@@ -1,0 +1,95 @@
+---
+title: "04-organizing_all_search_results"
+author: "Devi Veytia"
+date: "2023-01-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+```{r load libraries}
+library(dplyr)
+
+```
+
+
+The idea is to download all the search records from WOS and Scopus, de-duplicate, then merge with the screening results so that we don't screen the same articles twice. 
+- screen subsets (yes, sort by relevance in colandr is better)
+- download decisions that have already been made in pilot testing
+- de-duplicate search results (doi and title)
+- remove records that have already been screened(?,yes) (maybe by merging based on doi?)
+- format and export
+- 
+
+For WOS, I will need to partition the results into blocks < 100,000 because after that WOS does not allow me to download a record
+
+Note for Colandr:
+* can upload .ris, .bib, .txt (need to have the information that an .ris or .bib file would have). Might be the best option because then studies will have unique IDs? 
+* imported citaions cannot be deleted
+* max single import size is 40MB (15-20k of citations)
+
+
+When exporting search results from WOS, do it as a .bib file, then de-duplicate using revtools. Note I get an error when trying to download the complete view, can only do standard
+
+```{r using rscopus}
+## Set API key
+
+Sys.setenv(Elsevier_API = "f4e391f48f6cf6a2e335a3d56d1afc86")
+# # or
+# rscopus::set_api_key("5dccf61efd84c23b9fe877da0d73d5e5")
+
+## keys:
+# linked to hotmail acct: f4e391f48f6cf6a2e335a3d56d1afc86
+# linked to fondationbiodiversite acct: 5dccf61efd84c23b9fe877da0d73d5e5
+
+
+# # prove that I have the API key set
+# print(rscopus::get_api_key(), reveal=TRUE)
+rscopus::have_api_key()
+
+## Example
+
+# create query
+Query <- paste0("AF-ID(60006514) AND SUBJAREA(", 
+                rscopus::subject_areas(), 
+                ") AND PUBYEAR = 2018 AND ACCESSTYPE(OA)")
+
+
+# run query
+
+
+if (rscopus::have_api_key()) {
+  
+  # define function if the api key is present, build query based on subject area
+  make_query = function(subj_area) {
+    paste0("AF-ID(60006514) AND SUBJAREA(", 
+           subj_area,
+           ") AND PUBYEAR = 2018 AND ACCESSTYPE(OA)")
+  }
+  
+  # which subject area to subset the search to
+  i = 3
+  subj_area = rscopus::subject_areas()[i]
+  print(subj_area)
+  
+  # search for query
+  completeArticle <- rscopus::scopus_search(
+    query = make_query(subj_area), 
+    view = "COMPLETE", 
+    count = 25)
+  print(names(completeArticle))
+  total_results = completeArticle$total_results
+  total_results = as.numeric(total_results)
+} else {
+  total_results = 0
+}
+
+df <- gen_entries_to_df(completeArticle$entries)
+
+```
+
+
+
+

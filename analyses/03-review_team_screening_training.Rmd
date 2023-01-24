@@ -7,7 +7,7 @@ output: html_document
 
 ```{r load libraries}
 library(dplyr)
-
+library(ggplot2)
 ```
 
 
@@ -137,6 +137,86 @@ recsSub$Set <- rep(1:nSets, setSize)
 # Set 1: Inter-reviewer agreement
 
 Using this function: https://search.r-project.org/CRAN/refmans/irr/html/kappam.fleiss.html
+
+```{r names of screeners}
+screeners <- c("dveytia", "YunneShin", "bopp", "gattuso", "adriencomte")
+idColumns <- c("title", "abstract", "consensus")
+```
+
+```{r read in csv of set 1 screening results}
+
+## Read in and format
+set1 <- read.csv(here::here("data","derived-data","review-team-train-screen", "set1_screening_results.csv"),
+                 row.names = 2, strip.white = TRUE)
+# truncate number of columns
+set1 <- set1[,c(idColumns, screeners)]
+# calculate the proportion of agreement -- values of 0 and 1 indicate agreement, and in between are levels of disagreement with 0.5 being the highest
+set1$propPos <- apply(set1[,screeners], 1, function(x) sum(x>0))/5
+
+
+
+## Calculate the kappa statistic
+set1KappaTest <- irr::kappam.fleiss(set1[,c(screeners)])
+print(set1KappaTest)
+# Fleiss' Kappa for m Raters
+# 
+#  Subjects = 30 
+#    Raters = 5 
+#     Kappa = 0.573 
+# 
+#         z = 9.92 
+#   p-value = 0 
+
+
+## Visualize
+
+set1_long <- reshape2::melt(set1, 
+                            measure.vars = c(screeners),
+                            variable.name = "screener",
+                            value.name = "screen_decision")
+
+
+
+agreement <- expand.grid(set1$title, screeners)
+colnames(agreement) <- c("title","screener")
+agreement <- merge(agreement, set1[,c("title","propPos")], by=c("title"))
+
+
+ggp1 <- ggplot(set1_long, aes(screener, stringr::str_trunc(title, 30, "right"), 
+                      fill=factor(screen_decision, levels = c(1,-1), labels = c("incl","excl"))))+
+  geom_tile()+
+  scale_fill_manual(values = c("chartreuse4","darksalmon"))+
+  labs(y = "Title", fill = "Decision")+
+  labs(caption = paste("Fleiss' Kappa statistic = ", signif(set1KappaTest$value, 2)))+
+  # geom_tile(data=agreement, aes(
+  #   x=screener, y=stringr::str_trunc(title, 30, "right"),colour = propPos), 
+  #   fill="transparent", inherit.aes = FALSE)+
+  # scale_colour_gradientn(colours = c("transparent","red","transparent"))+
+  theme(
+    axis.text.x = element_text(angle=45, hjust=1),
+    legend.position = "bottom"
+  )
+
+
+ggp2 <- ggplot(set1, aes("agreement", stringr::str_trunc(title, 30, "right"),
+                 fill = propPos))+
+  geom_tile()+
+  scale_fill_gradientn(colours = c("transparent","red","transparent"), name="Agreement")+
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    axis.ticks = element_blank()
+  )
+
+
+# pdf(here::here("figures","screening_training_sets","screening_set1.pdf"),
+#     width = 7, height = 5)
+# egg::ggarrange(ggp1, ggp2, nrow=1, ncol=2, widths = c(3,1))
+# 
+# dev.off()
+```
+
 
 ```{r}
 require(irr)
