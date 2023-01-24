@@ -22,15 +22,19 @@ Using the test list, the search strings and the search results, I want to evalua
 
 Using the search string components (formula, keywords and substrings) stored in the file search-string.xlsx, build the full search string and format for WOS and Scopus
 
+```{r file locations for search string}
+search_string_dir <- here::here("data","derived-data","search-string")
+search_string_fp <- file.path(search_string_dir,"search-string.xlsx")
+
+
+```
+
 ## For WOS
 
 
 ```{r search string build for wos, echo=FALSE}
 
 ## Read in files
-
-search_string_fp <- here::here("data","search-string.xlsx")
-
 searchStringDf <- readxl::read_excel(path = search_string_fp, sheet = "sub-strings", trim_ws = TRUE)
 colnames(searchStringDf) <- gsub("\\s",".",colnames(searchStringDf))
 
@@ -96,9 +100,181 @@ for(i in 1:nrow(wos_equation)){
 
 ```{r write search string to text file, eval=FALSE}
 # # write as .txt file
-# sink(file.path(scopeSearchDir, "data","wos-equation.txt"))
+# sink(file.path(search_string_dir, "wos-equation.txt"))
 # for(i in 1:nrow(wos_equation)){cat(wos_equation[i,1],"\n", wos_equation[i,2],"\n","\n")}
 # sink()
   
 ```
+
+Write recursively as well because WOS cannot display > 100,000 articles at a time. Seperate by date range
+
+```{r write WOS search equation partitioned by year}
+year_brackets <- c("1946-2009","2010-2015", "2016-2019","2020-2023")
+# 
+# sink(file.path(search_string_dir,"wos-equation_partitionedByYear.txt"))
+# for(i in 1:length(year_brackets)){
+#   cat("TS = (", wos_equation$Search.String[7], ") AND  LA=(English) AND (PY = ",year_brackets[i],")", "\n","\n")
+# }
+# sink()
+```
+
+
+## For Scopus
+
+
+```{r search string format for scopus, echo=FALSE}
+
+## Read in files
+searchStringDf <- readxl::read_excel(path = search_string_fp, sheet = "sub-strings", trim_ws = TRUE)
+colnames(searchStringDf) <- gsub("\\s",".",colnames(searchStringDf))
+
+keywords <- readxl::read_excel(path = search_string_fp, sheet = "commonly-used-keywords", trim_ws = TRUE)
+colnames(keywords) <- gsub("\\s",".",colnames(keywords))
+
+searchFormula <- readxl::read_excel(path = search_string_fp, sheet="search-formula", trim_ws = TRUE)
+
+
+  
+## Put in commonly-used keywords into string
+searchStringDf$Search.Terms <- stri_replace_all_fixed(
+    searchStringDf$Search.Terms, keywords$Key.Term, keywords$Search.Terms, vectorise_all = FALSE
+    )
+
+
+# Make it for scopus
+searchStringDf_scopus <- searchStringDf
+temp <- unlist(gsub("NEAR","W",searchStringDf$Search.Terms))
+searchStringDf_scopus$Search.Terms <- unlist(gsub("NEAR","W",searchStringDf$Search.Terms))
+# # test each block to see if it works
+cat(paste(searchStringDf_scopus[1,3]))
+
+
+
+## extract terms based on search formula
+searchTermsDf_scopus <- matrix(nrow=length(searchTerms), ncol=2)
+searchTermsDf_scopus[,1] <- searchTerms
+
+for(i in 1:length(searchTerms)){
+  searchTermsDf_scopus[i,2] <- paste0("(",paste0(searchStringDf_scopus$Search.Terms[which(searchStringDf_scopus$Group == searchTerms[i])], collapse="OR"),")")
+}
+
+# # check chunks of search terms
+# cat(searchTermsDf_scopus[1,2])
+
+
+
+## Use search formulas to combine terms 
+
+# make a dataframe to house the search strings
+# modify the formula to conform with scopus syntax
+scopus_equation <- data.frame(
+  Search.Formula = unlist(gsub("NOT", "AND NOT",searchFormula$Search.Formula)))
+scopus_equation$Search.String <- NA
+
+# combine terms
+for(i in 1:nrow(scopus_equation)){
+  scopus_equation$Search.String[i] <- stri_replace_all_fixed(
+    scopus_equation$Search.Formula[i], searchTermsDf[,1], searchTermsDf[,2], vectorise_all = FALSE
+    )
+}
+
+
+# check
+# cat(scopus_equation[7,2])
+
+
+```
+
+
+```{r write search equation for scopus}
+
+# add in field codes and write to text file
+
+# sink(file.path(search_string_dir,"scopus-equation.txt"))
+# cat("TITLE-ABS-KEY(", scopus_equation$Search.String[7],")"," AND ","LANGUAGE(English)")
+# sink()
+```
+
+```{r write scopus equation partitioned by year}
+
+# seperate out into batches so I can download 2000 at a time
+scopusRefineValues <- read.csv(file.path(scopeSearchDir, "data","Scopus_exported_refine_values.csv"), skip=7)
+scopusRefineValues <- scopusRefineValues[,c("YEAR","X.1")]
+
+require(dplyr)
+scopusRefineValues <- scopusRefineValues %>%
+  arrange(X.1) %>%
+  mutate(cumsum = cumsum(X.1)) %>%
+  na.omit()
+
+cutoff <- seq(0, max(scopusRefineValues$cumsum), 2000)
+cutoffs <- data.frame(n = seq(1:length(cutoff)-1))
+cutoffs$string <- NA
+
+for(i in 1:(length(cutoff)-1)){
+  start <- which.min(abs(scopusRefineValues$cumsum-cutoff[i]))
+  end <- which.min(abs(scopusRefineValues$cumsum-cutoff[i+1]))
+  temp <- paste0(" AND (",paste0(paste0("PUBYEAR = ",scopusRefineValues$YEAR[start:(end-1)]), collapse=" OR "),")")
+  cutoffs$string[i] <- paste0("TITLE-ABS-KEY(", scopus_equation$Search.String[7],")"," AND ","LANGUAGE(English)",temp)
+}
+
+# # write table
+# writexl::write_xlsx(cutoffs, file.path(search_string_dir,"scopus-equation_partitionedByYear.xlsx"))
+
+
+```
+
+For Scopus it might make the most sense to download records by source title, becaues there are only 4 records that exceed 2,000 references
+
+
+# Evaluate comprehensiveness
+
+
+Using the test list, evaluate the comprehensiveness of the search in WOS. Do this by entering the search string in the topic field, and using an "AND" boolean operator, entering DO = the dois of the test list articles. If the number of returns = the number of test list articles I have full retrieval. To see which articles are not retrieved, search the DO = test list article dois, NOT TS = my WOS search string.
+
+
+DETAILS OF SEARCH
+
+Search on Jan 18 2023
+
+Total articles retrieved: 320,936
+test list articles = all 97 that are indexed in WOS were retrieved
+
+
+```{r set up dataframes to store results}
+# set up dataframe for results
+searchFormulaEval_summary <- data.frame(Search.Formula= c(searchFormula$Search.Formula, "Add (pollution OR pollutant$) to NOT terms"))
+searchFormulaEval_summary$N_total_results <- NA
+searchFormulaEval_summary$N_test_list <- NA
+
+# get number of test list articles
+test_list <- readxl::read_xlsx(file.path(scopeSearchDir, "derived_data", "screen_test_list","test-list_2023-01-19.xlsx"))
+n_test_list <- nrow(test_list)
+
+## Fill in results
+searchFormulaEval_summary[1,2:3] <- c(42555,18)
+searchFormulaEval_summary[2,2:3] <- c(498888, 89)
+searchFormulaEval_summary[3,2:3] <- c(13869,29)
+searchFormulaEval_summary[4,2:3] <- c(152368, 50)
+searchFormulaEval_summary[5,2:3] <- c(163312, 72)
+searchFormulaEval_summary[6,2:3] <- c(10138, 29)
+searchFormulaEval_summary[7,2:3] <- c(292256, 97)
+searchFormulaEval_summary[8,2:3] <- c(277012,95)
+
+# add column for proportion of test list articles
+searchFormulaEval_summary$N_percent_test_list <- searchFormulaEval_summary$N_test_list/n_test_list*100
+
+View(searchFormulaEval_summary)
+
+# # write to excel file for putting in paper
+# writexl::write_xlsx(searchFormulaEval_summary, 
+#                     here::here("outputs","scopingSearchSummary.xlsx"))
+
+```
+
+
+Therefore the final search string follows the formula in row 7.
+
+Note when I refine for english, it goes from 292256 - 287,965
+
 
