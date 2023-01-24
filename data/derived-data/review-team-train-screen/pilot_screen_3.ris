@@ -1,0 +1,684 @@
+TY  - article
+AU  - Pangedaiah, B.
+AU  - Reddy, P. L. Santosh Kumar
+AU  - Obulesu, Y. P.
+AU  - Kota, Venkata Reddy
+AU  - Alghaythi, Mamdouh L.
+ED  - NA
+TI  - A Robust Passive Islanding Detection Technique With Zero-Non-Detection Zone for Inverter-Interfaced Distributed Generation
+PY  - 2022
+SP  - 96296
+EP  - 96306
+AB  - In this paper, a new and efficient passive islanding detection technique for a grid-connected hybrid distributed generating system has been proposed using Second Generation Wavelet Transform (SGWT) and Maximum Overlap Discrete Wavelet Transform (MODWT). In this technique, the ripple content of the voltage signal is measured at the Point of Common Coupling (PCC) and it is monitored through the decomposition of the signal by applying SGWT and MODWT technique up to suitable finer levels. This algorithm able to detects all kinds of islanding at nearly 0.3 sec, even with zero power mismatch. It is verified on a wide range of operational conditions and is also validated in various non-islanding conditions. Furthermore, the proposed technique is simple, there is no need for a classifier requirement, not depends on system parameters, zero non-detection zone (NDZ), and its operation is independent of the capacity and nature of distributed generation (DG) connected to the utility grid.
+PB  - IEEE-INST ELECTRICAL ELECTRONICS ENGINEERS INC
+AD  - 445 HOES LANE, PISCATAWAY, NJ 08855-4141 USA
+LA  - English
+JO  - IEEE ACCESS
+VL  - 10
+IS  - NA
+DO  - 10.1109/ACCESS.2022.3204974
+SN  - 2169-3536
+KW  - Islanding; Discrete wavelet transforms; Signal processing algorithms; Voltage measurement; Renewable energy sources; Classification algorithms; Approximation algorithms; Power grids; Time-domain analysis; Grid connected distributed generation; maximum overlap discrete wavelet transform; passive islanding detection; second generation wavelet transform; time domain analysis; zero-non-detection zone
+ER  - 
+
+TY  - article
+AU  - Giannini, Alessandra
+AU  - Kaplan, Alexey
+ED  - NA
+TI  - The role of aerosols and greenhouse gases in Sahel drought and recovery
+PY  - 2019
+SP  - 449
+EP  - 466
+AB  - We exploit the multi-model ensemble produced by phase 5 of the Coupled Model Intercomparison Project (CMIP5) to synthesize current understanding of external forcing of Sahel rainfall change, past and future, through the lens of oceanic influence. The CMIP5 multi-model mean simulates the twentieth century evolution of Sahel rainfall, including the mid-century decline toward the driest years in the early 1980s and the partial recovery since. We exploit a physical argument linking anthropogenic emissions to the change in the temperature of the sub-tropical North Atlantic Ocean relative to the global tropical oceans to demonstrate indirect attribution of late twentieth century Sahel drought to the unique combination of aerosols and greenhouse gases that characterized the post-World War II period. The subsequent reduction in aerosol emissions around the North Atlantic that resulted from environmental legislation to curb acid rain, occurring as global tropical warming continued unabated, is consistent with the current partial recovery and with projections of future wetting. Singular Value Decomposition (SVD) applied to the above-mentioned sea surface temperature (SST) indices provides a succinct description of oceanic influence on Sahel rainfall and reveals the near-orthogonality in the influence of emissions between twentieth and twenty-first centuries: the independent effects of aerosols and greenhouse gases project on the difference of SST indices and explain past variation, while the dominance of greenhouse gases projects on their sum and explains future projection. This result challenges the assumption that because anthropogenic warming had a hand in past Sahel drought, continued warming will result in further drying. In fact, the twenty-first century dominance of greenhouse gases, unchallenged by aerosols, results in projections consistent with warming-induced strengthening of the monsoon, a response that has gained in coherence in CMIP5 compared to prior multi-model exercises.
+PB  - SPRINGER
+AD  - VAN GODEWIJCKSTRAAT 30, 3311 GZ DORDRECHT, NETHERLANDS
+LA  - English
+JO  - CLIMATIC CHANGE
+VL  - 152
+IS  - 3-4
+DO  - 10.1007/s10584-018-2341-9
+SN  - 0165-0009
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Dolan, Stacey L.
+AU  - Heath, Garvin A.
+ED  - NA
+TI  - Life Cycle Greenhouse Gas Emissions of Utility-Scale Wind Power
+PY  - 2012
+AB  - A systematic review and harmonization of life cycle assessment (LCA) literature of utility-scale wind power systems was performed to determine the causes of and, where possible, reduce variability in estimates of life cycle greenhouse gas (GHG) emissions. Screening of approximately 240 LCAs of onshore and offshore systems yielded 72 references meeting minimum thresholds for quality, transparency, and relevance. Of those, 49 references provided 126 estimates of life cycle GHG emissions. Published estimates ranged from 1.7 to 81 grams CO2-equivalent per kilowatt-hour (g CO2-eq/kWh), with median and interquartile range (IQR) both at 12 g CO2-eq/kWh. After adjusting the published estimates to use consistent gross system boundaries and values for several important system parameters, the total range was reduced by 47\% to 3.0 to 45 g CO2-eq/kWh and the IQR was reduced by 14\% to 10 g CO2-eq/kWh, while the median remained relatively constant (11 g CO2-eq/kWh). Harmonization of capacity factor resulted in the largest reduction in variability in life cycle GHG emission estimates. This study concludes that the large number of previously published life cycle GHG emission estimates of wind power systems and their tight distribution suggest that new process-based LCAs of similar wind turbine technologies are unlikely to differ greatly. However, additional consequential LCAs would enhance the understanding of true life cycle GHG emissions of wind power (e.g., changes to other generators operations when wind electricity is added to the grid), although even those are unlikely to fundamentally change the comparison of wind to other electricity generation sources.
+PB  - WILEY
+AD  - 111 RIVER ST, HOBOKEN 07030-5774, NJ USA
+LA  - English
+JO  - JOURNAL OF INDUSTRIAL ECOLOGY
+VL  - 16
+IS  - 1, SI
+DO  - 10.1111/j.1530-9290.2012.00464.x
+SN  - 1088-1980
+KW  - greenhouse gas emissions; industrial ecology; life cycle assessment; meta-analysis; renewable energy; wind energy
+ER  - 
+
+TY  - article
+AU  - Khelifa, Mohammed-Rissel
+AU  - Ziane, Sami
+AU  - Mezhoud, Samy
+AU  - Ledesert, Catherine
+AU  - Hebert, Ronan
+AU  - Ledesert, Beatrice
+ED  - NA
+TI  - Compared Environmental Impact Analysis of Alfa and Polypropylene Fibre-Reinforced Concrete
+PY  - 2021
+SP  - 1511
+EP  - 1522
+AB  - This study was conducted in order to examine the environmental and the mechanical properties of two fibre-reinforced concretes, namely Alfa fibres and polypropylene fibres. In this study, the life cycle assessment (LCA) method was used, since this process is likely to quantify the environmental impacts of concrete or concrete production industry. The environmental analyses showed that alfa fibres generate fewer impacts than polypropylene fibres. The results revealed that the use of the Alfa fibres reinforced concretes is efficient solution for climate change mitigation, for the reason that they generate: (1) a less fossil fuel depletion; (2) produce lower emissions of greenhouse gases; (3) develop a lesser atmospheric emission of particles, (4) reduce the marine ecotoxicity; and (5) participate in decreasing the photochemical oxydation.
+PB  - SPRINGER INTERNATIONAL PUBLISHING AG
+AD  - GEWERBESTRASSE 11, CHAM, CH-6330, SWITZERLAND
+LA  - English
+JO  - IRANIAN JOURNAL OF SCIENCE AND TECHNOLOGY-TRANSACTIONS OF CIVIL ENGINEERING
+VL  - 45
+IS  - 3
+DO  - 10.1007/s40996-020-00555-x
+SN  - 2228-6160
+KW  - Concrete; Fibres; Alfa; Polypropylene; SimaPro; Life cycle analysis; LCA
+ER  - 
+
+TY  - article
+AU  - Paul, Varun G.
+AU  - Wronkiewicz, David J.
+AU  - Mormile, Melanie R.
+AU  - Foster, Jamie S.
+ED  - NA
+TI  - Mineralogy and Microbial Diversity of the Microbialites in the Hypersaline Storr's Lake, the Bahamas
+PY  - 2016
+SP  - 282
+EP  - 300
+AB  - Microbialites found in the low-light-intensity, hypersaline waters of Storr's Lake (SL), San Salvador Island, the Bahamas, were investigated with respect to their morphology, mineralogy, and microbial diversity. Previously described microbialite morphologies, as well as a newly identified multi-cuspate morphology, were observed at various depths. Electron microscopy analysis revealed the presence of angular, blocky, and needle-shaped crystals with mineralized cyanobacterial filaments and remains of exopolymeric substances. X-ray diffraction studies confirmed the presence of both Mg-calcite and aragonite in the plateau-mushroom and pinnacle mound microbialites, whereas only Mg-calcite was identified in the other microbialite morphotypes. A comprehensive molecular analysis using barcoded pyrosequencing of five different microbial mat communities identified at least 12 dominant bacterial phyla. Cyanobacteria were generally low in abundance and ranged from approximate to 0.01\% in the deeper pinnacle mounds to approximate to 3.2\% in the shallow calcareous knobs. Other photosynthetic members included green nonsulfur bacteria of the phylum Chloroflexi and purple sulfur bacteria of the class Gammaproteobacteria. All mat types contained significant amounts of sulfate-reducing and dehalogenating bacteria. The low light intensity reaching the deeper microbialites, the lack of dominant cyanobacteria, and the abundance of sulfate reducers and Chloroflexi collectively suggest that sulfate reduction and anoxygenic photosynthetic processes influence the carbonate biomineralization process in these systems. Astrobiology 16, 282-300.
+PB  - MARY ANN LIEBERT, INC
+AD  - 140 HUGUENOT STREET, 3RD FL, NEW ROCHELLE, NY 10801 USA
+LA  - English
+JO  - ASTROBIOLOGY
+VL  - 16
+IS  - 4
+DO  - 10.1089/ast.2015.1326
+SN  - 1531-1074
+KW  - Microbial mats; Microbial diversity; Biomineralization
+ER  - 
+
+TY  - inproceedings
+AU  - Gretz, H
+AU  - Albert, H
+AU  - Allers, D
+AU  - Breitkreuz, T
+AU  - Furwentsches, W
+AU  - Gretz, J
+AU  - Meybauer, M
+AU  - Mucha, T
+AU  - Weinmann, O
+ED  - Bolcich, JC and Veziroglu, TN
+TI  - The Icelandic-German hydrogen project
+PY  - 1998
+SP  - 387
+EP  - 394
+AB  - Iceland has a great amount of indirect solar energy in the form of hydropower. With this energy, hydrogen is produced by electrolysis, pressurised to 200 bar and transported to Hamburg (Germany) in standard trailers. In Hamburg, six vans. originally equipped with gasoline engines are converted for operation with hydrogen, the fuel tanks being replaced by hydrogen gas tanks. The vans are used for urban distribution. These vehicles are suitable for ordinary operations, comply with the necessary safety requirements and can be driven and fuelled by drivers without any special skills or permits. The project is the world's first public hydrogen vehicle system for private utilisation. The paper describes the performance and the experience gained with the whole hydrogen system from the source to vehicle operation. The technical data of the daily operation is presented. Six project partners run the vehicles and bear the total costs of the project. ``Wasserstoff-Gesellschaft Hamburg (WGH){''} initiated the project and coordinates the executive activities. The project's acronym is ``W.E.I.T.{''} (in German: Wasserstoff-Energie Island Transfer). The project is split into two phases for administrative and financial reasons: Phase I: Hydrogen is delivered as a by-product from local chemical processes Phase ii: Hydrogen is delivered from renewable energy sources in Iceland.
+PB  - INT ASSOC HYDROGEN ENERGY
+AD  - PO BOX 248266, CORAL GABLES, FL 33124 USA
+LA  - English
+JO  - NA
+VL  - NA
+IS  - NA
+DO  - NA
+SN  - NA
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - WONG, CS
+AU  - CHAN, YH
+AU  - PAGE, JS
+AU  - SMITH, GE
+AU  - BELLEGAY, RD
+AU  - ISEKI, K
+ED  - NA
+TI  - GEOGRAPHICAL, SEASONAL AND INTERANNUAL VARIATIONS OF AIR-SEA CO2 EXCHANGE IN THE SUBTROPICAL PACIFIC SURFACE WATERS DURING 1983-1988 .1. VARIABILITIES OF OCEANIC FCO(2)
+PY  - 1995
+SP  - 414
+EP  - 430
+AB  - The fugacity, of CO2 (fCO(2)) in the surface seawater of the northeast (15 degrees N-45 degrees N) and southwest (25 degrees S-15 degrees S) subtropical Pacific Ocean from November 1983 to February 1988 were observed on Is cruises on the M/V Lillooet. The northeast Pacific within 15 degrees N-45 degrees N was a net CO2 sink with a mean annual Delta fCO(2) of about -5 mu atm, as the average of -19 mu atm in the boreal winter and spring and 8 mu atm in the boreal summer and autumn. Our cruises also obtained the first set of austral winter and spring fCO(2) data for the southwest subtropical Pacific and thus provided a complete seasonal cycle of surface fCO(2) for this oceanic region. The southwest Pacific within 25 degrees S-15 degrees S, with a mean annual Delta fCO(2) of about -20 mu atm, was a CO2 sink year round except during the austral summer of the El Nino whence Delta fCO(2) had positive values. The observed sea-surface fCO(2) showed large variability. Between the summer and the winter months, the seasonal amplitudes of fCO(2) (normalized to the climatological annual mean SST) ranged from 1 mu atm to 63 mu atm. The surface waters of the subtropical and the northeast Pacific also displayed annual trends in the normalized fCO(2) values. From January 1984 to January 1987, there were decreases in the seasonal means of normalized fCO(2) of 4-11 mu atm yr(-1) within 25 degrees C-15 degrees S, 15 degrees N-25 degrees N, and 25 degrees N-35 degrees N. These trends were within the uncertainty of the data and were not significant statistically. However, from summer 1985 to summer 1987, the normalized fCO(2), showed significant positive increase of 24 mu atm yr(-1) within 35 degrees N-45 degrees N. There was also an increase, though not significant statistically, of 13 mu atm yr(-1) within 25 degrees N-35 degrees N. The cause of the slightly larger increase in fCO(2), in northern subtropical gyre could be the anomalous intrusions of the Oyashio Current during the period 1984-1986 along the North Pacific Current, which was the source of the California Current bifurcating into the waters of 25 degrees N-35 degrees N and 35 degrees N-45 degrees N. These intrusions in late spring usually followed an intensified and eastward shift of the Aleutian Low which was especially persistent during 1977-1988.
+PB  - CO-ACTION PUBLISHING
+AD  - RIPVAGEN 7, JARFALLA, SE-175 64, SWEDEN
+LA  - English
+JO  - TELLUS SERIES B-CHEMICAL AND PHYSICAL METEOROLOGY
+VL  - 47
+IS  - 4
+DO  - 10.1034/j.1600-0889.47.issue4.3.x
+SN  - 0280-6509
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Yang, Ping
+AU  - Tang, Kam W.
+AU  - Tong, Chuan
+AU  - Lai, Derrick Y. F.
+AU  - Wu, Lianzuan
+AU  - Yang, Hong
+AU  - Zhang, Linhai
+AU  - Tang, Chen
+AU  - Hong, Yan
+AU  - Zhao, Guanghui
+ED  - NA
+TI  - Changes in sediment methanogenic archaea community structure and methane production potential following conversion of coastal marsh to aquaculture ponds
+PY  - 2022
+AB  - Widespread conversion of coastal wetlands into aquaculture ponds in coastal region often results in degradation of the wetland ecosystems, but its effects on sediment's potential to produce greenhouse gases remain unclear. Using field sampling, incubation experiments and molecular analysis, we studied the sediment CH4 production potential and the relevant microbial communities in a brackish marsh and the nearby aquaculture ponds in the Min River Estuary in southeastern China. Sediment CH4 production potential was higher in the summer and autumn months than in spring and winter months, and it was significantly correlated with sediment carbon content among all environmental variables. The mean sediment CH4 production potential in the aquaculture ponds (20.1 ng g-1 d-1) was significantly lower than that in the marsh (45.2 ng g-1 d-1). While Methanobacterium dominated in both habitats (41-59\%), the overall composition of sediment methanogenic archaea communities differed significantly between the two habitats (p < 0.05) and methanogenic archaea alpha diversity was lower in the aquaculture ponds (p < 0.01). Network analysis revealed that interactions between sediment methanogenic archaea were much weaker in the ponds than in the marsh. Overall, these findings suggest that conversion of marsh land to aquaculture ponds significantly altered the sediment methanogenic archaea community structure and diversity and lowered the sediment's capacity to produce CH4.
+PB  - ELSEVIER SCI LTD
+AD  - THE BOULEVARD, LANGFORD LANE, KIDLINGTON, OXFORD OX5 1GB, OXON, ENGLAND
+LA  - English
+JO  - ENVIRONMENTAL POLLUTION
+VL  - 305
+IS  - NA
+DO  - 10.1016/j.envpol.2022.119276
+SN  - 0269-7491
+KW  - Methane production; Methanogenic archaea; Network analysis; Land-use
+KW  - land coverage change (LULCC); Coastal wetlands; Aquaculture systems
+ER  - 
+
+TY  - article
+AU  - Bengtsson, J
+AU  - Angelstam, P
+AU  - Elmqvist, T
+AU  - Emanuelsson, U
+AU  - Folke, C
+AU  - Ihse, M
+AU  - Moberg, F
+AU  - Nystrom, M
+ED  - NA
+TI  - Reserves, resilience and dynamic landscapes
+PY  - 2003
+SP  - 389
+EP  - 396
+AB  - In a world increasingly modified by human activities, the conservation of biodiversity is essential as insurance to maintain resilient ecosystems and ensure a sustainable flow of ecosystem goods and services to society. However, existing reserves and national parks are unlikely to incorporate the long-term and large-scale dynamics of ecosystems. Hence, conservation strategies have to actively incorporate the large areas of land that are managed for human use. For ecosystems to reorganize after large-scale natural and human-induced disturbances, spatial resilience in the form of ecological memory is a prerequisite. The ecological memory is composed of the species, interactions and structures that make ecosystem reorganization possible, and its components may be found within disturbed patches as well in the surrounding landscape. Present static reserves should be complemented with dynamic reserves, such as ecological fallows and dynamic successional reserves, that are part of ecosystem management mimicking natural disturbance regimes at the landscape level.
+PB  - SPRINGER
+AD  - VAN GODEWIJCKSTRAAT 30, 3311 GZ DORDRECHT, NETHERLANDS
+LA  - English
+JO  - AMBIO
+VL  - 32
+IS  - 6
+DO  - 10.1639/0044-7447(2003)032{[}0389:RRADL]2.0.CO;2
+SN  - 0044-7447
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Maietta, Christine E.
+AU  - Hondula, Kelly L.
+AU  - Jones, C. Nathan
+AU  - Palmer, Margaret A.
+ED  - NA
+TI  - Hydrological Conditions Influence Soil and Methane-Cycling Microbial Populations in Seasonally Saturated Wetlands
+PY  - 2020
+AB  - Seasonally saturated wetlands are hydrologically dynamic ecosystems that provide various ecosystem services; however, their variable hydrologic conditions may promote greenhouse gas emissions. The extent to which wetlands produce and emit greenhouse gases is intimately tied to the underlying microbial community. We established a linear transect spanning a hydrologic gradient on the margins adjacent to five seasonally saturated wetlands to characterize how water level, saturation duration, and frequency of wet-dry cycles influenced the soil and methane-cycling microbial community composition. We found that the soil and methane-cycling microbial community diversity and structure were strongly related to water level changes and saturation duration but not saturation frequency. Soils that experienced inundation or saturation for more than 50\% of the year harbored a soil microbial composition distinct from soils that were rarely saturated or inundated. While soils closer to the wetland basin supported a higher relative abundance of methanogens, methane-oxidizing microbes were present across the entire topographic gradient; however, the composition shifted from a primarily anaerobic to aerobic methanotroph community. Findings suggest that soil and methane cycling microorganisms are influenced by the soil's hydrologic conditions, with methane producers being restricted to specific ranges and methane oxidizers able to occur under a variety of hydrologic conditions. The mechanisms driving methane oxidation by the latter, however, may depend on the hydrologic conditions.
+PB  - FRONTIERS MEDIA SA
+AD  - AVENUE DU TRIBUNAL FEDERAL 34, LAUSANNE, CH-1015, SWITZERLAND
+LA  - English
+JO  - FRONTIERS IN ENVIRONMENTAL SCIENCE
+VL  - 8
+IS  - NA
+DO  - 10.3389/fenvs.2020.593942
+SN  - NA
+KW  - freshwater mineral wetlands; methanogens; methanotrophs; methane emissions; microbial diversity
+ER  - 
+
+TY  - article
+AU  - Hu Yongyun
+AU  - Xia Yan
+AU  - Gao Mei
+AU  - Lu Daren
+ED  - NA
+TI  - Stratospheric Temperature Changes and Ozone Recovery in the 21st Century
+PY  - 2009
+SP  - 263
+EP  - 275
+AB  - Increasing greenhouse gases and likely ozone recovery will be the two most, important factors influencing changes in stratospheric temperatures in the 21st century. The radiative effect of increasing greenhouse gases will cause cooling in the stratosphere, while ozone recovery will lead to stratospheric warming. To investigate how stratospheric temperatures change under the two opposite forcings in the 21st century, we use observed ozone and reanalysis data as well as simulation results from four coupled oceanic and atmospheric general circulation models (GISS-ER, GFDL-CM20, NCAR-CCSM3, and UKMO-HadCM3) used in the IPCC (Intergovernment Panel for Climate Change) Fourth Assessment Report (AR4). Observational analysis shows that total column ozone and lower stratospheric temperatures all show increasing in the past 10 Years, while middle stratospheric temperatures demonstrate cooling. IPCC AR4 simulations Show that greenhouse forcing alone will lead to stratospheric cooling. However, with forcing of both increasing greenhouse gases and ozone recovery, the middle stratosphere will be cooled, while the lower stratosphere will be warmed. Warming magnitudes vary from one model to another. UKMO-HadCM3 generates relatively strong warming for all three greenhouse scenarios, and warming extends to 40 hPa. GFDL-CM20 and NCAR-CCSM3 produce weak warming, and warming mainly exists at lower levels, below about 60 hPa. In addition, we also discuss the effect of temperature changes on ozone recovery.
+PB  - SPRINGER HEIDELBERG
+AD  - TIERGARTENSTRASSE 17, D-69121 HEIDELBERG, GERMANY
+LA  - English
+JO  - ACTA METEOROLOGICA SINICA
+VL  - 23
+IS  - 3
+DO  - NA
+SN  - 0894-0525
+KW  - stratosphere; increasing greenhouse gases; ozone recovery; climate change; IPCC AR4
+ER  - 
+
+TY  - article
+AU  - Wang, Hai
+AU  - Wen, Yu-Jun
+ED  - NA
+TI  - Climate response to the spatial and temporal evolutions of anthropogenic aerosol forcing
+PY  - 2022
+SP  - 1579
+EP  - 1595
+AB  - Large-scale climate response to the spatial and temporal changes of anthropogenic aerosols are investigated in comparison with greenhouse gas (GHG) forcing using Coupled Model Intercomparison Project Phase 6 (CMIP6) simulations during 1930-2010. Globally, increasing anthropogenic aerosols in the Northern Hemisphere (NH) since the industrial revolution generates a North-South interhemispherically asymmetric climate response pattern. But this feature only dominates the historical climate change early in the twentieth century. In the second half of the twentieth century, anthropogenic aerosol emissions increase monotonically in Asia, but increase first and then decrease rapidly over Europe and North America. The shift of aerosol emissions from the western mid-latitude NH to the eastern low-latitude NH induces distinct climate response patterns compared with its global increase effect, anchoring an equatorial symmetric tropical sea surface temperature (SST) cooling and precipitation decrease, which resembles that in the GHG-induced response patterns with sign reversed. After the mid-1970s, with declining aerosol emissions over Europe and North America and increasing emissions in Asia, anthropogenic aerosol forcing generates a northward recovery of the tropical rainfall with little response in the tropical SST anomalies due to the cancellation effect of the distinct aerosol emissions conditions between the western and the eastern NH. While GHG forcing dominates observed climate change in the twentieth century, the distinct climate response patterns to the spatial and temporal evolutions of anthropogenic aerosol forcing highlight its important role in shaping the regional climate changes.
+PB  - SPRINGER
+AD  - ONE NEW YORK PLAZA, SUITE 4600, NEW YORK, NY, UNITED STATES
+LA  - English
+JO  - CLIMATE DYNAMICS
+VL  - 59
+IS  - 5-6
+DO  - 10.1007/s00382-021-06059-2
+SN  - 0930-7575
+KW  - Aerosol forcing; Spatial variation; Temporal evolution; Climate response; Atmospheric circulation
+ER  - 
+
+TY  - article
+AU  - Hao, Jianchi
+AU  - Wen, Hu
+AU  - Ma, Li
+AU  - Fei, Jinbiao
+AU  - Ren, Lifeng
+ED  - NA
+TI  - Theoretical Derivation of a Prediction Model for CO2 Adsorption by Coal
+PY  - 2021
+SP  - 13275
+EP  - 13283
+AB  - Adsorption characteristics of CO2 by coal are an important reservoir parameter to determine the CO2 storage capacity of the coal seam. The Langmuir isotherm adsorption model is commonly used to describe the isothermal adsorption line of coal. However, we cannot predict the CO2 adsorption capacity at other temperatures by using the Langmuir model based on the experimental data at a fixed temperature. This paper analyzes the epsilon-V-ad adsorption characteristic curves of three coal samples over a range of temperatures and pressures. The study demonstrates that the adsorption characteristic curves of CO2 gas are independent of temperature and depend mainly on the dispersion force between coal and the CO2 molecules. In addition, the adsorption potential of CO2 gas has a negative correlation with the volume of the adsorbed phase. Hence, the CO2 adsorption characteristic curve of coal conforms to the logarithmic function. Based on the adsorption potential theory, the prediction model of CO2 adsorption by coal is derived. The deviation analysis from measured data shows that the average relative deviation of the three coal samples is similar to 5\%, and the prediction results are accurate and reliable. Under different temperature and pressure conditions of the three coal samples, the results from the prediction model of CO2 adsorption by coal and the Langmuir model have a strong correlation with the experimental results. In comparison with the Langmuir model, the prediction model of CO2 adsorption by coal can predict the adsorption capacity under different temperature and pressure conditions. Hence, it has a wide range of applications when compared to that of the Langmuir model. In practical applications, better results are achieved with a significant reduction in experimental time and labor.
+PB  - AMER CHEMICAL SOC
+AD  - 1155 16TH ST, NW, WASHINGTON, DC 20036 USA
+LA  - English
+JO  - ACS OMEGA
+VL  - 6
+IS  - 20
+DO  - 10.1021/acsomega.1c00957
+SN  - 2470-1343
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Shin, Yunne-Jai
+AU  - Midgley, Guy F.
+AU  - Archer, Emma R. M.
+AU  - Arneth, Almut
+AU  - Barnes, David K. A.
+AU  - Chan, Lena
+AU  - Hashimoto, Shizuka
+AU  - Hoegh-Guldberg, Ove
+AU  - Insarov, Gregory
+AU  - Leadley, Paul
+AU  - Levin, Lisa A.
+AU  - Ngo, Hien T.
+AU  - Pandit, Ram
+AU  - Pires, Aliny P. F.
+AU  - Poertner, Hans-Otto
+AU  - Rogers, Alex D.
+AU  - Scholes, Robert J.
+AU  - Settele, Josef
+AU  - Smith, Pete
+ED  - NA
+TI  - Actions to halt biodiversity loss generally benefit the climate
+PY  - 2022
+SP  - 2846
+EP  - 2874
+AB  - The two most urgent and interlinked environmental challenges humanity faces are climate change and biodiversity loss. We are entering a pivotal decade for both the international biodiversity and climate change agendas with the sharpening of ambitious strategies and targets by the Convention on Biological Diversity and the United Nations Framework Convention on Climate Change. Within their respective Conventions, the biodiversity and climate interlinked challenges have largely been addressed separately. There is evidence that conservation actions that halt, slow or reverse biodiversity loss can simultaneously slow anthropogenic mediated climate change significantly. This review highlights conservation actions which have the largest potential for mitigation of climate change. We note that conservation actions have mainly synergistic benefits and few antagonistic trade-offs with climate change mitigation. Specifically, we identify direct co-benefits in 14 out of the 21 action targets of the draft post-2020 global biodiversity framework of the Convention on Biological Diversity, notwithstanding the many indirect links that can also support both biodiversity conservation and climate change mitigation. These relationships are context and scale-dependent; therefore, we showcase examples of local biodiversity conservation actions that can be incentivized, guided and prioritized by global objectives and targets. The close interlinkages between biodiversity, climate change mitigation, other nature's contributions to people and good quality of life are seldom as integrated as they should be in management and policy. This review aims to re-emphasize the vital relationships between biodiversity conservation actions and climate change mitigation in a timely manner, in support to major Conferences of Parties that are about to negotiate strategic frameworks and international goals for the decades to come.
+PB  - WILEY
+AD  - 111 RIVER ST, HOBOKEN 07030-5774, NJ USA
+LA  - English
+JO  - GLOBAL CHANGE BIOLOGY
+VL  - 28
+IS  - 9
+DO  - 10.1111/gcb.16109
+SN  - 1354-1013
+KW  - biodiversity conservation; carbon sequestration; climate change mitigation; convention on biological diversity; nature-based solutions; restoration
+ER  - 
+
+TY  - article
+AU  - Pan, Hansheng
+AU  - Pournazeri, Sam
+AU  - Princevac, Marko
+AU  - Miller, J. Wayne
+AU  - Mahalingam, Shankar
+AU  - Khan, M. Yusuf
+AU  - Jayaram, Varalakshmi
+AU  - Welch, William A.
+ED  - NA
+TI  - Effect of hydrogen addition on criteria and greenhouse gas emissions for a marine diesel engine
+PY  - 2014
+SP  - 11336
+EP  - 11345
+AB  - Hydrogen remains an attractive alternative fuel to petroleum and a number of investigators claim that adding hydrogen to the air intake manifold of a diesel engine will reduce criteria emissions and diesel fuel consumption. Such claims are appealing when trying to simultaneously reduce petroleum consumption, greenhouse gases and criteria pollutants. The goal of this research was to measure the change in criteria emissions (CO, NOx and PM2.5) and greenhouse gases such as carbon dioxide (CO2), using standard test methods for a wide range of hydrogen addition rates. A two-stroke Detroit Diesel Corporation 12V-71TI marine diesel engine was mounted on an engine dynamometer and tested at three out of the four loads specified in the ISO 8178-4 E3 emission test cycle and at idle. The engine operated on CARB ultra-low sulfur \#2 diesel with hydrogen added at flow rates of 0, 22 and 220 SLPM. As compared with the base case without hydrogen, measurements showed that hydrogen injection at 22 and 220 SLPM had negligible influence on the overall carbon dioxide specific emission, EFCO2. However, in examining data at each load the data revealed that at idle EFCO2 was reduced by 21\% at 22 SLPM (6.9\% of the added fuel energy was from hydrogen) and 37.3\% at 220 SLPM (103.1\% of the added fuel energy was from hydrogen). At all other loads, the influence of added hydrogen was insignificant. Specific emissions for nitrogen oxides, EFNOx, and fine particulate matters, EFPM2 5, showed a trade-off relationship at idle. At idle, EFNOx was reduced by 28\% and 41\% with increasing hydrogen flow rates, whilst EFPM2 5 increased by 41\% and 86\% respectively. For other engine loads, EFNOx and EFPM2.5 did not change significantly with varying hydrogen flow rates. One of the main reasons for the greater impact of hydrogen at idle is that the contribution of hydrogen to the total fuel energy is much higher at idle as compared to the other loads. The final examination in this paper was the system energy balance when hydrogen is produced by an on-board electrolysis unit. An analysis at 75\% engine load showed that hydrogen production increased the overall equivalent fuel consumption by 2.6\% at 22 SLPM and 17.7\% at 220 SLPM. Copyright (C) 2014, Hydrogen Energy Publications, LLC. Published by Elsevier Ltd. All rights reserved.
+PB  - PERGAMON-ELSEVIER SCIENCE LTD
+AD  - THE BOULEVARD, LANGFORD LANE, KIDLINGTON, OXFORD OX5 1GB, ENGLAND
+LA  - English
+JO  - INTERNATIONAL JOURNAL OF HYDROGEN ENERGY
+VL  - 39
+IS  - 21
+DO  - 10.1016/j.ijhydene.2014.05.010
+SN  - 0360-3199
+KW  - Dual fuel internal combustion engine; Hydrogen addition; Diesel engine; PM; NOx; Fuel consumption
+ER  - 
+
+TY  - article
+AU  - Vieira Borges, Paulo Alexandre
+AU  - Gabriel, Rosalina
+AU  - Pimentel, Cesar M. M.
+AU  - Brito, Mariana R.
+AU  - Moniz Serrano, Artur Raposo
+AU  - Fonseca Crespo, Luis Carlos
+AU  - Assing, Volker
+AU  - Stueben, Peter
+AU  - Fattorini, Simone
+AU  - Soares, Antonio Onofre
+AU  - Mendonca, Enesima P.
+AU  - Nogueira, Elisabete
+ED  - NA
+TI  - Biota from the coastal wetlands of Praia da Vitoria (Terceira, Azores, Portugal): Part 1-Arthropods
+PY  - 2018
+AB  - Background During a LIFE research project aiming at the implementation of the conservation of the habitats and restoration of coastal wetland areas of Praia da Vitoria (Terceira, Azores, Portugal), there was the opportunity undertake a systematic record of several groups of arthropods in three wetland areas: Paul da Praia da Vitoria (PPV), Paul do Belo Jardim (PBJ) and Paul da Pedreira do Cabo da Praia (PPCP). The objective of the study was to perform a rapid biodiversity assessment, comparing the three sites in two different years, before and after the implementation of several conservation measures. This project also contributed to improve the knowledge of Azorean arthropod diversity at both local and regional scales, including new taxa for Terceira island and new records for Azores. Taking into consideration those aims, a set of standardised sampling methods were performed, inspired by the COBRA protocol originally developed for spiders. New information A total of 15,810 specimens belonging to 216 arthropod species and subspecies were collected. Beetles (Insecta, Coleoptera) and spiders (Araneae) dominated, with 81 and 51 taxa, respectively. Two beetle families dominated, Staphylinidae and Curculionidae with, respectively, 22 and 17 species and subspecies. Exotic species were also dominant (132 species and subspecies), the Azorean endemics being restricted to only eight taxa. The remaining 76 species and subspecies are native non-endemic. Two rare endemic species were found with relatively sustainable populations, the Azores Cone-head Conocephalus chavesi (Orthoptera, Tettigoniidae) and the true weevil Drouetius oceanicus oceanicus (Coleoptera, Curculionidae). A total of six species are novel for the Azores, five exotic (Bledius unicornis, Carpelimus zealandicus, Oenopia doublieri, Sitona hispidulus, Trichiusa immigrata) and one possibly native (Pyrrhocoris apterus). An additional 15 taxa are novel for Terceira island, ten exotic (Cheiracanthium mildei, Cylindroiulus latestriatus, Eumodicogryllus bordigalensis, Nemobius sylvestris, Pissodes castaneus, Psyllipsocus ramburi, Trachyzelotes lyonneti, Trigonnidium cicindeloides, Tychius cuprifer, Zelotes tenuis) and five native (Aegialia arenaria, Oxypoda lurida, Platycleis sabulosa, Plinthisus brevipennis, Tachyura diabrachys).
+PB  - PENSOFT PUBLISHERS
+AD  - 12 PROF GEORGI ZLATARSKI ST, SOFIA, 1700, BULGARIA
+LA  - English
+JO  - BIODIVERSITY DATA JOURNAL
+VL  - 6
+IS  - NA
+DO  - 10.3897/BDJ.6.e27194
+SN  - 1314-2836
+KW  - Arthropoda; Azores; Terceira Island; coastal area; standardised sampling
+ER  - 
+
+TY  - article
+AU  - Roullier, F.
+AU  - Berline, L.
+AU  - Guidi, L.
+AU  - De Madron, X. Durrieu
+AU  - Picheral, M.
+AU  - Sciandra, A.
+AU  - Pesant, S.
+AU  - Stemmann, L.
+ED  - NA
+TI  - Particle size distribution and estimated carbon flux across the Arabian Sea oxygen minimum zone
+PY  - 2014
+SP  - 4541
+EP  - 4557
+AB  - The goal of the Arabian Sea section of the TARA oceans expedition was to study large particulate matter (LPM > 100 mu m) distributions and possible impact of associated midwater biological processes on vertical carbon export through the oxygen minimum zone (OMZ) of this region. We propose that observed spatial patterns in LPM distribution resulted from the timing and location of surface phytoplankton bloom, lateral transport, microbial processes in the core of the OMZ, and enhanced biological processes mediated by bacteria and zooplankton at the lower oxycline. Indeed, satellite-derived net primary production maps showed that the northern stations of the transect were under the influence of a previous major bloom event while the most southern stations were in a more oligotrophic situation. Lagrangian simulations of particle transport showed that deep particles of the northern stations could originate from the surface bloom while the southern stations could be considered as driven by 1-D vertical processes. In the first 200 m of the OMZ core, minima in nitrate concentrations and the intermediate nepheloid layer (INL) coincided with high concentrations of 100 mu m < LPM < 200 mu m. These particles could correspond to colonies of bacteria or detritus produced by anaerobic microbial activity. However, the calculated carbon flux through this layer was not affected. Vertical profiles of carbon flux indicate low flux attenuation in the OMZ, with a Martin model b exponent value of 0.22. At three stations, the lower oxycline was associated to a deep nepheloid layer, an increase of calculated carbon flux and an increase in mesozooplankton abundance. Enhanced bacterial activity and zooplankton feeding in the deep OMZ is proposed as a mechanism for the observed deep particle aggregation. Estimated lower flux attenuation in the upper OMZ and re-aggregation at the lower oxycline suggest that OMZ may be regions of enhanced carbon flux to the deep sea relative to non OMZ regions.
+PB  - COPERNICUS GESELLSCHAFT MBH
+AD  - BAHNHOFSALLEE 1E, GOTTINGEN, 37081, GERMANY
+LA  - English
+JO  - BIOGEOSCIENCES
+VL  - 11
+IS  - 16
+DO  - 10.5194/bg-11-4541-2014
+SN  - 1726-4170
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Vinnik, L. P.
+ED  - NA
+TI  - Receiver Function Seismology
+PY  - 2019
+SP  - 12
+EP  - 21
+AB  - The results of application of the receiver function technique are briefly reviewed. In the mantle transition zone, the topography of the main seismic boundaries is evaluated with a resolution of about 3 km in depth and a lateral resolution of about 200 km. The variations of the depth of the main boundaries have the maximal amplitude reaching tens of kilometers. Thinning of the mantle transition zone in the hot spots and the respective increase in temperature by similar to 100 degrees C is established. In several regions, two low-velocity layers are revealed in the mantle transition zone: one directly above the 410-km seismic discontinuity and another at a depth of 450 to 500 km. The origin of the first layer is associated with dehydration in the mantle plumes in the process of the olivine-wadsleyite phase transformation. The increase in the velocity of S-waves in the base of the second layer may explain the observations of the so-called 520-km boundary. The traditional approach to the studies of the structure of the crust and upper mantle is based on using the surface waves. Receiver functions can provide higher resolution at the same depths when a combination of P-and S-wave receiver functions is used. This type of results was obtained for Fennoscandia, Kaapvaal craton, Indian shield, Central Tien Shan, Baikal rift zone, the Azores, Cape Verde Islands, and the western Mediterranean. S-receiver functions were used in the study of the lunar crust. The joint inversion of P-and S-receiver functions provides robust estimates of the parameters of the seismic boundaries, including weak discontinuities such as the lithosphere-asthenosphere interface of cratons. The parameters determined from receiver functions include the P-wave to S-wave velocity ratio. In a few regions, a very high (>2.0) velocity ratio is observed in the lower crust that may indicate the presence of a fluid with a high pore pressure. Receiver functions allow estimating the parameters of the azimuthal anisotropy as a function of depth. The change of the parameters with depth makes it possible to distinguish the active anisotropy associated with recent deformations from the frozen anisotropy-the effect of the past tectonic processes.
+PB  - MAIK NAUKA/INTERPERIODICA/SPRINGER
+AD  - 233 SPRING ST, NEW YORK, NY 10013-1578 USA
+LA  - English
+JO  - IZVESTIYA-PHYSICS OF THE SOLID EARTH
+VL  - 55
+IS  - 1
+DO  - 10.1134/S1069351319010130
+SN  - 1069-3513
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Mehryar, Sara
+AU  - Surminski, Swenja
+ED  - NA
+TI  - Investigating flood resilience perceptions and supporting collective decision-making through fuzzy cognitive mapping
+PY  - 2022
+AB  - Improving flood resilience of communities requires a holistic understanding of risks and resilience options as well as the preferences and priorities of different stakeholders. Innovations in risk and resilience assessment have helped communities to identify gaps in their flood risk management strategy but selecting and implementing resilience solutions remains a big challenge for many decision-makers. In addition to traditional appraisals and cost-benefit assessments this also calls for a participatory process in which various stakeholders are encouraged to adopt a system-level approach in identifying interventions that can maximise a range of benefits and co-benefits. In this study, we investigate how a combination of modelling and measurement methods can help decision-makers with their flood resilience strategies. We apply a participatory system thinking approach combining Fuzzy Cognitive Mapping (FCM) with a flood resilience measurement framework called Flood Resilience Measurement for Communities (FRMC). We first investigate stakeholders' biases on flood resilience interventions, and then lead them through a system thinking exercise using FCM and FRMC to elicit mental models representing important aspects of flood resilience and their interrelation. These are then aggregated, representing the collective perceptions and knowledge of stakeholders, and used to identify the most beneficial resilience actions in terms of direct and indirect impacts on flood resilience. We apply this approach to the case of Lowestoft, a coastal town in England exposed to significant flood risk. Developed in close collaboration with the local authorities, the ambition is to support decision-making on flood resilience interventions. We find that this combination of methods enables system-level thinking and inclusive decision-making about flood resilience which can ultimately encourage transformative decisions on prioritization of actions and investments.
+PB  - ELSEVIER
+AD  - RADARWEG 29, 1043 NX AMSTERDAM, NETHERLANDS
+LA  - English
+JO  - SCIENCE OF THE TOTAL ENVIRONMENT
+VL  - 837
+IS  - NA
+DO  - 10.1016/j.scitotenv.2022.155854
+SN  - 0048-9697
+KW  - Flood resilience; Participatory decision making; Resilience measurement tool; Mind mapping; Fuzzy cognitive mapping
+ER  - 
+
+TY  - article
+AU  - Carter, MR
+AU  - Kunelius, HT
+AU  - Sanderson, JB
+AU  - Kimpinski, J
+AU  - Platt, HW
+AU  - Bolinder, MA
+ED  - NA
+TI  - Productivity parameters and soil health dynamics under long-term 2-year potato rotations in Atlantic Canada
+PY  - 2003
+SP  - 153
+EP  - 168
+AB  - Crop rotation effects, due to emerging soil ecological interactions and processes that occur with time, can have a major impact on crop productivity and soil health. 2-year potato (Solanum tuberosum L.) rotation studies were conducted during an 11-year period on a fine sandy loam (Orthic Podzol) under a cool, humid climate in Prince Edward Island in eastern Canada. Rotation partners included Italian ryegrass (Lolium multiflorum Lam.), red clover (Trifolium pratense L.), and barley (Hordeum vulgare L.). The study objective was to assess trends in yield parameters, populations and diversity in nematodes and soil-borne pathogens, and soil structural stability and organic matter retention with time. Italian ryegrass had the largest biomass of both herbage (6.5 Mg ha(-1)) and roots (4.8 Mg ha(-1)), compared to red clover or barley. Averaged across 9 years, potato tuber yield was highest under Italian ryegrass (35.0 Mg ha(-1)) and lowest under red clover (31.1 Mg ha(-1)) rotations. Differences in tuber yield among rotations was associated with soil N limitation and nematode activity, but was not evident until Year 6. Population densities of specific plant parasitic nematodes recovered from roots and soil were generally low and varied according to host plant. Root lesion (Protylenchus spp.) and root-knot (Meloidogyne spp.) nematodes were more prevalent under red clover compared to other rotational crops. Stunt (Merlinius spp. and Tylenchorhynchus spp.) nematodes were more common under Italian ryegrass. The main organisms associated with tuber-borne disease were Rhizoctonia solani, Streptomyces spp., Fusarium spp., and Helminthosporium solani. The greatest reduction in tuber-borne diseases occurred with the potato-red clover rotation but significant differences were infrequent. Soil structural form throughout the soil profile (to 30 cm depth) was not adversely affected by the rotational treatments during the duration of the study, while soil structural stability at the soil surface (0-10 cm) was significantly improved. Losses of soil organic C, during the 11-year period ranged from marginal (4\%) for rotations with Italian ryegrass, to significant (16\%) under the barley rotation. Computer simulations, using the Century model, illustrated the importance of C inputs to maintain soil organic matter levels. Overall, potato crop productivity and soil organic C were generally maintained in rotations that contained Italian ryegrass, but declined under rotations with red clover and barley. (C) 2003 Elsevier Science B.V. All rights reserved.
+PB  - ELSEVIER SCIENCE BV
+AD  - PO BOX 211, 1000 AE AMSTERDAM, NETHERLANDS
+LA  - English
+JO  - SOIL \& TILLAGE RESEARCH
+VL  - 72
+IS  - 2
+DO  - 10.1016/S0167-1987(03)00085-0
+SN  - 0167-1987
+KW  - crop rotation; potato; soil-borne tuber diseases; plant parasitic nematodes; barley; red clover; Italian ryegrass; Podzol; soil organic carbon retention; soil health; soil structured; Eastern Canada
+ER  - 
+
+TY  - inproceedings
+AU  - Kriauciuniene, Jurate
+AU  - Gailiusis, Brunonas
+ED  - Cygas, D and Froehner, KD
+TI  - Impact of shoreface nourishment and breakwaters on the sediment processes of the Lithuanian nearshore
+PY  - 2008
+SP  - 576
+EP  - 582
+AB  - Various measures have been used to protect coastal areas controlling beach erosion. During the last decades all over the world there has been many alternatives from engineering to soft coastal defence techniques, among which artificial beach nourishment and breakwaters are particularly popular. This study evaluates the changes of sediment processes in Lithuanian nearshore using two measures of shore protection: breakwaters and shoreface nourishment. The current study aims to estimate which measure is more effective in Lithuanian nearshore. For this purpose the calculations of sediment transport were done for breakwaters and nearshore berms separately (case study area is in Baltic Sea near Palanga). The analysis is based on the results of MIKE 21 modelling system (waves, hydrodynamic processes and sediment transport) under varying climatic conditions, especially in stormy weather that has the major impact on hydrodynamic and sediment processes.
+PB  - VILNIUS GEDIMINAS TECHNICAL UNIV PRESS, TECHNIKA
+AD  - SAULETEKIO A1. 11, VILNIUS-40, LT-10233, LITHUANIA
+LA  - English
+JO  - NA
+VL  - NA
+IS  - NA
+DO  - NA
+SN  - NA
+KW  - sediment transport; shoreface nourishment; breakwater; MIKE 21; Baltic Sea
+ER  - 
+
+TY  - article
+AU  - Stolaroff, Joshuah K.
+AU  - Bhattacharyya, Subarna
+AU  - Smith, Clara A.
+AU  - Bourcier, William L.
+AU  - Cameron-Smith, Philip J.
+AU  - Aines, Roger D.
+ED  - NA
+TI  - Review of Methane Mitigation Technologies with Application to Rapid Release of Methane from the Arctic
+PY  - 2012
+SP  - 6455
+EP  - 6469
+AB  - Methane is the most important greenhouse gas after carbon dioxide, with particular influence on near-term climate change. It poses increasing risk in the future from both direct anthropogenic sources and potential rapid release from the Arctic. A range of mitigation (emissions control) technologies have been developed for anthropogenic sources that can be developed for further application, including to Arctic sources. Significant gaps in understanding remain of the mechanisms, magnitude, and likelihood of rapid methane release from the Arctic. Methane may be released by several pathways, including lakes, wetlands, and oceans, and may be either uniform over large areas or concentrated in patches. Across Arctic sources, bubbles originating in the sediment are the most important mechanism for methane to reach the atmosphere. Most known technologies operate on confined gas streams of 0.1\% methane or more, and may be applicable to limited Arctic sources where methane is concentrated in pockets. However, some mitigation strategies developed for rice paddies and agricultural soils are promising for Arctic wetlands and thawing permafrost. Other mitigation strategies specific to the Arctic have been proposed but have yet to be studied. Overall, we identify four avenues of research and development that can serve the dual purposes of addressing current methane sources and potential Arctic sources: (1) methane release detection and quantification, (2) mitigation units for small and remote methane streams, (3) mitigation methods for dilute (<1000 ppm) methane streams, and (4) understanding methanotroph and methanogen ecology.
+PB  - AMER CHEMICAL SOC
+AD  - 1155 16TH ST, NW, WASHINGTON, DC 20036 USA
+LA  - English
+JO  - ENVIRONMENTAL SCIENCE \& TECHNOLOGY
+VL  - 46
+IS  - 12
+DO  - 10.1021/es204686w
+SN  - 0013-936X
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Woehrle, Dieter
+ED  - NA
+TI  - The Role of Carbon Dioxide and the Importance of Greenhouse Gases Carbon Cycle and Climate Change
+PY  - 2021
+SP  - 112
+EP  - 124
+AB  - First of all, the section on the carbon cycle describes the quantities of carbon in and, in particular, in the case of carbon dioxide, the interactions between different terrestrial spheres. Special attention is drawn to sources and sinks for CO2 in the atmosphere. Based on this, it is shown that the natural greenhouse effect, which is characterized by solar radiation and infrared-active greenhouse gases such as CO2, CH4 and N2O, over a longer period of time resulted in a thermal-radiative equilibrium. This determined the temperature and thus the climate which is a prerequisite for life on Earth. The drastic increase in near-surface temperatures, for example, and the rise in sea level in recent decades is caused by increasing anthropogenic emissions of greenhouse gases. The dramatic increase in CO2-concentration is caused by the use of fossil fuels. Sinks absorb only a part of the anthropogenically produced CO2 from the atmosphere. A brief note on sustainable technologies is given at the end.
+PB  - WILEY-V C H VERLAG GMBH
+AD  - POSTFACH 101161, 69451 WEINHEIM, GERMANY
+LA  - German
+JO  - CHEMIE IN UNSERER ZEIT
+VL  - 55
+IS  - 2
+DO  - 10.1002/ciuz.201900061
+SN  - 0009-2851
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Arai, Hironori
+AU  - Inubushi, Kazuyuki
+AU  - Chiu, Chih-Yu
+ED  - NA
+TI  - Dynamics of Methane in Mangrove Forest: Will It Worsen with Decreasing Mangrove Forests?
+PY  - 2021
+AB  - Mangrove forests sequester a significant amount of organic matter in their sediment and are recognized as an important carbon storage source (i.e., blue carbon, including in seagrass ecosystems and other coastal wetlands). The methane-producing archaea in anaerobic sediments releases methane, a greenhouse gas species. The contribution to total greenhouse gas emissions from mangrove ecosystems remains controversial. However, the intensity CH4 emissions from anaerobic mangrove sediment is known to be sensitive to environmental changes, and the sediment is exposed to oxygen by methanotrophic (CH4-oxidizing) bacteria as well as to anthropogenic impacts and climate change in mangrove forests. This review discusses the major factors decreasing the effect of mangroves on CH4 emissions from sediment, the significance of ecosystem protection regarding forest biomass and the hydrosphere/soil environment, and how to evaluate emission status geospatially. An innovative ``digital-twin{''} system overcoming the difficulty of field observation is required for suggesting sustainable mitigation in mangrove ecosystems, such as a locally/regionally/globally heterogenous environment with various random factors.
+PB  - MDPI
+AD  - ST ALBAN-ANLAGE 66, CH-4052 BASEL, SWITZERLAND
+LA  - English
+JO  - FORESTS
+VL  - 12
+IS  - 9
+DO  - 10.3390/f12091204
+SN  - NA
+KW  - geospatial; greenhouse gas; carbon storage; CH4; microbial activities
+ER  - 
+
+TY  - inproceedings
+AU  - Perera, Lokukaluge P.
+AU  - Mo, Brage
+ED  - NA
+TI  - DATA COMPRESSION OF SHIP PERFORMANCE AND NAVIGATION INFORMATION UNDER DEEP LEARNING
+PY  - 2016
+AB  - Various emission control regulations enforce vessels to collect performance and navigation data and evaluate ship energy efficiency by implementing onboard sensors and data acquisition (DAQ) systems. These DAQ systems are designed to collect, store and communicate large amounts of performance and navigation information through complex data handling processes. It is suggested that this information should eventually be transferred to shore based data analysis centers for further processing and storage. However, the associated data transfer costs introduce additional challenges in this process and enforce to investigate cost effective data handling approaches in shipping. That mainly relates to the amount of data that are transferring through various communication networks (i.e. satellites \& wireless networks) between vessels and shore based data centers. Hence, this study proposes to use a deep learning approach (i.e. autoencoder system architecture) to compress ship performance and navigation information, which can be transferred through the respective communication networks as a reduced data set. The compressed data set can be expanded in the respective data center requiring further analysis. Therefore, a data set of ship performance and navigation information is analyzed (i.e. compression and expansion) through an autoencoder system architecture in this study. The compressed data set represents a subset of ship performance and navigation information can also be used to evaluate energy efficiency type applications in shipping. Furthermore, the respective input and output data sets of the autoencoder are also compared as statistical distributions to evaluate the network performance.
+PB  - AMER SOC MECHANICAL ENGINEERS
+AD  - THREE PARK AVENUE, NEW YORK, NY 10016-5990 USA
+LA  - English
+JO  - NA
+VL  - NA
+IS  - NA
+DO  - NA
+SN  - NA
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Tobey, James
+AU  - Rubinoff, Pamela
+AU  - Robadue, Jr., Donald
+AU  - Ricci, Glen
+AU  - Volk, Richard
+AU  - Furlow, John
+AU  - Anderson, Glen
+ED  - NA
+TI  - Practicing Coastal Adaptation to Climate Change: Lessons from Integrated Coastal Management
+PY  - 2010
+SP  - 317
+EP  - 335
+AB  - The challenges faced in adapting to climate change present themselves with increasing urgency. Nowhere will these challenges be greater than in the developing world where often weak institutions and governance systems struggle to deal with mounting pressures from population growth, inadequate infrastructure, and diminishing or already depleted natural resources. This article synthesizes the many global climate change and other anthropogenic threats to coastal ecosystems and draws on lessons and good practices from global experience in integrated coastal management (ICM) that can be transferred to coastal adaptation to these challenges. The case is made that the process and best practices of ICM are not radically changed by applying a climate lens. For the most part, the good practices of planning and implementation coastal management measures apply equally to climate change as they do to other coastal issues. However, there are some new and important considerations that enter into planning and decision-making with respect to climate change. These considerations include the need for an even greater emphasis on nature-based coastal protection strategies and measures, more pronounced issues of uncertainty in decision-making, the need for a longer planning horizon, and the importance of including in the decision-making equation opportunities to mitigate the sources of climate change with adaptation measures.
+PB  - TAYLOR \& FRANCIS INC
+AD  - 530 WALNUT STREET, STE 850, PHILADELPHIA, PA 19106 USA
+LA  - English
+JO  - COASTAL MANAGEMENT
+VL  - 38
+IS  - 3
+DO  - 10.1080/08920753.2010.483169
+SN  - 0892-0753
+KW  - climate change; coastal adaptation; coastal impacts; ICM; lessons learned
+ER  - 
+
+TY  - article
+AU  - Gower, J.
+AU  - King, S.
+ED  - NA
+TI  - Use of satellite images of chlorophyll fluorescence to monitor the spring bloom in coastal waters
+PY  - 2012
+SP  - 7469
+EP  - 7481
+AB  - This article demonstrates a successful application of fluorescence line height (FLH) images from the Medium Resolution Imaging Spectrometer (MERIS) and Moderate Resolution Imaging Spectroradiometer (MODIS) satellite imagers and provides a strong argument for making more widespread use of FLH in monitoring surface phytoplankton in coastal waters. In the present example, MERIS and MODIS FLH images show the start of the spring bloom in coastal waters of the Strait of Georgia in British Columbia, Canada. The images clearly show a recurring pattern in five of the eight years from 2003 to 2010 covered by MERIS, which suggests seeding of the early spring bloom from narrow coastal inlets. Such seeding has been suggested before, but never observed. FLH images show the blooms more clearly than images of surface chlorophyll based on the ratios of water-leaving radiances in the blue and green spectral range (440-560 nm). FLH images used here have been derived with no atmospheric correction. Alternative products based on the blue/green ratio require atmospheric correction, which is difficult in coastal areas. Such products also tend to be more significantly confused with other constituents of coastal waters.
+PB  - TAYLOR \& FRANCIS LTD
+AD  - 4 PARK SQUARE, MILTON PARK, ABINGDON OX14 4RN, OXON, ENGLAND
+LA  - English
+JO  - INTERNATIONAL JOURNAL OF REMOTE SENSING
+VL  - 33
+IS  - 23, SI
+DO  - 10.1080/01431161.2012.685979
+SN  - 0143-1161
+KW  - NA
+ER  - 
+
+TY  - article
+AU  - Zhou, Jin
+AU  - Zhang, Bo-Ya
+AU  - Yu, Ke
+AU  - Du, Xiao-Peng
+AU  - Zhu, Jian-Ming
+AU  - Zeng, Yan-Hua
+AU  - Cai, Zhong-Hua
+ED  - NA
+TI  - Functional profiles of phycospheric microorganisms during a marine dinoflagellate bloom
+PY  - 2020
+AB  - Harmful algal blooms (HABs) are an ecological concern but relatively few studies have investigated the functional potential of bacterioplankton over a complete algal bloom cycle, which is critical for determining their contribution to the fate of algal blooms. To address this point, we carried out a time-series metagenomic analysis of the functional features of microbial communities at three different Gymnodinium catenatum bloom stages (pre-, peak-, and post-bloom). Different microbial composition were observed during the blooming stages. The environmental parameters and correlation networks co-contribute to microbial variability, and the former explained 38.4\% of total variations of the bacterioplankton community composition. Functionally, a range of pathways involved in carbon, nitrogen, phosphorus and sulfur cycling were significantly different during the various HAB stages. Genes associated with carbohydrate-active enzymes, denitrification, and iron oxidation were enriched at the pre-bloom stage; genes involved in reductive citrate cycle for carbon fixation, carbon degradation, nitrification and phosphate transport were enhanced at the peak stage; and relative gene abundance related to sulfur oxidation, vitamin synthesis, and iron transport and storage was increased at the post-bloom stage. The ecological linkage analysis has shown that microbial functional potential especially the C/P/Fe metabolism were significantly linked to the fate of the algal blooms. Taken together, our results demonstrated that microorganisms displayed successional patterns not only at the community level, but also in the metabolic potential on HAB's progression. This work contributes to a growing understanding of microbial structural elasticity and functional plasticity and shed light on the potential mechanisms of microbial-mediated HAB trajectory. (c) 2020 Elsevier Ltd. All rights reserved.
+PB  - PERGAMON-ELSEVIER SCIENCE LTD
+AD  - THE BOULEVARD, LANGFORD LANE, KIDLINGTON, OXFORD OX5 1GB, ENGLAND
+LA  - English
+JO  - WATER RESEARCH
+VL  - 173
+IS  - NA
+DO  - 10.1016/j.watres.2020.115554
+SN  - 0043-1354
+KW  - Algal blooms; Microbial functional profiles; Matter cycle; Metagenomic
+ER  - 
+
+TY  - article
+AU  - Zhuang, Kelin
+AU  - North, Gerald R.
+AU  - Stevens, Mark J.
+ED  - NA
+TI  - A NetCDF version of the two-dimensional energy balance model based on the full multigrid algorithm
+PY  - 2017
+SP  - 198
+EP  - 202
+AB  - A NetCDF version of the two-dimensional energy balance model based on the full multigrid method in Fortran is introduced for both pedagogical and research purposes. Based on the land-sea-ice distribution, orbital elements, greenhouse gases concentration, and albedo, the code calculates the global seasonal surface temperature. A step-by-step guide with examples is provided for practice. (C) 2018 Published by Elsevier B.V.
+PB  - ELSEVIER
+AD  - RADARWEG 29, 1043 NX AMSTERDAM, NETHERLANDS
+LA  - English
+JO  - SOFTWAREX
+VL  - 6
+IS  - NA
+DO  - 10.1016/j.softx.2017.07.003
+SN  - 2352-7110
+KW  - Energy balance model; Full multigrid algorithm; Seasonal surface temperature
+ER  - 
+
+TY  - article
+AU  - Paranunzio, Roberta
+AU  - Dwyer, Edward
+AU  - Fitton, James M.
+AU  - Alexander, Paul J.
+AU  - O'Dwyer, Barry
+ED  - NA
+TI  - Assessing current and future heat risk in Dublin city, Ireland
+PY  - 2021
+AB  - Populations in high-density urban areas are exposed to higher levels of heat stress in comparison to rural areas. New spatially explicit approaches that identify highly exposed and vulnerable areas are needed to inform current urban planning practices to cope with heat hazards. This study proposes an extreme heat stress risk index for Dublin city across multiple decades (2020s-2050s) and for two representative concentration pathways (RCPs). In order to consider the interactions between greenhouse gas emissions and urban expansion, a climate-based urban land cover classification and a simple climate model have been combined to compute air temperature values accounting for urban heat island effect. This allowed the derivation of an improved hazard indicator in terms of extreme heat stress which, when integrated with information on current levels of vulnerability (i.e., socioeconomic factors assessed using principal component analysis (PCA), provides a heat hazard risk index for Dublin city at a fine spatial scale. Between the 2020s and 2050s, urban areas considered at highest risk are expected to increase by about 70\% and 96\% under RCP 4.5 and 8.5 respectively. For the 2050s, enhanced levels of heat risk under the RCP 8.5 scenario are particularly visible in the core city centre and in the northern and western suburbs. This study provides a valuable reference for decision makers for urban planning and provides an approach to help prioritise management decisions for the development of heat resilient and sustainable cities.
+PB  - ELSEVIER
+AD  - RADARWEG 29, 1043 NX AMSTERDAM, NETHERLANDS
+LA  - English
+JO  - URBAN CLIMATE
+VL  - 40
+IS  - NA
+DO  - 10.1016/j.uclim.2021.100983
+SN  - 2212-0955
+KW  - Heat risk; Socioeconomic vulnerability; Climate adaptation; Urban climate; Urban Heat Island; Universal thermal climate index
+ER  - 
+

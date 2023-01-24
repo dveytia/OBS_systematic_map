@@ -5,26 +5,145 @@ date: "2023-01-24"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r load libraries}
+library(dplyr)
+
 ```
 
-## R Markdown
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+This file organizes the results and decisions for the review team training for screening
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-```{r cars}
-summary(cars)
+# Organise search results into training sets for export
+
+
+In order to start the team training in a timely manner, I download a sample of the search results from WOS to divide into training sets. To aim to get a distribution of relevant and irrelevant articles, the search string was run in WOS, and then sorted by relevance. The first 3000 and last 3000 records were downloaded. From these 6000 records, I was able to randomly sample the training sets for pilot testing, as well as the sample for training and testing the model (3000 records total). Query link: https://www.webofscience.com/wos/woscc/summary/c04c0155-d6fa-4cf5-9b1d-e00408b0bb81-6b7bdddc/relevance/1
+
+
+```{r read in sample of search records from WOS and deduplicate}
+
+## read in the sample of the search records downloaded from WOS
+recs <- litsearchr::import_results(
+  directory = here::here("data","raw-data","sample_WOS_download_2023-01-20")
+)
+
+
+
+## De-duplicate
+
+# based on doi -- 0 duplicates
+unique_id <- revtools::find_duplicates(recs, to_lower = TRUE)
+sum(duplicated(unique_id))
+
+
+# assign the unique ids to the records and filter for only unique entries
+recs$unique_id <- unique_id
+
+# based on title
+unique_id_title <- revtools::find_duplicates(recs, to_lower = TRUE, match_variable = "title",
+                                            match_function = "stringdist", method = "osa",remove_punctuation = TRUE)
+recs$unique_id_title <- unique_id_title
+
+# how many duplicates
+sum(duplicated(unique_id_title))
+
+# view title duplicates
+View(recs[which(unique_id_title %in% unique_id_title[duplicated(unique_id_title)]),c("unique_id","unique_id_title","author","title","year","doi")])
+
+# remove duplicates
+ids2remove <- c(105, 762,1113, 1015, 1015, 1392, 2576, 3567)
+recs <- subset(recs, !(unique_id %in% ids2remove))
+
+
+
+## Examine dataset
+summary(recs)
+
+
+
+## save the records
+# saveRDS(recs, here::here("data", 
+#                                        "derived_data", 
+#                                        "review_team_train_screen",
+#                                        "sample_WOS_download_2023-01-20_deduplicated.rds"))
+
+
+# revtools::write_bibliography(recs, 
+#                              here::here("data", 
+#                                        "derived_data", 
+#                                        "review_team_train_screen",
+#                                        "sample_WOS_download_2023-01-20_deduplicated.bib"))
+
 ```
 
-## Including Plots
+```{r randomly select 4 training sets}
 
-You can also embed plots, for example:
+## Randomly select articles for training sets
+set.seed(123)
+nSets <- 4
+setSize <- 30
+nRecs <- nSets*setSize
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+
+
+## Allocate references randomly into training sets and save .bib files and .txt files for Colandr and Abstrackr respectively
+
+# read in de-duplicated references
+recsSub <- readRDS(here::here("data","derived_data","review_team_train_screen","sample_WOS_download_2023-01-20_deduplicated.rds"))
+
+# remove articles that don't have titles or abstracts
+recsSub <- subset(recsSub, !is.na(abstract))
+recsSub <- subset(recsSub, !is.na(title))
+
+# pull out the articles I need randomly
+recsSub <- recsSub[sample(nrow(recsSub), nRecs, replace=FALSE),]
+
+# Explore data
+recsSub %>%
+  select(author, title, year, abstract, doi, keywords) %>%
+  View
+
+# Set a column to ID what set it belongs to
+recsSub$Set <- rep(1:nSets, setSize)
+
+
+
+
+# ## Write each set to a seperate file
+# for(i in 1:nSets){
+#   temp <- subset(recsSub, Set == i)
+#   temp$Set <- NA
+#   
+#   # write files
+#   tempFileName <- file.path(scopeSearchDir, 
+#                                        "derived_data", 
+#                                        "review_team_train_screen",
+#                                        paste0("pilot_screen_",i))
+#   revtools::write_bibliography(temp, 
+#                              paste0(tempFileName,".ris"))
+#   
+#   temp <- temp %>%
+#     select(unique_id, title, abstract, keywords) %>%
+#     rename(id = unique_id)
+#   
+#   write.table(temp,
+#              file = paste0(tempFileName,".txt"),
+#              row.names=F, col.names=TRUE, sep='\t', quote=FALSE)
+# }
+
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+# Set 1: Inter-reviewer agreement
+
+Using this function: https://search.r-project.org/CRAN/refmans/irr/html/kappam.fleiss.html
+
+```{r}
+require(irr)
+
+# needs a dataframe where each row is an article, and each column is a reviewer. The values represent the decision (can also be multi-categorical)
+
+
+```
+
+
