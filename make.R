@@ -28,5 +28,7 @@ pkgload::load_all(here::here())
 ## Run Project ----------
 
 source(knitr::purl(here::here("analyses","01-compile_test_list.Rmd"), output=tempfile()))
+source(knitr::purl(here::here("analyses","02-evaluate_comprehensiveness.Rmd"), output=tempfile()))
+source(knitr::purl(here::here("analyses","03-review_team_screening_training.Rmd"), output=tempfile()))
 
 
