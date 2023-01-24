@@ -1,0 +1,108 @@
+---
+title: "01-compile_test_list"
+author: "Devi Veytia"
+date: "2023-01-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+
+Members have contributed test list articles, but now I need to check them against the eligibility criteria to ensure they are true "inclusions"
+
+```{r load libraries}
+library(dplyr)
+
+```
+
+```{r read in all test list articles}
+# Retreive test-list items exported as .ris from Zotero
+
+testListDir <- here::here("data","raw-data","test-list") # Folder with the test list bib information
+risEntries <- dir(testListDir)[grepl(".ris", dir(testListDir))]
+mostRecentDate <- as.Date(gsub("[A-z \\.\\(\\)]","", risEntries))
+testListBib.fp <- file.path(testListDir, risEntries[which.max(mostRecentDate)])
+Zoteroimport <- litsearchr::import_results(file = testListBib.fp, verbose = TRUE)
+
+# clean columns
+Zoteroimport <- Zoteroimport[,c("author","year","doi","url","title","abstract")]
+
+# remove duplicates
+# based on DOI
+#revtools::screen_duplicates(Zoteroimport)
+unique_id <- revtools::find_duplicates(Zoteroimport, to_lower = TRUE)
+Zoteroimport$unique_id <- unique_id
+length(which(duplicated(unique_id))) # number of dups
+
+# # run if duplicates
+# duplicates <- unique_id[which(duplicated(unique_id))]
+# Zoteroimport %>%
+#   filter(unique_id %in% duplicates) %>%
+#   arrange(unique_id) %>%
+#   View()
+
+# remove those with no DOI
+Zoteroimport <- subset(Zoteroimport, !is.na(doi))
+```
+
+
+```{r screen articles in R using metagear}
+
+# set up screening
+unscreened_test_list <- metagear::effort_distribute(Zoteroimport[!duplicated(Zoteroimport$unique_id),], 
+                                                  reviewers = c("Devi"), effort= c(100), initialize = TRUE,
+                                                  save_split = TRUE, 
+                                          directory = here::here("data","derived-data","screen_test_list"))
+
+buttonOptions <- c("No_OB","cc_impact","No_climThreat","Indir_relevance", "No_other","Yes")
+keyOptions <- c("q","w","e","r","t","y")
+
+## Run the code below to screen
+
+# metagear::abstract_screener(file.path(scopeSearchDir,"derived-data","screen_test_list","effort_Devi.csv"), 
+#                             aReviewer = "Devi",
+#                             abstractColumnName = "abstract", titleColumnName = "title",
+#                             theButtons = buttonOptions, keyBindingToButtons = keyOptions)
+
+```
+
+```{r import and subset test list to only included articles}
+screened_test_list <- readxl::read_excel(
+  path = here::here("data","derived-data","screen_test_list","test-list_screened.xlsx"))
+
+# filter results to included
+screened_test_list <- subset(screened_test_list, INCLUDE == "Yes")
+
+# number of test list articles -- 105
+nrow(screened_test_list)
+
+```
+
+```{r write dois of test list articles}
+
+cat(paste0(screened_test_list$doi, collapse = " OR "), 
+    file = here::here("data", "derived-data", "screen_test_list", "test-list_screened_dois.txt"))
+
+```
+
+
+```{r compile a table of test list articles indexed in WOS}
+test_list <- litsearchr::import_results(
+  file = here::here("data", "derived-data", "screen_test_list", 
+                   "test-list_indexed_in_WOS_2023-01-19.ris"), verbose = TRUE)
+
+# Format and save as an excel
+test_list <- test_list[,c("title","author","year","doi")]
+
+# clean
+test_list$year[which(test_list$doi == "10.1038/s41565-022-01226-w")] <- 2022
+test_list$year[which(test_list$doi == "10.1007/s13280-022-01811-2")] <- 2022
+
+# # # write to excel
+# writexl::write_xlsx(test_list, here::here("data", "derived_data", "screen_test_list", 
+#                     "test-list_2023-01-19.xlsx"))
+```
+
+
