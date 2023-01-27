@@ -39,4 +39,4 @@ vignettes/*.pdf
 .Renviron
 
 # .bib files because otherwise the storage is massive
-/*.bib
+*.bib
