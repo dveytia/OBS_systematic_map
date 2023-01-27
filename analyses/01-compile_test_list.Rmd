@@ -105,9 +105,12 @@ test_list$year[which(test_list$doi == "10.1007/s13280-022-01811-2")] <- 2022
 #                     "test-list_2023-01-19.xlsx"))
 
 # ## write to text file
-# cat(paste0(test_list$doi, collapse = " OR "), 
-#     file = here::here("data", "derived-data", "screen_test_list", "test-list_indexedInWOS_dois.txt"))
-
+cat(paste0("DO = (",
+           paste0(test_list$doi, collapse = " OR "),
+           ")"
+    ), 
+    file = here::here("data", "derived-data", "screen_test_list", "test-list_indexedInWOS_dois.txt")
+    )
 ```
 
 
