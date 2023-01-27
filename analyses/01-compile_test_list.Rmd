@@ -82,8 +82,8 @@ nrow(screened_test_list)
 
 ```{r write dois of test list articles}
 
-cat(paste0(screened_test_list$doi, collapse = " OR "), 
-    file = here::here("data", "derived-data", "screen_test_list", "test-list_screened_dois.txt"))
+# cat(paste0(screened_test_list$doi, collapse = " OR "), 
+#     file = here::here("data", "derived-data", "screen_test_list", "test-list_screened_dois.txt"))
 
 ```
 
@@ -103,6 +103,11 @@ test_list$year[which(test_list$doi == "10.1007/s13280-022-01811-2")] <- 2022
 # # # write to excel
 # writexl::write_xlsx(test_list, here::here("data", "derived_data", "screen_test_list", 
 #                     "test-list_2023-01-19.xlsx"))
+
+# ## write to text file
+# cat(paste0(test_list$doi, collapse = " OR "), 
+#     file = here::here("data", "derived-data", "screen_test_list", "test-list_indexedInWOS_dois.txt"))
+
 ```
 
 
