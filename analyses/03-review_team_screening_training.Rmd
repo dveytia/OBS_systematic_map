@@ -218,6 +218,100 @@ ggp2 <- ggplot(set1, aes("agreement", stringr::str_trunc(title, 30, "right"),
 ```
 
 
+
+
+
+
+# Set 2: Inter-reviewer agreement
+
+Using this function: https://search.r-project.org/CRAN/refmans/irr/html/kappam.fleiss.html
+
+```{r names of screeners}
+screeners <- c("dveytia", "YunneShin", "bopp", "gattuso", "adriencomte")
+idColumns <- c("title", "abstract", "consensus")
+```
+
+```{r read in csv of set 2 screening results}
+
+## Read in and format
+set2 <- read.csv(here::here("data","derived-data","review-team-train-screen", "set2_screening_results.csv"),
+                 row.names = 2, strip.white = TRUE)
+# truncate number of columns
+set2 <- set2[,c(idColumns, screeners)]
+# calculate the proportion of agreement -- values of 0 and 1 indicate agreement, and in between are levels of disagreement with 0.5 being the highest
+set2$propPos <- apply(set2[,screeners], 1, function(x) sum(x>0))/5
+
+
+
+## Calculate the kappa statistic
+set2KappaTest <- irr::kappam.fleiss(set2[,c(screeners)])
+set2KappaTest <- irr::kappam.fleiss(set2[,c("dveytia", "YunneShin", "bopp", "adriencomte")])
+print(set2KappaTest)
+
+ # Fleiss' Kappa for m Raters
+ # 
+ # Subjects = 30 
+ #   Raters = 5 
+ #    Kappa = 0.773 
+ # 
+ #        z = 13.4 
+ #  p-value = 0 
+
+
+## The number of includes
+sum(set2$consensus == 1)
+
+
+## Visualize
+
+set2_long <- reshape2::melt(set2, 
+                            measure.vars = c(screeners),
+                            variable.name = "screener",
+                            value.name = "screen_decision")
+
+
+
+agreement <- expand.grid(set2$title, screeners)
+colnames(agreement) <- c("title","screener")
+agreement <- merge(agreement, set2[,c("title","propPos")], by=c("title"))
+
+
+ggp1 <- ggplot(set2_long, aes(screener, stringr::str_trunc(title, 30, "right"), 
+                      fill=factor(screen_decision, levels = c(1,-1), labels = c("incl","excl"))))+
+  geom_tile()+
+  scale_fill_manual(values = c("chartreuse4","darksalmon"))+
+  labs(y = "Title", fill = "Decision")+
+  labs(caption = paste("Fleiss' Kappa statistic = ", signif(set2KappaTest$value, 2)))+
+  # geom_tile(data=agreement, aes(
+  #   x=screener, y=stringr::str_trunc(title, 30, "right"),colour = propPos), 
+  #   fill="transparent", inherit.aes = FALSE)+
+  # scale_colour_gradientn(colours = c("transparent","red","transparent"))+
+  theme(
+    axis.text.x = element_text(angle=45, hjust=1),
+    legend.position = "bottom"
+  )
+
+
+ggp2 <- ggplot(set2, aes("agreement", stringr::str_trunc(title, 30, "right"),
+                 fill = propPos))+
+  geom_tile()+
+  scale_fill_gradientn(colours = c("transparent","red","transparent"), name="Agreement")+
+  theme(
+    axis.text = element_blank(),
+    axis.title = element_blank(),
+    panel.background = element_rect(fill = "white"),
+    axis.ticks = element_blank()
+  )
+
+
+# pdf(here::here("figures","screening_training_sets","screening_set2.pdf"),
+#     width = 7, height = 5)
+# egg::ggarrange(ggp1, ggp2, nrow=1, ncol=2, widths = c(3,1))
+# 
+# dev.off()
+```
+
+
 ```{r}
 require(irr)
 
@@ -225,5 +319,8 @@ require(irr)
 
 
 ```
+
+
+
 
 

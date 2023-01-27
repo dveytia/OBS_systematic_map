@@ -243,7 +243,9 @@ test list articles = all 97 that are indexed in WOS were retrieved
 
 ```{r set up dataframes to store results}
 # set up dataframe for results
-searchFormulaEval_summary <- data.frame(Search.Formula= c(searchFormula$Search.Formula, "Add (pollution OR pollutant$) to NOT terms"))
+searchFormulaEval_summary <- data.frame(
+  Search_no = 1:(length(searchFormula$Search.Formula)+1),
+  Search.Formula= c(searchFormula$Search.Formula, "Add (pollution OR pollutant$) to NOT terms"))
 searchFormulaEval_summary$N_total_results <- NA
 searchFormulaEval_summary$N_test_list <- NA
 
