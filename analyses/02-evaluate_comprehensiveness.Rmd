@@ -280,3 +280,56 @@ Therefore the final search string follows the formula in row 7.
 Note when I refine for english, it goes from 292256 - 287,965
 
 
+
+
+## Combine test list items returned from each block
+
+
+```{r}
+returnTestListDir <- here::here("data","raw-data","WOS_downloads","test-list-returns-by-block")
+returnTestListFiles <- dir(returnTestListDir)
+
+# read in and de-duplicate test list returns
+temp <- rbibtools::read_bib(here::here(returnTestListDir))
+temp$unique_id <- revtools::find_duplicates(temp)
+temp <- temp[!duplicated(temp$unique_id),]
+nrow(temp)
+
+# compare to test list
+# read in test list
+test_list <- readxl::read_excel(here::here("data", "derived-data", "screen_test_list", "test-list_2023-01-19.xlsx"))
+
+# identify if any test list items are not included
+ind <- which(!(test_list$doi %in% temp$doi))
+if(length(ind)>0){
+  View(test_list[ind,])
+}else{
+  print("all test list articles retreived")
+}
+
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
