@@ -312,15 +312,7 @@ ggp2 <- ggplot(set2, aes("agreement", stringr::str_trunc(title, 30, "right"),
 ```
 
 
-```{r}
-require(irr)
-
-# needs a dataframe where each row is an article, and each column is a reviewer. The values represent the decision (can also be multi-categorical)
-
-
-```
-
-
+The necessary kappa statistic was reached -- can move on to individual screening
 
 
 

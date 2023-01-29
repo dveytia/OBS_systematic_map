@@ -38,5 +38,6 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# .bib files because otherwise the storage is massive
+# files where I've stored references because otherwise the storage is massive
 *.bib
+*.sqlite

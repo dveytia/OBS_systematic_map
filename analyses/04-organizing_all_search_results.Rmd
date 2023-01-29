@@ -11,6 +11,26 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
 
 ```{r load libraries}
 library(dplyr)
+library(R.utils)
+library(RSQLite)
+
+```
+
+```{r set up inputs}
+##  set up inputs
+
+# Do you want to overwrite the existing sql databases?
+sqlOverwrite = TRUE
+
+# Directory where the folders containing the results for the different blocks 
+# wos results
+wos_resultsDir <- here::here("data","raw-data","WOS_downloads")
+# file to for the sql database
+sqlite_file <- file.path(wos_resultsDir,"sql-databases","sample-wos-refs.sqlite")
+table_name <- "wosrefs"
+
+# number of articles of include in double blid screening
+nDoubBlind <- 300
 
 ```
 
@@ -89,6 +109,303 @@ if (rscopus::have_api_key()) {
 df <- gen_entries_to_df(completeArticle$entries)
 
 ```
+
+
+# Subsetting results for screening
+
+It would take too long to de-duplicate all references, so what I will do instead is randomly select 3 .bib files from each block and then divvy them up into screening sets:
+* 300 refs for double blind screening
+* 
+
+```{r}
+## use inputs to extract folder paths for where the wos results are stored
+resultsFolders <- dir(wos_resultsDir)[grep("23", dir(resultsDir))] # results extracted in '23
+
+# get names for the different blocks
+blockNames <- unlist(lapply(str_split(resultsFolders,"_"), function(x) x[[1]]))
+
+# create list to store results into different sets
+setsList <- vector("list", length(blockNames)+1)
+
+for(i in 1:length(resultsFolders)){
+  
+  # select one of the block directories and extract all the file names within
+  blockFiles <- dir(file.path(wos_resultsDir, resultsFolders[i]))
+  
+  # # order files based on dowload order
+  # ord <- stringr::str_extract_all(blockFiles,"\\d", simplify = TRUE)
+  # ord <- as.numeric(paste0(ord[,1], ord[,2]))
+  # ord[which(is.na(ord))] <- 0
+  # blockFiles <- blockFiles[order(ord)]
+  # 
+  # # select files in three slices: first, middle and last
+  # # since I sorted based on relevance, this should give a good representation of varying levels of relevance
+  # blockFiles <- blockFiles[c(1,round(length(blockFiles)/2), length(blockFiles))]
+  
+  
+  # extract all the unique wos IDs 
+  
+  
+  
+  
+  # for each of the slices, read out the bibliographic file
+  for(f in 1:length(blockFiles)){
+    
+    tempDf <- revtools::read_bibliography(
+      here::here(resultsDir, resultsFolders[i], blockFiles[f])
+    ) 
+    
+    tempDf$source_string <- paste()
+    
+    # make into a big dataframe
+    if(i==1 & f==1){
+      
+    }
+    
+    
+  } # end processing the .bib file
+  
+}
+
+```
+
+
+# Subsetting WOS results for screening using sql
+
+Analysis steps:
+
+For each search block:
+* load in all .bib files into R: only columns for doi and title
+  * create unique ID based on fuzzy title and year (Callaghan et al 2021)
+  * grouping by unique ID, combine data from different rows to create a single row containing all the available data see: https://stackoverflow.com/questions/44206714/remove-least-complete-duplicate-rows-in-r-or-sql
+   * 
+
+convert to sqlite database using the inborutils packages
+* remove duplicates from the sql database 
+
+```{r}
+## Set up inputs
+
+# max number of record files to read per block
+# if number of files > maxFileNo, then maxFileNo will be sampled from available files
+maxFileNo <- 10
+
+
+# Colnames to extract
+colnames2extract <- c("type","author","title","journal","year","volume","number","pages","abstract","publisher","address","affiliation","doi","issn","eissn","keywords","keywords_plus","research_areas","web_of_science_categories","author_email","affiliations","orcid_numbers", "web_of_science_index", "unique_id", "funding_acknowledgement", "funding_text", "article_number", "researcherid_numbers","editor", "booktitle","isbn", "book_group_author", "organization", "series")
+
+
+
+## use inputs to extract file paths
+resultsFolders <- dir(resultsDir)[grep("23", dir(resultsDir))]
+
+# get names for the different blocks
+blockNames <- unlist(lapply(str_split(resultsFolders,"_"), function(x) x[[1]]))
+
+
+
+
+## loop through all the files to write to an sql database
+start <- Sys.time()
+
+for(i in 1:length(resultsFolders)){
+  
+  cat(paste(blockNames[i], i,"/of", length(blockNames), "\n"))
+  
+  blockFiles <- dir(file.path(resultsDir, resultsFolders[i]))
+  
+  if(length(blockFiles) > maxFileNo){
+    blockFiles <- blockFiles[sample(1:length(blockFiles),size = maxFileNo, replace = FALSE)]
+  }
+  
+  # for each of the wos record files in the directory
+  for(f in 1:length(blockFiles)){
+    
+    cat(paste("   file", f, "of", length(blockFiles),"\n"))
+    
+    # read in bibtex file -- if there is an error skip to the next
+    skip_to_next <- FALSE
+    tryCatch(
+      tempDf <- revtools::read_bibliography(here::here(resultsDir, resultsFolders[i], blockFiles[f])),
+      error = function(e){skip_to_next <<- TRUE}
+    )
+    if(skip_to_next){next}
+    
+    # Ensure order and naming of columns is consistent
+    # create empty columns if standard columns are missing
+    if(sum(!(colnames2extract %in% colnames(tempDf))) > 0){
+      tempDf[,colnames2extract[which(!(colnames2extract %in% colnames(tempDf)))]] <- NA
+    }
+    # subset to only specific columns 
+    tempDf <- tempDf[,colnames2extract]
+    
+    # add a column ID to indicate which block it came from
+    tempDf$source_string <- paste(blockNames[i])
+    
+    # set overwrite commands and appending commands
+    if(i==1 & f==1 & sqlOverwrite){
+      overwritel = TRUE; appendl = FALSE
+    }else{
+      overwritel = FALSE; appendl = TRUE
+    }
+    
+    # write to database
+    db <- RSQLite::dbConnect(RSQLite::SQLite(), dbname = sqlite_file)
+    dbWriteTable(db, "refs", tempDf, append=appendl, overwrite = overwritel)
+    dbDisconnect(db)
+    
+    
+  } # end processing the .bib file
+  
+} # end looping through the block folder
+
+end <- Sys.time()
+
+start-end
+```
+
+
+```{r sample references for each substring and de-duplicate}
+set.seed(123)
+
+wos_id_db <- src_sqlite(sqlite_file, create=FALSE)
+wos_ids <- tbl(wos_id_db, "refs")
+
+# select 1500 references from each block to give 7500 to work with
+wos_id_results <- wos_ids %>%
+  filter(!is.na(doi), !is.na(title), !is.na(abstract)) %>%
+  #select(unique_id, source_string) %>%
+  group_by(source_string)%>%
+  slice_sample(n=1500)
+
+wos_id_results <- as.data.frame(wos_id_results)
+dim(wos_id_results)
+
+wos_id_results$title_id <- revtools::find_duplicates(wos_id_results, match_variable = "title",
+                                             match_function = "stringdist", method = "osa", threshold = 5,
+                                             remove_punctuation = TRUE, to_lower = TRUE)
+
+# remove title and year duplicates
+# for each unique combination of title and year, 
+# combine data from different rows to create a single row containing all the available data
+# note if there are conflicting data for a column with the same ID slice will take the first value
+wos_id_results2 <- wos_id_results %>%
+  mutate(title_year_id = paste(title_id, year, sep =".")) %>%
+  group_by(title_year_id) %>%
+  slice(which.min(rowSums(is.na(.)))) %>%
+  as.data.frame()
+
+nrow(wos_id_results2)
+
+
+wos_id_results <- wos_id_results %>%
+  mutate(title_year_id = paste(title_id, year, sep ="."))
+
+dupedIds <- wos_id_results$title_year_id[duplicated(wos_id_results$title_year_id)]
+for(i in 1:length(dupedIds)){
+  tempDf <- wos_id_results %>%
+   filter(title_year_id %in% dupedIds[i]) %>% 
+   slice(which.min(rowSums(is.na(.)))) %>%
+   as.data.frame()
+  if(i==1){
+    dedupedResults <- tempDf
+  }else{
+    dedupedResults <- rbind(dedupedResults, tempDf)
+  }
+}
+
+# join together into one dataframe with unique references
+nondupedResults <- wos_id_results %>%
+  filter(!(title_year_id %in% dupedIds)) %>%
+  as.data.frame()
+unique_wos_results <- rbind(dedupedResults, nondupedResults)
+rm(dedupedResults, nondupedResults)
+
+# number of duplicates removed -- 121
+nrow(wos_id_results)-nrow(unique_wos_results)
+
+# add a column indicating that it is a random sample
+unique_wos_results$random_sample <- paste("yes")
+
+# ensure that title and abstract are not na
+unique_wos_results <- unique_wos_results %>%
+  filter(!is.na(title), !is.na(abstract))
+
+# # write to a new file
+# saveRDS(unique_wos_results,
+#         here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sample.rds"))
+
+```
+
+Depending on how the records need to be formatted, save as appropriate file type
+
+```{r using the dedeuplicated sample of references create files to upload for screening}
+
+# load in the random sample of deduplicated wos results
+unique_wos_results <- readRDS(
+  here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sample.rds")
+)
+
+# from this, divide into sets of articles to screen based on block
+sampleInstructions <- data.frame(
+  source_string = unique(unique_wos_results$source_string),
+  n = c(1000, 700, 1000, 300, 1000)
+)
+
+# using the sample instructions create a dataframe with a random sample
+for(i in 1:nrow(sampleInstructions)){
+  
+  tempDf <- unique_wos_results %>%
+    filter(source_string == sampleInstructions$source_string[i]) %>%
+    sample_n(size = sampleInstructions$n[i])
+  
+  if(i==1){
+    sampleDf <- tempDf
+  }else{
+    sampleDf <- rbind(sampleDf, tempDf)
+  }
+  
+}
+
+
+# seperate out into double blind and regular sets 
+indDoubBlind <- sample(1:nrow(sampleDf), nDoubBlind, replace=FALSE)
+sampleDf$Double_Blind <- "no"
+sampleDf$Double_Blind[indDoubBlind] <- "yes"
+
+# format files for upload into screening platform and write
+
+```
+
+
+
+# untested code ----
+
+
+```{r deduplicate the sql database}
+
+db <- src_sqlite(sqlite_file, create=FALSE)
+tempDf <- tbl(db, "refs")
+recs <- tempDf %>%
+  mutate(unique_ID)
+
+
+```
+
+```{r de duplicate code}
+start <- Sys.time()
+tempDf$title_id <- revtools::find_duplicates(tempDf, match_variable = "title",
+                                             match_function = "stringdist", method = "osa", threshold = 5,
+                                             remove_punctuation = TRUE, to_lower = TRUE)
+end <- Sys.time()
+
+diff <- end-start
+diff*300*1000/60/60/24 # the amount of time it would take in days to run for 300k ref
+
+# if the title and year are a match, combine for the most complete reference
+
+``` 
+
 
 
 
