@@ -40,4 +40,5 @@ vignettes/*.pdf
 
 # files where I've stored references because otherwise the storage is massive
 *.bib
+*.ris
 *.sqlite
