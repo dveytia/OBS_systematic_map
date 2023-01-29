@@ -376,20 +376,23 @@ indDoubBlind <- sample(1:nrow(sampleDf), nDoubBlind, replace=FALSE)
 sampleDf$Double_Blind <- "no"
 sampleDf$Double_Blind[indDoubBlind] <- "yes"
 
+sampleDf_singleScreen <- sampleDf %>% filter(Double_Blind == "no")
+
+## Write files
+# save sampled Df
+saveRDS(sampleDf,
+        here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
 
 
-# ## Write files
-# # save sampled Df
-# saveRDS(sampleDf, 
-#         here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
-# 
-# 
 # # format files for upload into screening platform and write
 # # potential to group by source to better help with the relevance ranking algorithm -- but decided not to
-# # 
 # 
-# revtools::write_bibliography(x = sampleDf %>% filter(Double_Blind == "no"),
-#                              filename = here::here("data","derived-data", "screening","records-to-screen","wos_sub-sample1.ris"),
+# revtools::write_bibliography(x = sampleDf_singleScreen[1:round(nrow(sampleDf_singleScreen)/2),],
+#                              filename = here::here("data","derived-data", "screening","records-to-screen","wos_sub-sample_1.1.ris"),
+#                             format="ris")
+# 
+# revtools::write_bibliography(x = sampleDf_singleScreen[(round(nrow(sampleDf_singleScreen)/2)+1):nrow(sampleDf_singleScreen),],
+#                              filename = here::here("data","derived-data", "screening","records-to-screen","wos_sub-sample_1.2.ris"),
 #                             format="ris")
 # 
 # revtools::write_bibliography(x = sampleDf %>% filter(Double_Blind == "yes"),
@@ -429,6 +432,9 @@ diff*300*1000/60/60/24 # the amount of time it would take in days to run for 300
 
 
 
+# PRISMA SUMMARY
+
+check this out: PRISMA2020 R Package https://www.youtube.com/watch?v=IySomccfnFE&list=PLt4D0fZLWzSlVzzhZTeyOCJDyMoDHNEDK&index=18
 
 
 
