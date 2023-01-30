@@ -208,7 +208,9 @@ sink()
 
 For Scopus it might make the most sense to download records by source title, becaues there are only 4 records that exceed 2,000 references
 
-
+Numbers of total results from scopus per block (Jan 30 2023):
+General: 221
+Renewables: 85425
 
 
 # Evaluate comprehensiveness
