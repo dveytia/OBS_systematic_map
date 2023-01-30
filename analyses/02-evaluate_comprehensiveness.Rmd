@@ -170,6 +170,13 @@ for(s in 1:length(sheets)){
   # the last row is where the final string is stored
   string <- temp[nrow(temp),]
   
+  # clean out an NA and preceeding boolean operator if it is present
+  if(sum(is.na(string))>0){
+    naInd <- which(is.na(string))
+    rmOper <- naInd+1
+    string[-c(naInd, rmOper)]
+  }
+  
   
   ## Format the string for Scopus
   
@@ -197,20 +204,25 @@ for(s in 1:length(sheets)){
 
 ```{r write search equation for scopus to txt file}
 
-# add in field codes and write to text file
-
-sink(file.path(search_string_dir,"scopus-equation-blocks.txt"))
-for(s in 1:length(sheets)){
-  cat(string_blocks_scopus$Block[s],"\n",string_blocks_scopus$String[s],"\n","\n")
-}
-sink()
+# # add in field codes and write to text file
+# 
+# sink(file.path(search_string_dir,"scopus-equation-blocks.txt"))
+# for(s in 1:length(sheets)){
+#   cat(string_blocks_scopus$Block[s],"\n",string_blocks_scopus$String[s],"\n","\n")
+# }
+# sink()
 ```
 
 For Scopus it might make the most sense to download records by source title, becaues there are only 4 records that exceed 2,000 references
 
 Numbers of total results from scopus per block (Jan 30 2023):
 General: 221
-Renewables: 85425
+Renewables: 85,425
+Mitigation: 55,631
+Nature: 1442
+Societal: 488
+
+total = 142,907 
 
 
 # Evaluate comprehensiveness
