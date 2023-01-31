@@ -135,65 +135,16 @@ Societal: 488
 total = 142,907 
 
 
-# Evaluate comprehensiveness of the search in WOS
+# Evaluate comprehensiveness of the search in WOS 
 
 
-Using the test list, evaluate the comprehensiveness of the search in WOS. Do this by entering the search string in the topic field, and using an "AND" boolean operator, entering DO = the dois of the test list articles. If the number of returns = the number of test list articles I have full retrieval. To see which articles are not retrieved, search the DO = test list article dois, NOT TS = my WOS search string.
+Using the test list, evaluate the comprehensiveness of the search in WOS. 
 
-
-DETAILS OF SEARCH
-
-Search on Jan 18 2023
-
-Total articles retrieved: 320,936
-test list articles = all 97 that are indexed in WOS were retrieved
-
-
-```{r set up dataframes to store results}
-# set up dataframe for results
-searchFormulaEval_summary <- data.frame(
-  Search_no = 1:(length(searchFormula$Search.Formula)+1),
-  Search.Formula= c(searchFormula$Search.Formula, "Add (pollution OR pollutant$) to NOT terms"))
-searchFormulaEval_summary$N_total_results <- NA
-searchFormulaEval_summary$N_test_list <- NA
-
-# get number of test list articles
-test_list <- readxl::read_xlsx(file.path(scopeSearchDir, "derived_data", "screen_test_list","test-list_2023-01-19.xlsx"))
-n_test_list <- nrow(test_list)
-
-## Fill in results
-searchFormulaEval_summary[1,2:3] <- c(42555,18)
-searchFormulaEval_summary[2,2:3] <- c(498888, 89)
-searchFormulaEval_summary[3,2:3] <- c(13869,29)
-searchFormulaEval_summary[4,2:3] <- c(152368, 50)
-searchFormulaEval_summary[5,2:3] <- c(163312, 72)
-searchFormulaEval_summary[6,2:3] <- c(10138, 29)
-searchFormulaEval_summary[7,2:3] <- c(292256, 97)
-searchFormulaEval_summary[8,2:3] <- c(277012,95)
-
-# add column for proportion of test list articles
-searchFormulaEval_summary$N_percent_test_list <- searchFormulaEval_summary$N_test_list/n_test_list*100
-
-View(searchFormulaEval_summary)
-
-# # write to excel file for putting in paper
-# writexl::write_xlsx(searchFormulaEval_summary, 
-#                     here::here("outputs","scopingSearchSummary.xlsx"))
-
-```
-
-
-Therefore the final search string follows the formula in row 7.
-
-Note when I refine for english, it goes from 292256 - 287,965
+The test list items retrieved from each sub-string (adding the additional argument in the search "AND (DO = <test list article dois>)" and then exporting the results), are then compiled and assessed for completeness -- is the whole test list retreived across all the sub-strings?
 
 
 
-
-## Combine test list items returned from each block
-
-
-```{r}
+```{r combine test list items returned from each block}
 returnTestListDir <- here::here("data","raw-data","WOS_downloads","test-list-returns-by-block")
 returnTestListFiles <- dir(returnTestListDir)
 
