@@ -105,11 +105,12 @@ colnames2extract <- c("type","author","title","journal","year","volume","number"
 
 
 ## use inputs to extract file paths
-resultsFolders <- dir(resultsDir)[grep("23", dir(resultsDir))]
+resultsFolders <- dir(file.path(resultsPath, dbFolderNames[1]))
+resultsFolders <- resultsFolders[grep("23", resultsFolders)]
+resultsFolders <- resultsFolders[order(resultsFolders)]
 
 # get names for the different blocks
 blockNames <- unlist(lapply(str_split(resultsFolders,"_"), function(x) x[[1]]))
-
 
 
 
@@ -120,7 +121,7 @@ for(i in 1:length(resultsFolders)){
   
   cat(paste(blockNames[i], i,"/of", length(blockNames), "\n"))
   
-  blockFiles <- dir(file.path(resultsDir, resultsFolders[i]))
+  blockFiles <- dir(file.path(resultsPath, dbFolderNames[1], resultsFolders[i]))
   
   if(length(blockFiles) > maxFileNo){
     blockFiles <- blockFiles[sample(1:length(blockFiles),size = maxFileNo, replace = FALSE)]
@@ -134,7 +135,7 @@ for(i in 1:length(resultsFolders)){
     # read in bibtex file -- if there is an error skip to the next
     skip_to_next <- FALSE
     tryCatch(
-      tempDf <- revtools::read_bibliography(here::here(resultsDir, resultsFolders[i], blockFiles[f])),
+      tempDf <- revtools::read_bibliography(here::here(resultsPath,dbFolderNames[1], resultsFolders[i], blockFiles[f])),
       error = function(e){skip_to_next <<- TRUE}
     )
     if(skip_to_next){next}
@@ -321,7 +322,7 @@ Things to include in the dataframe:
 
 Then create another database that has collapsed all duplicates based on title and year into the most complete record possible.
 
-```{r set up folders filepaths containing records}
+```{r IS THIS NEEDED  set up folders filepaths containing records}
 
 ## use inputs to extract file paths
 
@@ -385,7 +386,7 @@ scopusFormat <- revtools::read_bibliography(
 # colnames(wosFormat)[(colnames(wosFormat) %in% colnames(scopusFormat))]
 ```
 
-```{r Vector of names of columns I want to include in the standard dataframe when all is combined}
+```{r Vector of names of columns I want to include in the standard dataframe when all is combined }
 
 standardColnames <- c(
   "source_database", # the name of the database e.g. wos or scopus
@@ -434,10 +435,10 @@ for(d in 1:length(dbFolderNames)){
   cat(paste(dbFolderNames[d], "\n"))
   
   # name of the database
-  database <- names(database_resultsFolders)[d]
+  database <- dbFolderNames[d]
   
   # names of all the folders holding results
-  resultsFolders <- names(database_resultsFolders[[d]])
+  resultsFolders <- dir(file.path(resultsPath, dbFolderNames[d])) #names(database_resultsFolders[[d]])
   
   # get the names for the sub-string blocks
   blockNames <- unlist(lapply(strsplit(resultsFolders,"_"), function(x) x[[1]]))
