@@ -509,6 +509,74 @@ for(d in 1:length(dbFolderNames)){
 ```
 
 
+
+```{r searching through the sql database, make a lookup table with id, title and year duplicates}
+# make a unique id which is the number of the record in the review
+# also make a 
+
+
+db <- src_sqlite(sqlite_all_ref_file, create=FALSE)
+allrefs <- tbl(db, "refs")
+
+# find number of records in total
+nrecstotal <- allrefs %>% summarise(n())
+print(nrecstotal) # 392111
+
+# extract the id, the title and the year for de-duplication
+dedupInfo <- allrefs %>%
+  select(database_article_id, title, year, doi)
+dedupInfo <- as.data.frame(dedupInfo)
+
+unique_title_id <- revtools::find_duplicates(dedupInfo,
+    match_variable = "title", 
+    match_function = "stringdist", method = "osa", threshold = 5,
+    remove_punctuation = TRUE, to_lower = TRUE
+  )
+
+dedupInfo$unique_title_id <- unique_title_id
+
+saveRDS(dedupInfo, here::here("data","derived-data","title_dedup_ids.rds"))
+
+
+
+
+
+# ------
+
+
+# remove title and year duplicates
+# for each unique combination of title and year, 
+# combine data from different rows to create a single row containing all the available data
+# note if there are conflicting data for a column with the same ID slice will take the first value
+wos_id_results2 <- wos_id_results %>%
+  mutate(title_year_id = paste(title_id, year, sep =".")) %>%
+  group_by(title_year_id) %>%
+  slice(which.min(rowSums(is.na(.)))) %>%
+  as.data.frame()
+
+nrow(wos_id_results2)
+
+
+wos_id_results <- wos_id_results %>%
+  mutate(title_year_id = paste(title_id, year, sep ="."))
+
+dupedIds <- wos_id_results$title_year_id[duplicated(wos_id_results$title_year_id)]
+for(i in 1:length(dupedIds)){
+  tempDf <- wos_id_results %>%
+   filter(title_year_id %in% dupedIds[i]) %>% 
+   slice(which.min(rowSums(is.na(.)))) %>%
+   as.data.frame()
+  if(i==1){
+    dedupedResults <- tempDf
+  }else{
+    dedupedResults <- rbind(dedupedResults, tempDf)
+  }
+}
+
+
+```
+
+
 # untested code ----
 
 
