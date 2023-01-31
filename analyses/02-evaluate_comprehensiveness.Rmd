@@ -32,97 +32,7 @@ Using the test list, the search strings and the search results, I want to evalua
 
 # Format the search string
 
-Using the search string components (formula, keywords and substrings) stored in the file search-string.xlsx, build the full search string and format for Scopus
-
-## For WOS
-
-
-```{r search string build for wos, echo=FALSE}
-
-## Read in files
-searchStringDf <- readxl::read_excel(path = search_string_fp, sheet = "sub-strings", trim_ws = TRUE)
-colnames(searchStringDf) <- gsub("\\s",".",colnames(searchStringDf))
-
-keywords <- readxl::read_excel(path = search_string_fp, sheet = "commonly-used-keywords", trim_ws = TRUE)
-colnames(keywords) <- gsub("\\s",".",colnames(keywords))
-
-searchFormula <- readxl::read_excel(path = search_string_fp, sheet="search-formula", trim_ws = TRUE)
-
-
-  
-## Put in commonly-used keywords into string
-searchStringDf$Search.Terms <- stri_replace_all_fixed(
-    searchStringDf$Search.Terms, keywords$Key.Term, keywords$Search.Terms, vectorise_all = FALSE
-    )
-
-
-
-# # test each block to see if it works
-# cat(paste(searchStringDf[13,3]))
-
-
-
-## extract terms based on search formula
-# remove operators
-rm_boolean <- function(x){
-  y <- str_remove_all(str_remove_all(str_remove_all(str_remove_all(x,"AND"), "OR"), "NOT"), "NEAR")
-  y <- gsub("[0-9]", "", y)
-  y <- gsub("/","",y)
-  return(y)
-}
-
-searchTerms <- apply(searchFormula, 2, rm_boolean)
-
-searchTerms <- unique(unlist(str_split(searchTerms, boundary("word"))))
-searchTermsDf <- matrix(nrow=length(searchTerms), ncol=2)
-searchTermsDf[,1] <- searchTerms
-
-for(i in 1:length(searchTerms)){
-  searchTermsDf[i,2] <- paste0("(",paste0(searchStringDf$Search.Terms[which(searchStringDf$Group == searchTerms[i])], collapse="OR"),")")
-}
-
-# # check chunks of search terms
-# cat(searchTermsDf[8,2])
-
-## Use search formulas to combine terms 
-wos_equation <- data.frame(Search.Formula = searchFormula[,1])
-wos_equation$Search.String <- NA
-
-for(i in 1:nrow(wos_equation)){
-  wos_equation$Search.String[i] <- stri_replace_all_fixed(
-    wos_equation$Search.Formula[i], searchTermsDf[,1], searchTermsDf[,2], vectorise_all = FALSE
-    )
-}
-
-
-# # check 
-# cat(wos_equation[1,2])
-
-cat(wos_equation[8,2])
-  
-
-```
-
-```{r write search string to text file, eval=FALSE}
-# # write as .txt file
-# sink(file.path(search_string_dir, "wos-equation.txt"))
-# for(i in 1:nrow(wos_equation)){cat(wos_equation[i,1],"\n", wos_equation[i,2],"\n","\n")}
-# sink()
-  
-```
-
-Write recursively as well because WOS cannot display > 100,000 articles at a time. Seperate by date range
-
-```{r write WOS search equation partitioned by year}
-year_brackets <- c("1946-2009","2010-2015", "2016-2019","2020-2023")
-# 
-# sink(file.path(search_string_dir,"wos-equation_partitionedByYear.txt"))
-# for(i in 1:length(year_brackets)){
-#   cat("TS = (", wos_equation$Search.String[7], ") AND  LA=(English) AND (PY = ",year_brackets[i],")", "\n","\n")
-# }
-# sink()
-```
-
+Using the search string components (formula, keywords and substrings) stored in the search string file, build the full search string and format for Scopus
 
 ## For Scopus
 
@@ -225,7 +135,7 @@ Societal: 488
 total = 142,907 
 
 
-# Evaluate comprehensiveness
+# Evaluate comprehensiveness of the search in WOS
 
 
 Using the test list, evaluate the comprehensiveness of the search in WOS. Do this by entering the search string in the topic field, and using an "AND" boolean operator, entering DO = the dois of the test list articles. If the number of returns = the number of test list articles I have full retrieval. To see which articles are not retrieved, search the DO = test list article dois, NOT TS = my WOS search string.
