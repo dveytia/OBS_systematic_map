@@ -135,6 +135,17 @@ Societal: 488
 total = 142,907 
 
 
+From WOS
+General : 14069
+Renewables: 42677
+Mitigation: 47245
+Nature: 128467
+Societal: 18673
+
+total = 251131
+
+
+
 # Evaluate comprehensiveness of the search in WOS 
 
 

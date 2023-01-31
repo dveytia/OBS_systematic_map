@@ -522,6 +522,32 @@ allrefs <- tbl(db, "refs")
 nrecstotal <- allrefs %>% summarise(n())
 print(nrecstotal) # 392111
 
+# number of records by database
+nrecsbydb <- allrefs %>% group_by(source_database) %>% summarise(n())
+print(nrecsbydb)
+#   source_database  `n()`
+#   <chr>            <int>
+# 1 Scopus          140955
+# 2 Web Of Science  251156
+
+# also by substring
+allrefs %>% group_by(source_database, search_substring) %>% summarise(n())
+#    source_database search_substring  `n()`
+#    <chr>           <chr>             <int>
+#  1 Scopus          General-options     221
+#  2 Scopus          Mitigation        55607
+#  3 Scopus          Nature             1442
+#  4 Scopus          Renewables        83197
+#  5 Scopus          Societal            488
+#  6 Web Of Science  General-options   14069
+#  7 Web Of Science  Mitigation        47245
+#  8 Web Of Science  Nature           128492
+#  9 Web Of Science  Renewables        42677
+# 10 Web Of Science  Societal          18673
+
+
+
+
 # extract the id, the title and the year for de-duplication
 dedupInfo <- allrefs %>%
   select(database_article_id, title, year, doi)
