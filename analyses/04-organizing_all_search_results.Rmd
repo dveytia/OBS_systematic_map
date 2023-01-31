@@ -16,6 +16,10 @@ library(RSQLite)
 
 ```
 
+```{r source functions}
+source(here::here("R","cleaning-and-formatting-bib-dataframes.R"))
+```
+
 ```{r set up inputs}
 ##  set up inputs
 
@@ -24,28 +28,25 @@ sqlOverwrite = TRUE
 
 
 ## Directory where the folders containing the results for the different blocks 
-
-# wos results
-wos_resultsDir <- here::here("data","raw-data","WOS_downloads")
-
-# scopus results
-scopus_resultsDir <- here::here("data","raw-data","Scopus_downloads")
+resultsPath <- here::here("data","raw-data") # where the database folders are located
+dbFolderNames <- c("WOS_downloads", "Scopus_downloads") # names of the database folders
 
 
 ## Sql file for the sampling of the records for screening
-sqlite_file <- file.path(wos_resultsDir,"sql-databases","sample-wos-refs.sqlite")
+sqlite_file <- file.path(resultsPath, dbFolderNames[1],"sql-databases","sample-wos-refs.sqlite")
 table_name <- "wosrefs"
 
 
 ## SQL files for de-duplication
-sqlite_all_wos_file <- file.path(wos_resultsDir,"sql-databases","sample-wos-refs.sqlite")
+sqlite_all_ref_file <- file.path(resultsPath,"sql-databases","all-refs.sqlite")
+sqlite_all_ref_table_name <- "allrefs" <- "allrefs"
 
-# file to for the sql database
-sqlite_scopus_file <- file.path(scopus_resultsDir,"sql-databases","sample-scopus-refs.sqlite")
-table_name <- "scopusrefs"
+sqlite_unique_ref_file <- file.path(resultsPath,"sql-databases","unique-refs.sqlite")
+sqlite_unique_ref_table_name <- "uniquerefs"
 
 
-# number of articles of include in double blibd screening
+
+## number of articles of include in double blibd screening
 nDoubBlind <- 300
 
 ```
@@ -285,10 +286,10 @@ sampleDf$Double_Blind[indDoubBlind] <- "yes"
 
 sampleDf_singleScreen <- sampleDf %>% filter(Double_Blind == "no")
 
-## Write files
-# save sampled Df
-saveRDS(sampleDf,
-        here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
+# ## Write files
+# # save sampled Df
+# saveRDS(sampleDf,
+#         here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
 
 
 # # format files for upload into screening platform and write
@@ -310,7 +311,7 @@ saveRDS(sampleDf,
 
 
 
-# De-duplicate all the WOS and Scopus records
+# Reformat all the WOS and Scopus records into standard formatting
 
 Things to include in the dataframe:
 * Which database it came from
@@ -320,48 +321,191 @@ Things to include in the dataframe:
 
 Then create another database that has collapsed all duplicates based on title and year into the most complete record possible.
 
-```{r set up folders containing records}
+```{r set up folders filepaths containing records}
 
 ## use inputs to extract file paths
-wos_resultsFolders <- dir(wos_resultsDir)[grep("23", dir(wos_resultsDir))]
-scopus_resultsFolders <- dir(scopus_resultsDir)[grep("23", dir(scopus_resultsDir))]
 
-# make sure the folders are in the same order
-wos_resultsFolders <- wos_resultsFolders[order(wos_resultsFolders)]
-scopus_resultsFolders <- scopus_resultsFolders[order(scopus_resultsFolders)]
+# combine into one list so that it can be looped through
+database_resultsFolders <- vector("list", length(dbFolderNames))
+names(database_resultsFolders) <-  dbFolderNames
 
-# get names for the different blocks -- should be the same for both
-blockNames <- unlist(lapply(str_split(wos_resultsFolders,"_"), function(x) x[[1]]))
 
-# get the file names and store in a list
-results_files <- list()
-results_files$WOS <- vector("list", length(wos_resultsFolders))
-names(results_files$WOS) <- blockNames
-results_files$Scopus <- vector("list", length(scopus_resultsFolders))
-names(results_files$Scopus) <- blockNames
+## get the file names located within each block folder and store in a list
 
-for(f in 1:length(wos_resultsFolders)){
-  results_files$WOS[[f]] <- dir(file.path(wos_resultsDir,wos_resultsFolders[f]))
-  results_files$Scopus[[f]] <- dir(file.path(scopus_resultsDir,scopus_resultsFolders[f]))
+for(d in 1:length(dbFolderNames)){ # for each of the databases searched
+  
+  # select only the folders with record results (not sql databases)
+  resultsFolders <- dir(file.path(resultsPath, dbFolderNames[d]))
+  resultsFolders <- resultsFolders[grep("23", resultsFolders)]
+  resultsFolders <- resultsFolders[order(resultsFolders)] 
+  
+  # create a list to store these file names
+  database_resultsFolders[[d]] <- vector("list", length(resultsFolders))
+  names(database_resultsFolders[[d]]) <- resultsFolders
+  
+  # get names for the different blocks -- should be the same for all so only do this once
+  if(d==1){
+    blockNames <- unlist(lapply(strsplit(resultsFolders,"_"), function(x) x[[1]]))
+    blockNames <- stringr::str_remove(blockNames, "-block")
+  }
+  
+  
+  # for each folder containing results for a search string
+  # get a list of the file names
+  for(s in 1:length(resultsFolders)){ 
+     database_resultsFolders[[d]][[s]] <- dir(file.path(resultsPath, dbFolderNames[d], resultsFolders[s]))
+  }
+  
 }
 
+
+
+# check
+str(database_resultsFolders)
 
 
 ```
 
 
 ```{r compare the formatting of the wos references and the scopus references to figure out how to merge them}
+# import sample df from .bib files
 wosFormat <- revtools::read_bibliography(
-  file.path(wos_resultsDir, wos_resultsFolders[1], results_files$WOS[[1]][1]))
+  file.path(resultsPath, 
+            names(database_resultsFolders)[1], 
+            names(database_resultsFolders[[1]])[1],
+            database_resultsFolders[[1]][[1]][1]))
+
 scopusFormat <- revtools::read_bibliography(
-  file.path(scopus_resultsDir, scopus_resultsFolders[1], results_files$Scopus[[1]][1]))
+  file.path(resultsPath, 
+            names(database_resultsFolders)[2], 
+            names(database_resultsFolders[[2]])[1],
+            database_resultsFolders[[2]][[1]][1]))
 
-colnames(wosFormat)[(colnames(wosFormat) %in% colnames(scopusFormat))]
+# # check which column names are shared
+# colnames(wosFormat)[(colnames(wosFormat) %in% colnames(scopusFormat))]
+```
 
+```{r Vector of names of columns I want to include in the standard dataframe when all is combined}
+
+standardColnames <- c(
+  "source_database", # the name of the database e.g. wos or scopus
+  "search_substring", # the string(s) the record was retrieved, 
+  "database_article_id", # if the source has a unique id, use (e.g. eid for scopus, and unique_id in wos)
+  "type", # the type of publication, e.g. article, proceedings - make all lower case
+  "author", # the authors of the publication
+  "title", # the title of the publication
+  "source_title", # "journal" column, which in scopus is actually source_title, so could be book,etc, in wos, if journal is absent, use booktitle  
+  "year",
+  "volume",
+  "number",
+  "pages",
+  "abstract",
+  "keywords", # merge author keywords and keywords
+  "keywords_other", # any additional keywords, e.g. author keywords or keywords_plus
+  "publisher",
+  "editor",
+  "language",
+  "affiliation",
+  "funding", # funding_acknowledgement in wos, "funding_details in scopus
+  "doi",
+  "issn",
+  "isbn",
+  "journal", # wos-only columns ------------
+  "research_areas",
+  "web_of_science_categories",
+  "booktitle",
+  "book_group_author",
+  "book_author",
+  "organization",
+  "series",
+  "da" # access date
+)
 
 ```
 
 
+```{r loop through all the saved .bib files and reformat and save into sql database}
+
+# for each of the databases searched
+
+for(d in 1:length(dbFolderNames)){ 
+  
+  # track progress
+  cat(paste(dbFolderNames[d], "\n"))
+  
+  # name of the database
+  database <- names(database_resultsFolders)[d]
+  
+  # names of all the folders holding results
+  resultsFolders <- names(database_resultsFolders[[d]])
+  
+  # get the names for the sub-string blocks
+  blockNames <- unlist(lapply(strsplit(resultsFolders,"_"), function(x) x[[1]]))
+  blockNames <- stringr::str_remove(blockNames, "-block")
+  
+  # for each folder containing results for a search string
+  for(s in 1:length(resultsFolders)){ 
+    
+    # track progress
+    cat(paste("  ",blockNames[s], d,"/of", length(blockNames), "\n"))
+    
+    # get all the files in the folder
+    files <- dir(file.path(resultsPath, database, resultsFolders[s]))
+    
+    # for each file in the folder read in the .bib file
+    # if there is an error because wrong file type is in folder, skip to next
+    for(f in 1:length(files)){
+      
+      # track progress
+      cat(paste("      file", f,"/of", length(files), "\n"))
+      
+      # Read in file
+      skip_to_next <- FALSE
+      tryCatch(
+        tempDf <- revtools::read_bibliography(here::here(resultsPath, database, resultsFolders[s], files[f])),
+        error = function(e){skip_to_next <<- TRUE}
+      )
+      if(skip_to_next){next}
+      
+      
+      # Format to common formatting
+      # determine what function needs to be used to format
+      if(grepl("wos", tolower(database))){
+        format.fn <- wos2standard
+      }else{
+        format.fn <- scopus2standard
+      }
+      # use that function to format the data frame
+      tempDf <- format.fn(
+        standardColnames = standardColnames, inputDf = tempDf, search_substring = blockNames[s] 
+      )
+      
+      
+      # write to the sql database
+      # set overwrite commands and appending commands
+      if(d==1 & s==1 & f==1 & sqlOverwrite){
+        overwritel = TRUE; appendl = FALSE
+      }else{
+        overwritel = FALSE; appendl = TRUE
+      }
+      
+      # write to database
+      db <- RSQLite::dbConnect(RSQLite::SQLite(), dbname = sqlite_all_ref_file)
+      dbWriteTable(db, "refs", tempDf, append=appendl, overwrite = overwritel)
+      dbDisconnect(db)
+      
+      
+    } # end processing one file
+    
+     
+  } # end looping through all files in a block folder
+  
+} # end looping through all databases
+
+
+
+
+```
 
 
 # untested code ----
