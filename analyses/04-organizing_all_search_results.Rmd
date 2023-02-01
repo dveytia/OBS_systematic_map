@@ -584,6 +584,17 @@ dedupInfo <- allrefs %>%
 dedupInfo %>% head
 dedupInfo <- as.data.frame(dedupInfo)
 
+# write the file of de-dupe info
+save(dedupInfo, file = file.path(resultsPath, "deduplication-files","columns-for-deduplication.RData"))
+```
+
+```{r}
+
+# read in file
+dedupInfo2 <- read.table(file = file.path(resultsPath, "deduplication-files","columns-for-deduplication.txt"),
+                        header = TRUE, sep = '\t')
+
+# run code for deduplication
 unique_title_id <- revtools::find_duplicates(dedupInfo,
     match_variable = "title", 
     group_variables = c("year"),
