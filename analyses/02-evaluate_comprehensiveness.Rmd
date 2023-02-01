@@ -125,24 +125,6 @@ for(s in 1:length(sheets)){
 
 For Scopus it might make the most sense to download records by source title, becaues there are only 4 records that exceed 2,000 references
 
-Numbers of total results from scopus per block (Jan 30 2023):
-General: 221
-Renewables: 85,425
-Mitigation: 55,631
-Nature: 1442
-Societal: 488
-
-total = 142,907 
-
-
-From WOS
-General : 14069
-Renewables: 42677
-Mitigation: 47245
-Nature: 128467
-Societal: 18673
-
-total = 251131
 
 
 
