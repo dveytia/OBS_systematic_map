@@ -580,17 +580,18 @@ allrefs %>% group_by(source_database, search_substring) %>% summarise(n())
 
 # extract the id, the title and the year for de-duplication
 dedupInfo <- allrefs %>%
-  select(database_article_id, title, year, doi)
+  select(analysis_id, title, year, doi)
+dedupInfo %>% head
 dedupInfo <- as.data.frame(dedupInfo)
 
 unique_title_id <- revtools::find_duplicates(dedupInfo,
     match_variable = "title", 
-    group_variables = c("year", ),
+    group_variables = c("year"),
     match_function = "stringdist", method = "osa", threshold = 5,
     remove_punctuation = TRUE, to_lower = TRUE
   )
 
-dedupInfo$unique_title_id <- unique_title_id
+dedupInfo$duplicate_id <- unique_title_id
 
 saveRDS(dedupInfo, here::here("data","derived-data","title_dedup_ids.rds"))
 
