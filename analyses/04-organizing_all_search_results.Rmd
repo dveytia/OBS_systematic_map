@@ -13,6 +13,7 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
 library(dplyr)
 library(R.utils)
 library(RSQLite)
+library(revtools)
 
 ```
 
@@ -389,6 +390,8 @@ scopusFormat <- revtools::read_bibliography(
 ```{r Vector of names of columns I want to include in the standard dataframe when all is combined }
 
 standardColnames <- c(
+  "analysis_id", # space to fill in the unique id of the record as it has been downloaded in the map
+  "duplicate_id", # space to fill in the "unique id" based on de-duplication protocol
   "source_database", # the name of the database e.g. wos or scopus
   "search_substring", # the string(s) the record was retrieved, 
   "database_article_id", # if the source has a unique id, use (e.g. eid for scopus, and unique_id in wos)
@@ -427,6 +430,11 @@ standardColnames <- c(
 
 ```{r loop through all the saved .bib files and reformat and save into sql database}
 
+# # version of the database file
+v = "v2"
+sqlite_all_ref_file_version <- paste0(gsub(".sqlite","",sqlite_all_ref_file),"_",v,".sqlite")
+
+
 # for each of the databases searched
 
 for(d in 1:length(dbFolderNames)){ 
@@ -439,6 +447,8 @@ for(d in 1:length(dbFolderNames)){
   
   # names of all the folders holding results
   resultsFolders <- dir(file.path(resultsPath, dbFolderNames[d])) #names(database_resultsFolders[[d]])
+  resultsFolders <- resultsFolders[grepl("23", resultsFolders)]
+  resultsFolders <- resultsFolders[order(resultsFolders)]
   
   # get the names for the sub-string blocks
   blockNames <- unlist(lapply(strsplit(resultsFolders,"_"), function(x) x[[1]]))
@@ -460,13 +470,14 @@ for(d in 1:length(dbFolderNames)){
       # track progress
       cat(paste("      file", f,"/of", length(files), "\n"))
       
-      # Read in file
-      skip_to_next <- FALSE
-      tryCatch(
-        tempDf <- revtools::read_bibliography(here::here(resultsPath, database, resultsFolders[s], files[f])),
-        error = function(e){skip_to_next <<- TRUE}
-      )
-      if(skip_to_next){next}
+      # # Read in file
+      # skip_to_next <- FALSE
+      # tryCatch(
+      #   tempDf <- revtools::read_bibliography(here::here(resultsPath, database, resultsFolders[s], files[f])),
+      #   error = function(e){skip_to_next <<- TRUE}
+      # )
+      # if(skip_to_next){next}
+      tempDf <- revtools::read_bibliography(file.path(resultsPath, database, resultsFolders[s], files[f]))
       
       
       # Format to common formatting
@@ -482,6 +493,24 @@ for(d in 1:length(dbFolderNames)){
       )
       
       
+      ## fill in the analysis_id
+      # if the first iteration, start from 1
+      if(d==1 & s==1 & f==1){start <- 1}
+      end <- start+nrow(tempDf)-1
+      tempDf$analysis_id <- seq(start, end)
+      # once filled set where the next iteration should start
+      start <- end+1
+      
+      
+      # print progress
+      if(f==1){
+        runningtotal <- nrow(tempDf)
+      }else{
+        runningtotal <- runningtotal + nrow(tempDf)
+      }
+      print(paste(nrow(tempDf), "records added /", runningtotal, "total"))
+      
+      
       # write to the sql database
       # set overwrite commands and appending commands
       if(d==1 & s==1 & f==1 & sqlOverwrite){
@@ -490,10 +519,11 @@ for(d in 1:length(dbFolderNames)){
         overwritel = FALSE; appendl = TRUE
       }
       
-      # write to database
-      db <- RSQLite::dbConnect(RSQLite::SQLite(), dbname = sqlite_all_ref_file)
+      # # write to database
+      db <- RSQLite::dbConnect(RSQLite::SQLite(), dbname = sqlite_all_ref_file_version)
       dbWriteTable(db, "refs", tempDf, append=appendl, overwrite = overwritel)
       dbDisconnect(db)
+      
       
       
     } # end processing one file
@@ -515,7 +545,7 @@ for(d in 1:length(dbFolderNames)){
 # also make a 
 
 
-db <- src_sqlite(sqlite_all_ref_file, create=FALSE)
+db <- src_sqlite(sqlite_all_ref_file_version, create=FALSE)
 allrefs <- tbl(db, "refs")
 
 # find number of records in total
@@ -555,6 +585,7 @@ dedupInfo <- as.data.frame(dedupInfo)
 
 unique_title_id <- revtools::find_duplicates(dedupInfo,
     match_variable = "title", 
+    group_variables = c("year", ),
     match_function = "stringdist", method = "osa", threshold = 5,
     remove_punctuation = TRUE, to_lower = TRUE
   )
