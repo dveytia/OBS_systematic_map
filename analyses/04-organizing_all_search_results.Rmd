@@ -312,6 +312,17 @@ sampleDf_singleScreen <- sampleDf %>% filter(Double_Blind == "no")
 ```
 
 
+```{r add in test list items to random screening subsample}
+
+# load in test list articles
+test_list <- readxl::read_excel(here::here("data", "derived-data", "screen_test_list",
+                    "test-list_2023-01-19.xlsx"))
+
+
+
+```
+
+
 
 # Reformat all the WOS and Scopus records into standard formatting
 
