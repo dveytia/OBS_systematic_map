@@ -314,10 +314,36 @@ sampleDf_singleScreen <- sampleDf %>% filter(Double_Blind == "no")
 
 ```{r add in test list items to random screening subsample}
 
-# load in test list articles
-test_list <- readxl::read_excel(here::here("data", "derived-data", "screen_test_list",
-                    "test-list_2023-01-19.xlsx"))
+## load in articles
 
+# test list articles
+test_list_short <- readxl::read_excel(here::here("data", "derived-data", "screen_test_list", "test-list_2023-01-19.xlsx"))
+
+test_list <- revtools::read_bibliography(
+  file = here::here("data", "derived-data", "screening","records-to-screen", 
+                   "test-list_indexedInWos.bib"))
+
+test_list <- test_list[which(test_list$doi %in% test_list_short$doi),]
+
+# subset already being screened
+sampleDf <- readRDS(here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
+
+
+
+
+## make sure there are no duplicates with subset already being screened
+# check for duplicates and remove if present
+dups <- which(test_list$doi %in% sampleDf$doi)
+if(length(dups) > 0){
+  test_list <- test_list[-dups,]
+}
+
+
+
+# write this to a new bib file to be screened with the random subset
+revtools::write_bibliography(x = test_list,
+                             filename = here::here("data","derived-data","screening","records-to-screen","add_test-list-articles.ris"),
+                            format="ris")
 
 
 ```
