@@ -43,3 +43,4 @@ vignettes/*.pdf
 *.ris
 *.sqlite
 /data/derived-data/coding/coding-pdfs/
+/data/derived-data/coding/coding-pdfs-training/
