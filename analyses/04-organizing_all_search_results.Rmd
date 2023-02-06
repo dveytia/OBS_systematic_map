@@ -476,12 +476,18 @@ screen_results_merged %>%
 
 
 
+
 ```{r write the articles that need to be screened into pdf files}
 require(rmarkdown)
 load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 
 write2pdf <- subset(screen_results_merged, include_screen == "true")
 
+# compile a list of files that are already written to pdf so I can skip writing
+already_written <- dir(here::here("data","derived-data","coding","coding-pdfs-training"))
+
+
+# loop through and write all files to pdf
 for(i in 1:nrow(write2pdf)){
   
   filename <- paste(write2pdf$sysrev_id[i], 
@@ -491,6 +497,8 @@ for(i in 1:nrow(write2pdf)){
                            tolower(
                              stringr::str_trunc(write2pdf$title[i], width = 40))))),write2pdf$year[i],sep="_")
   filename <- paste0(filename,".pdf")
+  
+  if(filename %in% already_written){next}
   
   # write text to an .Rmd file
   sink("temp.txt")
