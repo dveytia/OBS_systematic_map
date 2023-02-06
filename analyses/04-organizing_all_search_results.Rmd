@@ -513,8 +513,13 @@ for(i in 1:nrow(write2pdf)){
   cat(my_text, sep="  \n", file = "my_text.Rmd")
   render("my_text.Rmd", pdf_document(),
          output_file = here::here(
-           "data","derived-data","coding","coding-pdfs",
+           "data","derived-data","coding","coding-pdfs", filename
          ))
+  
+  if(i==nrow(write2pdf)){
+    file.remove("temp.txt")
+    file.remove("my_text.Rmd")
+  }
 }
 
 
