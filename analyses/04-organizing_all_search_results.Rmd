@@ -441,6 +441,7 @@ screen_results3 <- merge(screen_results, matchingDf[which(matchingDf$source == "
 screen_results3$source <- NULL
 # for full record
 sampleDf3 <- merge(sampleDf, matchingDf[which(matchingDf$source == "whole_ref"),])
+sampleDf3$source <- NULL
 View(sampleDf3[which(duplicated(sampleDf3$titleMatch)),]) # check any remaining duplicates
 sampleDf3 <- sampleDf3[-which(duplicated(sampleDf3$titleMatch))[1:2]] # remove duplicates manuall
 sampleDf3 <- revtools::extract_unique_references(sampleDf3, "titleMatch") # or can also automate 
@@ -457,6 +458,11 @@ sum(is.na(screen_results_merged$doi))
 # clean confusing columns
 screen_results_merged <- screen_results_merged[,-c("titleMatch", "n_duplicates")]
 
+
+# order columns
+firstCols <- c("sysrev_id","title","year","doi","source_title","author", "screener","include_screen","multiple_oro_screen","outcome_section","blue_carbon_flux_storage","notes")
+lastCols <- colnames(write2pdf)[which(!(colnames(write2pdf) %in% firstCols))]
+screen_results_merged <- screen_results_merged[c(firstCols, lastCols)]
 
 
 # save
@@ -481,7 +487,9 @@ screen_results_merged %>%
 require(rmarkdown)
 load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 
+# only write the inclusions to pdf
 write2pdf <- subset(screen_results_merged, include_screen == "true")
+
 
 # compile a list of files that are already written to pdf so I can skip writing
 already_written <- dir(here::here("data","derived-data","coding","coding-pdfs-training"))
@@ -531,6 +539,19 @@ for(i in 1:nrow(write2pdf)){
 }
 
 
+```
+
+```{r get column data for coding training}
+
+already_written <- dir(here::here("data","derived-data","coding","coding-pdfs-training"))
+trainIDs <- strsplit(already_written,"_")
+trainIDs <- lapply(trainIDs, function(x) x[[1]])
+trainIDs <- unlist(trainIDs)
+
+codingTrainingMetadata <- subset(screen_results_merged, sysrev_id %in% trainIDs)
+
+writexl::write_xlsx(codingTrainingMetadata, 
+                    here::here("data","derived-data","coding","coding-pdfs-training_metadata.xlsx"))
 ```
 
 
