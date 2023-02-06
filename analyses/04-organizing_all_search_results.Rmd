@@ -294,6 +294,7 @@ sampleDf_singleScreen <- sampleDf %>% filter(Double_Blind == "no")
 #         here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
 
 
+
 # # format files for upload into screening platform and write
 # # potential to group by source to better help with the relevance ranking algorithm -- but decided not to
 # 
@@ -330,7 +331,6 @@ sampleDf <- readRDS(here::here("data","derived-data", "screening","records-to-sc
 
 
 
-
 ## make sure there are no duplicates with subset already being screened
 # check for duplicates and remove if present
 dups <- which(test_list$doi %in% sampleDf$doi)
@@ -348,6 +348,177 @@ revtools::write_bibliography(x = test_list,
 
 ```
 
+
+
+# Organizing screened results for coding
+
+```{r read in screened results}
+
+## Load in csv export of screened records from sysrev
+screenedRecs_dir <- here::here("data","derived-data","screening","screened-records")
+screenedRecs_files <- dir(screenedRecs_dir)
+screenedRecs_files <- screenedRecs_files[grepl("screen-decisions",screenedRecs_files)]
+
+# colnames to get for standard formatting
+screenColnamesIn <- c("Article.ID","Title","Journal","Authors","Test.list.article","Users", 
+                           "Include","Double_Blind","Filtered",
+                      "X..1.ORO","Outcome.section","blue.carbon.flux.storage","User.Notes")
+screenColnamesOut <- c("sysrev_id","title","source_title","author", "test_list_article","screener",
+                       "include_screen", "Double_Blind","filtered_screen","multiple_oro_screen", 
+                       "outcome_section","blue_carbon_flux_storage","notes")
+
+for(f in 1:length(screenedRecs_files)){
+  tempDf <- read.csv(file.path(screenedRecs_dir, screenedRecs_files[f]))
+  
+  # filter to only resolved records
+  tempDf <- subset(tempDf, Status == "consistent")
+  
+  # extract relevant columns
+  tempDf <- tempDf[,which(colnames(tempDf) %in% screenColnamesIn)]
+  # add missing columns
+  missingCols <- screenColnamesIn[!(screenColnamesIn %in% colnames(tempDf))]
+  tempDf[,missingCols] <- NA
+  
+  # order columns into standard order
+  tempDf <- tempDf[,c(screenColnamesIn)]
+  
+  # rename columns
+  colnames(tempDf) <- screenColnamesOut
+  
+  # identify if it was double blind
+  tempDf$Double_Blind <- grepl("double-blind", screenedRecs_files[f])
+  
+  # bind results together
+  if(f==1){
+    screen_results <- tempDf
+  }else{
+    screen_results <- rbind(screen_results, tempDf)
+  }
+  
+  if(f==length(screenedRecs_files)){rm(tempDf)}
+}
+
+# make one column to indicate how the record was sampled (e.g. random, test list, other)
+screen_results$test_list_article <- ifelse(is.na(screen_results$test_list_article), FALSE, TRUE)
+screen_results$sample_screen <- ifelse(screen_results$test_list_article, "test list", "random")
+
+
+# now reorder columns
+screen_results$test_list_article <- NULL
+screenColnamesOut2 <- screenColnamesOut
+screenColnamesOut2[which(screenColnamesOut == "test_list_article")] <- "sample_screen"
+screen_results <- screen_results[,c(screenColnamesOut2)]
+
+
+
+```
+
+
+```{r merge with other metadata because some was lost in sysrev export}
+
+# load in file with metadata
+sampleDf <- readRDS(here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
+sampleDf <- revtools::extract_unique_references(sampleDf, "title_year_id")
+
+
+# dataframe to find matches
+screen_results2 <- screen_results[,c("title","author")]
+screen_results2$source <- "screen_result"
+sampleDf2 <- sampleDf[,c("title","author")]
+sampleDf2$source <- "whole_ref"
+
+matchingDf <- rbind(screen_results2, sampleDf2)
+
+# merge in columns with metadata I want in my coding form
+matchingDf$titleMatch <- revtools::find_duplicates(matchingDf, "title")
+
+# check at least each screen result has a match
+nrow(screen_results2) <= sum(duplicated(titleMatches))
+
+# join match to the original dataframe
+# for screening results
+screen_results3 <- merge(screen_results, matchingDf[which(matchingDf$source == "screen_result"),])
+screen_results3$source <- NULL
+# for full record
+sampleDf3 <- merge(sampleDf, matchingDf[which(matchingDf$source == "whole_ref"),])
+View(sampleDf3[which(duplicated(sampleDf3$titleMatch)),]) # check any remaining duplicates
+sampleDf3 <- sampleDf3[-which(duplicated(sampleDf3$titleMatch))[1:2]] # remove duplicates manuall
+sampleDf3 <- revtools::extract_unique_references(sampleDf3, "titleMatch") # or can also automate 
+# merge dataframes together
+removeCols <- intersect(colnames(screen_results3), colnames(sampleDf3))
+removeCols <- removeCols[-which(removeCols == "titleMatch")]
+screen_results_merged <- merge(
+  screen_results3, sampleDf3 %>% select(all_of(-c(removeCols))), by=c("titleMatch"), all.y = FALSE
+)
+
+# check there are no duplicated doi
+sum(is.na(screen_results_merged$doi))
+
+# clean confusing columns
+screen_results_merged <- screen_results_merged[,-c("titleMatch", "n_duplicates")]
+
+
+
+# save
+save(screen_results_merged, 
+     file= here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+```
+
+
+```{r summarise screening information}
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+
+screen_results_merged %>%
+  group_by(sample_screen, include_screen) %>%
+  summarise(n=n())
+
+```
+
+
+
+```{r write the articles that need to be screened into pdf files}
+require(rmarkdown)
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+
+write2pdf <- subset(screen_results_merged, include_screen == "true")
+
+for(i in 1:nrow(write2pdf)){
+  
+  filename <- paste(write2pdf$sysrev_id[i], 
+                    gsub(" ","-",
+                         stringr::str_trim(
+                      gsub('[[:punct:] ]+',' ',
+                           tolower(
+                             stringr::str_trunc(write2pdf$title[i], width = 40))))),write2pdf$year[i],sep="_")
+  filename <- paste0(filename,".pdf")
+  
+  # write text to an .Rmd file
+  sink("temp.txt")
+  cat("#",write2pdf$title[i])
+  cat("\n","\n")
+  cat(write2pdf$author[i])
+  cat("\n","\n")
+  cat(write2pdf$year[i])
+  cat("\n","\n")
+  cat(write2pdf$source_title[i])
+  cat("\n","\n")
+  cat("###",write2pdf$keywords[i])
+  cat("\n","\n","\n","\n")
+  cat(write2pdf$abstract[i])
+  cat("\n","\n")
+  cat("*Research areas: ",write2pdf$research_areas[i],"*")
+  sink()
+  
+  my_text <- readLines("temp.txt")
+  cat(my_text, sep="  \n", file = "my_text.Rmd")
+  render("my_text.Rmd", pdf_document(),
+         output_file = here::here(
+           "data","derived-data","coding","coding-pdfs",
+         ))
+}
+
+
+```
 
 
 # Reformat all the WOS and Scopus records into standard formatting

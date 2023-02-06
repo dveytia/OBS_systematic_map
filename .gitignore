@@ -42,3 +42,4 @@ vignettes/*.pdf
 *.bib
 *.ris
 *.sqlite
+/data/derived-data/coding/coding-pdfs/
