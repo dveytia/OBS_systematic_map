@@ -44,3 +44,5 @@ vignettes/*.pdf
 *.sqlite
 /data/derived-data/coding/coding-pdfs/
 /data/derived-data/coding/coding-pdfs-training/
+/data/derived-data/screening/screened-records/*.csv
+/data/derived-data/screening/records-to-screen/*.rds

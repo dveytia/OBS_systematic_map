@@ -324,6 +324,12 @@ test_list <- revtools::read_bibliography(
   file = here::here("data", "derived-data", "screening","records-to-screen", 
                    "test-list_indexedInWos.bib"))
 
+test_list <- litsearchr::import_results(
+  file = here::here("data", "derived-data", "screen_test_list", 
+                   "test-list_indexed_in_WOS_2023-01-19.ris")
+)
+
+
 test_list <- test_list[which(test_list$doi %in% test_list_short$doi),]
 
 # subset already being screened
@@ -359,19 +365,30 @@ screenedRecs_dir <- here::here("data","derived-data","screening","screened-recor
 screenedRecs_files <- dir(screenedRecs_dir)
 screenedRecs_files <- screenedRecs_files[grepl("screen-decisions",screenedRecs_files)]
 
-# colnames to get for standard formatting
+
+## colnames to get for standard formatting
 screenColnamesIn <- c("Article.ID","Title","Journal","Authors","Test.list.article","Users", 
                            "Include","Double_Blind","Filtered",
                       "X..1.ORO","Outcome.section","blue.carbon.flux.storage","User.Notes")
 screenColnamesOut <- c("sysrev_id","title","source_title","author", "test_list_article","screener",
                        "include_screen", "Double_Blind","filtered_screen","multiple_oro_screen", 
                        "outcome_section","blue_carbon_flux_storage","notes")
+screenColnames <- cbind(screenColnamesIn, screenColnamesOut)
+screenColnames # check they correspond
+
+# which columns are to be formatted as a boolean vector
+BooleanColnames <- c("test_list_article", "include_screen", "filtered_screen", "multiple_oro_screen", 
+                     "outcome_section","blue_carbon_flux_storage")
+
+
+
+## Read in files and bind together into one dataframe with desired columns
 
 for(f in 1:length(screenedRecs_files)){
   tempDf <- read.csv(file.path(screenedRecs_dir, screenedRecs_files[f]))
   
-  # filter to only resolved records
-  tempDf <- subset(tempDf, Status == "consistent")
+  # filter to only consistent or resolved records, no conflicts
+  tempDf <- subset(tempDf, Status %in% c("consistent", "resolved","single"))
   
   # extract relevant columns
   tempDf <- tempDf[,which(colnames(tempDf) %in% screenColnamesIn)]
@@ -386,7 +403,7 @@ for(f in 1:length(screenedRecs_files)){
   colnames(tempDf) <- screenColnamesOut
   
   # identify if it was double blind
-  tempDf$Double_Blind <- grepl("double-blind", screenedRecs_files[f])
+  tempDf$Double_Blind <- rep(grepl("double-blind", screenedRecs_files[f]), nrow(tempDf))
   
   # bind results together
   if(f==1){
@@ -398,85 +415,132 @@ for(f in 1:length(screenedRecs_files)){
   if(f==length(screenedRecs_files)){rm(tempDf)}
 }
 
-# make one column to indicate how the record was sampled (e.g. random, test list, other)
-screen_results$test_list_article <- ifelse(is.na(screen_results$test_list_article), FALSE, TRUE)
-screen_results$sample_screen <- ifelse(screen_results$test_list_article, "test list", "random")
 
+
+## Format Columns
+
+# boolean column types
+for(c in 1:length(BooleanColnames)){
+  ind <- which(colnames(screen_results) == BooleanColnames[c])
+  screen_results[,ind] <- ifelse(screen_results[,ind] == "true", TRUE, FALSE)
+  screen_results[,ind] <- ifelse(is.na(screen_results[,ind]), FALSE, screen_results[,ind])
+  
+}
+
+
+# make one column to indicate how the record was sampled (e.g. random, test list, other)
+
+screen_results$sample_screen <- ifelse(screen_results$filtered_screen, "relevance sort", "random")
+screen_results$sample_screen <- ifelse(screen_results$test_list_article, "test list", screen_results$sample_screen)
+screen_results$sample_screen <- factor(screen_results$sample_screen, 
+                                          levels = c("random","relevance sort","test list"))
 
 # now reorder columns
 screen_results$test_list_article <- NULL
-screenColnamesOut2 <- screenColnamesOut
+screen_results$filtered_screen <- NULL
+screenColnamesOut2 <- screenColnamesOut[-which(screenColnamesOut == "filtered_screen")]
 screenColnamesOut2[which(screenColnamesOut == "test_list_article")] <- "sample_screen"
 screen_results <- screen_results[,c(screenColnamesOut2)]
 
 
+# de-duplicate again because some duplicates got through
+# screenDups <- revtools::screen_duplicates(screen_results)
+
+
+# produce summary of counts of different categories
+summary(screen_results)
 
 ```
 
 
 ```{r merge with other metadata because some was lost in sysrev export}
 
-# load in file with metadata
-sampleDf <- readRDS(here::here("data","derived-data", "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
+# load in file with metadata of the records I screened
+sampleDf <- readRDS(here::here("data","derived-data",
+                               "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
 sampleDf <- revtools::extract_unique_references(sampleDf, "title_year_id")
+add_testlist <- revtools::read_bibliography(
+  here::here("data", "derived-data", "screening","records-to-screen", 
+                   "test-list_indexedInWos.bib")
+)
+sampleDf_addTestList <- rbind(
+  add_testlist[,intersect(colnames(sampleDf), colnames(add_testlist))],
+  sampleDf[,intersect(colnames(sampleDf), colnames(add_testlist))]
+)
 
 
-# dataframe to find matches
-screen_results2 <- screen_results[,c("title","author")]
+
+# dataframe to find matches between screen results and dataframe with metadata
+# just use title, but keep author for manual checks of dups
+screen_results2 <- screen_results[,c("title","author")] 
 screen_results2$source <- "screen_result"
 sampleDf2 <- sampleDf[,c("title","author")]
 sampleDf2$source <- "whole_ref"
-
 matchingDf <- rbind(screen_results2, sampleDf2)
 
 # merge in columns with metadata I want in my coding form
 matchingDf$titleMatch <- revtools::find_duplicates(matchingDf, "title")
 
 # check at least each screen result has a match
-nrow(screen_results2) <= sum(duplicated(titleMatches))
+nrow(screen_results2) <= sum(duplicated(matchingDf$titleMatch))
 
-# join match to the original dataframe
+
+##  join match to the original dataframe
+
 # for screening results
 screen_results3 <- merge(screen_results, matchingDf[which(matchingDf$source == "screen_result"),])
 screen_results3$source <- NULL
+
 # for full record
 sampleDf3 <- merge(sampleDf, matchingDf[which(matchingDf$source == "whole_ref"),])
 sampleDf3$source <- NULL
 View(sampleDf3[which(duplicated(sampleDf3$titleMatch)),]) # check any remaining duplicates
-sampleDf3 <- sampleDf3[-which(duplicated(sampleDf3$titleMatch))[1:2]] # remove duplicates manuall
+sampleDf3 <- sampleDf3[-which(duplicated(sampleDf3$titleMatch))[1:2]] # remove duplicates manually
 sampleDf3 <- revtools::extract_unique_references(sampleDf3, "titleMatch") # or can also automate 
-# merge dataframes together
+
+# merge dataframes together and remove duplicate columns that I am not using to merge
 removeCols <- intersect(colnames(screen_results3), colnames(sampleDf3))
 removeCols <- removeCols[-which(removeCols == "titleMatch")]
+keepCols <- colnames(sampleDf3)[which(!(colnames(sampleDf3) %in% removeCols))]
 screen_results_merged <- merge(
-  screen_results3, sampleDf3 %>% select(all_of(-c(removeCols))), by=c("titleMatch"), all.y = FALSE
+  screen_results3, sampleDf3[,keepCols], by=c("titleMatch"), all.y = FALSE, all.x = TRUE
 )
 
-# check there are no duplicated doi
+# check there are no nas in doi so that I can match easily with deduplicated database
 sum(is.na(screen_results_merged$doi))
+screen_results_merged %>%
+  filter(is.na(doi)) %>%
+  View
+
+# these are all from the test list -- 
 
 # clean confusing columns
-screen_results_merged <- screen_results_merged[,-c("titleMatch", "n_duplicates")]
+screen_results_merged <- screen_results_merged %>% select(-titleMatch, -n_duplicates)
 
 
 # order columns
 firstCols <- c("sysrev_id","title","year","doi","source_title","author", "screener","include_screen","multiple_oro_screen","outcome_section","blue_carbon_flux_storage","notes")
-lastCols <- colnames(write2pdf)[which(!(colnames(write2pdf) %in% firstCols))]
-screen_results_merged <- screen_results_merged[c(firstCols, lastCols)]
+lastCols <- colnames(screen_results_merged)[which(!(colnames(screen_results_merged) %in% firstCols))]
+screen_results_merged <- screen_results_merged[,c(firstCols, lastCols)]
+
+
+# summarise
+summary(screen_results_merged)
+# note that not all test list articles were screened because while they were in the sample, we did not get to screening them
 
 
 # save
-save(screen_results_merged, 
-     file= here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+write.csv(screen_results_merged, 
+     file= here::here("data","derived-data","screening","screened-records","screen_results_merged.csv"))
+save(screen_results_merged,
+     file = here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 ```
 
 
-```{r summarise screening information}
-load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 
-screen_results_merged %>%
-  group_by(sample_screen, include_screen) %>%
-  summarise(n=n())
+```{r test list check}
+missedTestList <- screen_results_merged %>%
+  filter(sample_screen == "test list")
 
 ```
 
