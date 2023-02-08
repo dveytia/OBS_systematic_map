@@ -357,6 +357,7 @@ revtools::write_bibliography(x = test_list,
 
 
 ```{r missed a couple articles because the test list file was incorrect, so add in}
+## Load in files
 
 # load FULL test list
 test_list <- revtools::read_bibliography(
@@ -364,6 +365,8 @@ test_list <- revtools::read_bibliography(
                    "test-list_indexed_in_WOS_2023-02-07.bib")
 )
 # subset to the test list articles that have been shortened based on revised relevance
+test_list_short <- readxl::read_excel(
+  here::here("data", "derived-data", "screen_test_list", "test-list_2023-01-19.xlsx"))
 test_list <- test_list[which(test_list$doi %in% test_list_short$doi),]
 
 # remove duplicate doi that causes unrelated article

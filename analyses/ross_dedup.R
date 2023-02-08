@@ -14,9 +14,9 @@ results = parallel::mclapply(1:length(years), function(i) {
   
   dedupInfo_sub$duplicate_id <- unique_title_id
   return(dedupInfo_sub)
-})
+}, mc.cores = 20)
 
 
 dedupInfo = do.call(rbind.data.frame, dedupInfo)
 
-save(dedupInfo, "title_dedup_ids.RData")
+save(dedupInfo, file="title_dedup_ids.RData")

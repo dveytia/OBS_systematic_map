@@ -1,0 +1,19 @@
+---
+title: "05-analyzing_coding_results"
+author: "Devi Veytia"
+date: "2023-02-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+```{r load libraries}
+library(dplyr)
+library(R.utils)
+library(RSQLite)
+
+
+
+```
