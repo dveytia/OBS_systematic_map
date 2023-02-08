@@ -420,10 +420,11 @@ screenedRecs_files <- screenedRecs_files[grepl("screen-decisions",screenedRecs_f
 
 ## colnames to get for standard formatting
 screenColnamesIn <- c("Article.ID","Title","Journal","Authors","Test.list.article","Users", 
-                           "Include","Double_Blind","Filtered",
+                           "Include","reason_excluded","Double_Blind","Filtered",
                       "X..1.ORO","Outcome.section","blue.carbon.flux.storage","User.Notes")
 screenColnamesOut <- c("sysrev_id","title","source_title","author", "test_list_article","screener",
-                       "include_screen", "Double_Blind","filtered_screen","multiple_oro_screen", 
+                       "include_screen","reason_excluded_screen",
+                       "Double_Blind","filtered_screen","multiple_oro_screen", 
                        "outcome_section","blue_carbon_flux_storage","notes")
 screenColnames <- cbind(screenColnamesIn, screenColnamesOut)
 screenColnames # check they correspond
@@ -441,6 +442,20 @@ for(f in 1:length(screenedRecs_files)){
   
   # filter to only consistent or resolved records, no conflicts
   tempDf <- subset(tempDf, Status %in% c("consistent", "resolved","single"))
+  
+  # add a column indicating reason for exclusion
+  tempDf$reason_excluded <- NA
+  for(i in 1:nrow(tempDf)){
+    if(tempDf$Relevant.Population[i] == "false"){
+      tempDf$reason_excluded[i] <- "Population"
+    }else if(tempDf$Relevant.Intervention[i] == "false"){
+      tempDf$reason_excluded[i] <- "Intervention"
+    }else if(tempDf$Relevant.Outcome[i] == "false"){
+      tempDf$reason_excluded[i] <- "Outcome"
+    }else{
+      next
+    }
+  }
   
   # extract relevant columns
   tempDf <- tempDf[,which(colnames(tempDf) %in% screenColnamesIn)]
@@ -487,6 +502,11 @@ screen_results$sample_screen <- ifelse(screen_results$test_list_article, "test l
 screen_results$sample_screen <- factor(screen_results$sample_screen, 
                                           levels = c("random","relevance sort","test list"))
 
+# factor reason excluded
+screen_results$reason_excluded_screen <- factor(
+  screen_results$reason_excluded_screen, levels = c("Population","Intervention","Outcome",NA)
+)
+
 # now reorder columns
 screen_results$test_list_article <- NULL
 screen_results$filtered_screen <- NULL
@@ -495,8 +515,7 @@ screenColnamesOut2[which(screenColnamesOut == "test_list_article")] <- "sample_s
 screen_results <- screen_results[,c(screenColnamesOut2)]
 
 
-# de-duplicate again because some duplicates got through
-# screenDups <- revtools::screen_duplicates(screen_results)
+
 
 
 # produce summary of counts of different categories
@@ -507,14 +526,20 @@ summary(screen_results)
 
 ```{r merge with other metadata because some was lost in sysrev export}
 
-# load in file with metadata of the records I screened
+## load in file with metadata of the records I screened
 sampleDf <- readRDS(here::here("data","derived-data",
                                "screening","records-to-screen","de-duplicated_wos_sub-sample1_Df.rds"))
 sampleDf <- revtools::extract_unique_references(sampleDf, "title_year_id")
+# add_testlist <- revtools::read_bibliography(
+#   here::here("data", "derived-data", "screening","records-to-screen", 
+#                    "test-list_indexedInWos.bib")
+# )
+sampleDf$source <- "sampleDf"
 add_testlist <- revtools::read_bibliography(
-  here::here("data", "derived-data", "screening","records-to-screen", 
-                   "test-list_indexedInWos.bib")
+  file = here::here("data", "derived-data", "screen_test_list", 
+                   "test-list_indexed_in_WOS_2023-02-07.bib")
 )
+add_testlist$source <- "testlist"
 sampleDf_addTestList <- rbind(
   add_testlist[,intersect(colnames(sampleDf), colnames(add_testlist))],
   sampleDf[,intersect(colnames(sampleDf), colnames(add_testlist))]
@@ -522,32 +547,31 @@ sampleDf_addTestList <- rbind(
 
 
 
-# dataframe to find matches between screen results and dataframe with metadata
+## dataframe to find matches between screen results and dataframe with metadata
 # just use title, but keep author for manual checks of dups
 screen_results2 <- screen_results[,c("title","author")] 
 screen_results2$source <- "screen_result"
-sampleDf2 <- sampleDf[,c("title","author")]
-sampleDf2$source <- "whole_ref"
+sampleDf2 <- sampleDf_addTestList[,c("title","author","source")]
+# sampleDf2$source <- "whole_ref"
 matchingDf <- rbind(screen_results2, sampleDf2)
+
 
 # merge in columns with metadata I want in my coding form
 matchingDf$titleMatch <- revtools::find_duplicates(matchingDf, "title")
 
-# check at least each screen result has a match
-nrow(screen_results2) <= sum(duplicated(matchingDf$titleMatch))
 
 
-##  join match to the original dataframe
+##  join matches to the original dataframe
 
 # for screening results
 screen_results3 <- merge(screen_results, matchingDf[which(matchingDf$source == "screen_result"),])
 screen_results3$source <- NULL
 
 # for full record
-sampleDf3 <- merge(sampleDf, matchingDf[which(matchingDf$source == "whole_ref"),])
+sampleDf3 <- merge(sampleDf_addTestList, matchingDf[which(matchingDf$source != "screen_result"),])
 sampleDf3$source <- NULL
 View(sampleDf3[which(duplicated(sampleDf3$titleMatch)),]) # check any remaining duplicates
-sampleDf3 <- sampleDf3[-which(duplicated(sampleDf3$titleMatch))[1:2]] # remove duplicates manually
+sampleDf3 <- sampleDf3[-which(duplicated(sampleDf3$titleMatch))[1:2],] # remove duplicates manually
 sampleDf3 <- revtools::extract_unique_references(sampleDf3, "titleMatch") # or can also automate 
 
 # merge dataframes together and remove duplicate columns that I am not using to merge
@@ -560,14 +584,20 @@ screen_results_merged <- merge(
 
 # check there are no nas in doi so that I can match easily with deduplicated database
 sum(is.na(screen_results_merged$doi))
-screen_results_merged %>%
-  filter(is.na(doi)) %>%
-  View
 
-# these are all from the test list -- 
+
+
 
 # clean confusing columns
 screen_results_merged <- screen_results_merged %>% select(-titleMatch, -n_duplicates)
+
+# double check for duplicates
+dups <- revtools::find_duplicates(screen_results_merged, "title", group_variables = "year")
+if(anyDuplicated(dups)){
+  screen_results_merged <- extract_unique_references(screen_results_merged, dups)
+  screen_results_merged <- screen_results_merged %>% select(-n_duplicates)
+}
+
 
 
 # order columns
@@ -589,14 +619,7 @@ save(screen_results_merged,
 ```
 
 
-
-```{r test list check}
-missedTestList <- screen_results_merged %>%
-  filter(sample_screen == "test list")
-
-```
-
-
+# Write included articles to pdfs for coding
 
 
 ```{r write the articles that need to be screened into pdf files}
@@ -946,6 +969,17 @@ dedupInfo <- as.data.frame(dedupInfo)
 save(dedupInfo, file = file.path(resultsPath, "deduplication-files","columns-for-deduplication.RData"))
 ```
 
+
+Next the deduplication is run in rossi using the script analyses/ross_dedup.R
+
+
+```{r read in the results from the ross deduplication}
+load(here::here("data","raw-data","deduplication-files","title_dedup_id.RData"))
+
+```
+
+
+
 ```{r}
 
 # read in file
@@ -968,7 +1002,6 @@ saveRDS(dedupInfo, here::here("data","derived-data","title_dedup_ids.rds"))
 
 
 
-# ------
 
 
 # remove title and year duplicates
