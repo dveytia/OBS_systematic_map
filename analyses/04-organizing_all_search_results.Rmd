@@ -974,7 +974,9 @@ Next the deduplication is run in rossi using the script analyses/ross_dedup.R
 
 
 ```{r read in the results from the ross deduplication}
+## this data contains columns for the unique id of the reference, the title and the year, as well as a duplicate id indicating if there was a duplicate based on title and year
 load(here::here("data","raw-data","deduplication-files","title_dedup_id.RData"))
+summary(dedupInfo)
 
 ```
 
