@@ -967,6 +967,7 @@ for(d in 1:length(dbFolderNames)){
 ```
 
 
+# Deduplicate pooled records
 
 ```{r searching through the sql database, make a lookup table with id, title and year duplicates}
 
@@ -1044,7 +1045,6 @@ noYear$duplicate_id <- revtools::find_duplicates(noYear,
                             match_function = "stringdist", 
                             method = "osa", threshold = 5,
                             remove_punctuation = TRUE, to_lower = TRUE)
-noYear$duplicate_id <- uniqueID
 noYear$title_year_dup_id <- paste("NA", noYear$duplicate_id, sep=".")
 
 # join in with rossi dedup results
@@ -1058,13 +1058,18 @@ dedupInfo <- dedupInfo %>%
 dedupInfo[1:3,]
 
 # the number of unique references
-length(dedupInfo$title_year_dup_id)-sum(duplicated(dedupInfo$title_year_dup_id))
+length(dedupInfo$title_year_dup_id)-sum(duplicated(dedupInfo$title_year_dup_id)) # 269481
 
-# save as a .sqlite
-db <- RSQLite::dbConnect(RSQLite::SQLite(), 
-                         dbname = here::here(resultsPath, "deduplication-files", "title_dedup_ids.sqlite"))
-dbWriteTable(db, "title_dedup_ids", tempDf, append=FALSE, overwrite = TRUE)
-dbDisconnect(db)
+# rename column to duplicate_id
+dedupInfo$duplicate_id <- dedupInfo$title_year_dup_id
+dedupInfo$title_year_dup_id <- NULL
+
+
+# # save as a .sqlite
+# db <- RSQLite::dbConnect(RSQLite::SQLite(), 
+#                          dbname = here::here(resultsPath, "sql-databases", "title_dedup_ids.sqlite"))
+# dbWriteTable(db, "title_dedup_ids", dedupInfo, append=FALSE, overwrite = TRUE)
+# dbDisconnect(db)
 
 ```
 
