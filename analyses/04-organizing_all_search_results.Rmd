@@ -39,13 +39,21 @@ table_name <- "wosrefs"
 
 
 ## SQL files for de-duplication
+
+# all references before duplicate identification
 sqlite_all_ref_file <- file.path(resultsPath,"sql-databases","all-refs.sqlite")
 sqlite_all_ref_table_name <- "allrefs" 
 # # version of the database file
 v = "v2"
 sqlite_all_ref_file_version <- paste0(gsub(".sqlite","",sqlite_all_ref_file),"_",v,".sqlite")
 
-sqlite_unique_ref_file <- file.path(resultsPath,"sql-databases","unique-refs.sqlite")
+# joined with duplicate id
+sqlite_all_ref_file_version_dedupid <- paste0(gsub(".sqlite","",sqlite_all_ref_file_version),
+                                              "_join-duplicate_id.sqlite")
+sqlite_allRefDedupID_table_name <- "allrefs_join"
+
+# just the unique references
+sqlite_unique_ref_file <- file.path(resultsPath,"sql-databases", paste0("unique-refs_",v,".sqlite"))
 sqlite_unique_ref_table_name <- "uniquerefs"
 
 
@@ -1073,41 +1081,38 @@ dedupInfo$title_year_dup_id <- NULL
 
 ```
 
-```{r Assign the duplicate ID to each record}
-
-# Open connection to the database
-dbcon <- dbConnect(RSQLite::SQLite(), sqlite_all_ref_file_version)
-
-# note this takes a while to run 
-# add a column with the dedup id to the sqlite database
-dbExecute(dbcon, "UPDATE refs SET duplicate_id = :duplicate_id where analysis_id = :analysis_id",
-          params=data.frame(duplicate_id=dedupInfo$title_year_dup_id,
-                            analysis_id=dedupInfo$analysis_id))
-
-# check the first few rows to see that it has worked
-dbGetQuery(dbcon, "SELECT * FROM refs LIMIT 3")
-
-# close the connection
-dbDisconnect(dbcon)
-
-```
 
 ```{r summarise the duplicate information using join}
+library(dbplyr)
 
 ## connect to the database
 allrefs_db <- dbConnect(RSQLite::SQLite(), sqlite_all_ref_file_version, create = FALSE)
+src_dbi(allrefs_db)
 allrefs <- tbl(allrefs_db, "refs")
 
-dedup_db <- dbConnect(RSQLite::SQLite(), here::here(resultsPath, "deduplication-files", "title_dedup_ids.sqlite"),
-                      create=FALSE)
-dedups <- tbl(dedup_db, "deduplication-files")
+allrefs %>% head %>% View
+
+dedup_db <- dbConnect(RSQLite::SQLite(), 
+                      here::here(resultsPath, "sql-databases", "title_dedup_ids.sqlite"), 
+                      create = FALSE)
+src_dbi(dedup_db)
+dedups <- tbl(dedup_db, "title_dedup_ids")
+# I only need two columns for the join, so collect those
+dedups <- dedups %>%
+  select(analysis_id, duplicate_id) %>%
+  collect()
+
+# a hack to get join to work
+copy_to(allrefs_db, dedups)
+src_dbi(allrefs_db)
+dbDisconnect(dedup_db)
 
 
 
 ## join the datasets with their duplicate info
 # do left join so that all the references are maintained
-allrefs_join <- allrefs %>%
-  left_join(dedup_db) # keeps all obs in x. Could use collect() to get all the data but I fear it would crash
+dedups <- tbl(allrefs_db, "dedups")
+allrefs_join <- left_join(allrefs %>% select(-duplicate_id), dedups, by = "analysis_id")
 
 
 
@@ -1116,41 +1121,48 @@ allrefs_join <- allrefs %>%
 # numbers of duplicates by database source
 allrefs_join %>%
   group_by(source_database) %>%
-  summarise(n_unique_refs = distinct(duplicate_id))
+  summarize(n_unique_refs = n_distinct(duplicate_id))
+#   source_database n_unique_refs
+#   <chr>                   <int>
+# 1 Scopus                 130492
+# 2 Web Of Science         205420
   
+
 # in total
 allrefs_join %>%
-  summarise(n_unique_refs = distinct(duplicate_id))
+  summarise(n_unique_refs = n_distinct(duplicate_id))
+#   n_unique_refs
+#           <int>
+# 1        269481
 
 
-## Close connections
-dbDisconnect(allrefs_db)
-dbDisconnnect(dedup_db)
 
+## Write
+require(RSQLite)
+allrefs_join <- allrefs_join %>% collect() # collect all the values from the database into local memory
+
+# new_db <- RSQLite::dbConnect(RSQLite::SQLite(),sqlite_all_ref_file_version_dedupid, create=TRUE)
+# dbWriteTable(conn=new_db, name=sqlite_allRefDedupID_table_name, value=allrefs_join, append=FALSE, overwrite = TRUE)
+# DBI::dbDisconnect(new_db)
+
+# check that the writing works
+new_db <- dbConnect(RSQLite::SQLite(), sqlite_all_ref_file_version_dedupid, create = FALSE)
+src_dbi(new_db)
+allrefs_join <- tbl(new_db, sqlite_allRefDedupID_table_name)
+
+allrefs_join %>% summarise(n=n()) # check all the rows are there
+DBI::dbDisconnect(new_db)
+
+
+## Disconnect from active databases
+DBI::dbDisconnect(allrefs_db)
 ```
 
-```{r summarise the duplicates - old}
-
-# open the connection
-db <- src_sqlite(sqlite_all_ref_file_version, create=FALSE)
-allrefs <- tbl(db, "refs")
-
-## Summarise numbers of duplicates
-# by database source
-allrefs %>%
-  group_by(source_database) %>%
-  summarise(n_unique_refs = distinct(duplicate_id))
-
-# in total
-allrefs %>%
-  summarise(n_unique_refs = distinct(duplicate_id))
 
 
-```
+Now that the duplicates are identified, deduplicate the database using Rossi
 
-deduplicate the database using Rossi
-
-```{r examine the deduplicated database}
+```{r examine the deduplicated database to check that it has the number of entries expected}
 # open the connection
 db <- src_sqlite(here::here(resultsPath, "sql-databases", "deduplicated-refs.sqlite"), create=FALSE)
 dedupRefs <- tbl(db, "dedupRefs")
@@ -1167,44 +1179,6 @@ dedupRefs %>% group_by(source_database) %>% summarise(n())
 
 ```
 
-
-
-```{r old dedup code}
-
-
-
-
-# remove title and year duplicates
-# for each unique combination of title and year, 
-# combine data from different rows to create a single row containing all the available data
-# note if there are conflicting data for a column with the same ID slice will take the first value
-wos_id_results2 <- wos_id_results %>%
-  mutate(title_year_id = paste(title_id, year, sep =".")) %>%
-  group_by(title_year_id) %>%
-  slice(which.min(rowSums(is.na(.)))) %>%
-  as.data.frame()
-
-nrow(wos_id_results2)
-
-
-wos_id_results <- wos_id_results %>%
-  mutate(title_year_id = paste(title_id, year, sep ="."))
-
-dupedIds <- wos_id_results$title_year_id[duplicated(wos_id_results$title_year_id)]
-for(i in 1:length(dupedIds)){
-  tempDf <- wos_id_results %>%
-   filter(title_year_id %in% dupedIds[i]) %>% 
-   slice(which.min(rowSums(is.na(.)))) %>%
-   as.data.frame()
-  if(i==1){
-    dedupedResults <- tempDf
-  }else{
-    dedupedResults <- rbind(dedupedResults, tempDf)
-  }
-}
-
-
-```
 
 
 
