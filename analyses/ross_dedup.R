@@ -17,6 +17,6 @@ results = parallel::mclapply(1:length(years), function(i) {
 }, mc.cores = 20)
 
 
-dedupInfo = do.call(rbind.data.frame, dedupInfo)
+dedupInfo = do.call(rbind.data.frame, results)
 
 save(dedupInfo, file="title_dedup_ids.RData")
