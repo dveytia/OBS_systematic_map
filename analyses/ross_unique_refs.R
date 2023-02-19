@@ -30,6 +30,10 @@ results = parallel::mclapply(1:length(unique_ids), function(i){
     tempDf <- revtools::extract_unique_references(tempDf, "duplicate_id")
     tempDf$search_substring <- search_strings
     tempDf$source_database <- databases
+    
+  }else{ # otherwise add a column saying there were no duplicates
+    
+    tempDf$n_duplicates <- 0 
   }
   #if(nrow(tempDf) ==0){next}
   

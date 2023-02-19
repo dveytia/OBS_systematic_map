@@ -1163,7 +1163,18 @@ DBI::dbDisconnect(allrefs_db)
 Now that the duplicates are identified, deduplicate the database using Rossi
 
 ```{r}
-load(file.path(resultsPath, "deduplication-files","list-results_unique-refs_v2.RData"))
+load(file.path(resultsPath, "deduplication-files","list-results.RData"))
+
+nCols <- lapply(results, function(x) ncol(x))
+
+mod.rbind <- function(x){
+  if(nrow(x)==1){
+    return(X)
+  }else{
+    next
+  }
+}
+
 
 unique_refs = do.call(rbind.data.frame, results)
 ```
