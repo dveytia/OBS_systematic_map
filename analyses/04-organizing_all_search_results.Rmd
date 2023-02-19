@@ -1187,7 +1187,7 @@ dedupRefs %>% group_by(source_database) %>% summarise(n=n())
 
 
 # number of unique records by search string
-search_string_n <- dedupRefs %>% group_by(search_substring) %>% summarise(n=n()) 
+dedupRefs %>% group_by(search_substring) %>% summarise(n=n()) 
 
 search_string_n <- dedupRefs %>% 
   summarise(
@@ -1197,6 +1197,12 @@ search_string_n <- dedupRefs %>%
     Societal = sum(grepl("Societal", search_substring))
   ) 
 search_string_n <- reshape2::melt(search_string_n, variable.name = "Search_string", value.name = "n_records")
+#   Search_string n_records
+# 1       General     14144
+# 2    Mitigation    156995
+# 3       Natural    129083
+# 4      Societal     18867
+
 
 require(ggplot2)
 
