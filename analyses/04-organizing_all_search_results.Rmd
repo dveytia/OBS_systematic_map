@@ -1162,23 +1162,36 @@ DBI::dbDisconnect(allrefs_db)
 
 Now that the duplicates are identified, deduplicate the database using Rossi
 
+```{r}
+load(file.path(resultsPath, "deduplication-files","list-results_unique-refs_v2.RData"))
+
+unique_refs = do.call(rbind.data.frame, results)
+```
+
 ```{r examine the deduplicated database to check that it has the number of entries expected}
 # open the connection
-db <- src_sqlite(here::here(resultsPath, "sql-databases", "deduplicated-refs.sqlite"), create=FALSE)
-dedupRefs <- tbl(db, "dedupRefs")
+db <- src_sqlite(sqlite_unique_ref_file, create=FALSE)
+dedupRefs <- tbl(db, sqlite_unique_ref_table_name)
 
 ## Summarise
 
 # summarize how many unique references in total
-dedupRefs %>% summarise(n())
+dedupRefs %>% summarise(n=n())
 
 
 # number of records by database
-dedupRefs %>% group_by(source_database) %>% summarise(n())
+dedupRefs %>% group_by(source_database) %>% summarise(n=n())
 
+
+
+## Write to a tab delimited .txt file for Vicky to process?
+dedupRefs <- dedupRefs %>% collect()
+
+write.table(dedupRefs,
+            file = file.path(resultsPath, "deduplication-files","unique_references.txt"),
+            row.names=F, col.names=TRUE, sep='\t', quote=FALSE)
 
 ```
-
 
 
 

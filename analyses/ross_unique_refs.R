@@ -27,7 +27,7 @@ results = parallel::mclapply(1:length(unique_ids), function(i){
   
   return(tempDf)
   
-}, mc.cores=20)
+}, mc.cores=1)
 
 # disconnect database
 DBI::dbDisconnect(dbcon)
