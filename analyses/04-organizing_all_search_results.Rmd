@@ -1162,45 +1162,57 @@ DBI::dbDisconnect(allrefs_db)
 
 Now that the duplicates are identified, deduplicate the database using Rossi
 
-```{r}
-load(file.path(resultsPath, "deduplication-files","list-results.RData"))
-
-nCols <- lapply(results, function(x) ncol(x))
-
-mod.rbind <- function(x){
-  if(nrow(x)==1){
-    return(X)
-  }else{
-    next
-  }
-}
-
-
-unique_refs = do.call(rbind.data.frame, results)
-```
 
 ```{r examine the deduplicated database to check that it has the number of entries expected}
 # open the connection
-db <- src_sqlite(sqlite_unique_ref_file, create=FALSE)
+db <- dbConnect(RSQLite::SQLite(),sqlite_unique_ref_file, create=FALSE)
+src_dbi(db)
 dedupRefs <- tbl(db, sqlite_unique_ref_table_name)
 
 ## Summarise
 
-# summarize how many unique references in total
-dedupRefs %>% summarise(n=n())
+# summarize how many unique references in total -- yes this matches what it should be
+dedupRefs %>% summarise(n_unique_refs=n())
+#   n_unique_refs
+#           <int>
+# 1        269481
 
-
-# number of records by database
+# number of unique records by database -- picture these results as a venn diagram
 dedupRefs %>% group_by(source_database) %>% summarise(n=n())
+#   source_database              n
+#   <chr>                    <int>
+# 1 Scopus                   64061
+# 2 Web Of Science          138989
+# 3 Web Of Science | Scopus  66431
+
+
+# number of unique records by search string
+search_string_n <- dedupRefs %>% group_by(search_substring) %>% summarise(n=n()) 
+
+search_string_n <- dedupRefs %>% 
+  summarise(
+    General = sum(grepl("General", search_substring)),
+    Mitigation = sum(sum(grepl("Mitigation", search_substring)), sum(grepl("Renewable", search_substring))),
+    Natural = sum(grepl("Natur", search_substring)),
+    Societal = sum(grepl("Societal", search_substring))
+  ) 
+search_string_n <- reshape2::melt(search_string_n, variable.name = "Search_string", value.name = "n_records")
+
+require(ggplot2)
+
+ggplot(search_string_n, aes(Search_string, n_records)) +
+  geom_col()+
+  theme_classic()
 
 
 
 ## Write to a tab delimited .txt file for Vicky to process?
 dedupRefs <- dedupRefs %>% collect()
+dim(dedupRefs)
 
-write.table(dedupRefs,
-            file = file.path(resultsPath, "deduplication-files","unique_references.txt"),
-            row.names=F, col.names=TRUE, sep='\t', quote=FALSE)
+# write.table(dedupRefs,
+#             file = file.path(resultsPath, "deduplication-files","unique_references.txt"),
+#             row.names=F, col.names=TRUE, sep='\t', quote=FALSE)
 
 ```
 
