@@ -1,19 +1,27 @@
 library(RSQLite)
 library(DBI)
 library(dplyr)
+library(dplyr)
 
 
 # open connection to database
 dbcon <- DBI::dbConnect(RSQLite::SQLite(), "all-refs_v2_join-duplicate_id.sqlite")
 
+# collect all the records from the databse -- added this
+allrefs_join <- DBI::dbGetQuery(dbcon, "SELECT * FROM allrefs_join")
+
 # the number of duplicate ids
 unique_ids <- dbGetQuery(dbcon, "SELECT duplicate_id FROM allrefs_join")
 unique_ids <- sort(unique(unique_ids[,1]))
 
+# disconnect database
+DBI::dbDisconnect(dbcon)
+
 # loop through to extract the most complete reference
 results = parallel::mclapply(1:length(unique_ids), function(i){  
   
-  tempDf <-  DBI::dbGetQuery(dbcon, "SELECT * FROM allrefs_join WHERE duplicate_id = ?", params = unique_ids[i])
+  #tempDf <-  DBI::dbGetQuery(dbcon, "SELECT * FROM allrefs_join WHERE duplicate_id = ?", params = unique_ids[i])
+  tempDf <- subset(allrefs_join, duplicate_id == unique_ids[i])
   
   # if there are duplicates, extract the unique references
   if(nrow(tempDf)>1){
@@ -23,18 +31,18 @@ results = parallel::mclapply(1:length(unique_ids), function(i){
     tempDf$search_substring <- search_strings
     tempDf$source_database <- databases
   }
-  if(nrow(tempDf) ==0){next}
+  #if(nrow(tempDf) ==0){next}
   
   return(tempDf)
   
-}, mc.cores=1)
+}, mc.cores=20)
 
-# disconnect database
-DBI::dbDisconnect(dbcon)
+
 
 # write unique results to sqlite database
 # rbind results together into a data frame
 unique_refs = do.call(rbind.data.frame, results)
+
 # write
 db <- RSQLite::dbConnect(RSQLite::SQLite(), dbname = "unique-refs_v2.sqlite", create=TRUE)
 DBI::dbWriteTable(db, "uniquerefs", unique_refs, append=FALSE, overwrite = TRUE)
@@ -47,5 +55,6 @@ print("done loop")
 # # check
 db <- RSQLite::dbConnect(RSQLite::SQLite(), dbname = "unique-refs_v2.sqlite")
 test <- tbl(db, "uniquerefs")
-test %>% summarise(n=n())
+test %>% summarise(n=n()) %>% print
+length(unique_ids) %>% print
 DBI::dbDisconnect(db)
