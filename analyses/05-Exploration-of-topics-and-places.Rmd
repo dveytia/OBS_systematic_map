@@ -1,0 +1,101 @@
+---
+title: "05-Exploration-of-topics-and-places"
+author: "Devi Veytia"
+date: "2023-02-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r load libraries}
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+library(reticulate)
+
+```
+
+
+# Set up data to work with
+
+Right now I will use unique references, but ideally this should be only the included screens
+```{r set up dataset}
+## inputs (need to change)
+sqlite.fp <- here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite")
+tbl.name <- "uniquerefs"
+
+
+## Get records from database
+dbcon <- dbConnect(RSQLite::SQLite(), sqlite.fp, create = FALSE)
+recs <- tbl(dbcon, tbl.name)
+
+
+## perhaps just to on a subsample
+my_text <- recs %>%
+  select(duplicate_id, title, abstract) %>%
+  slice_sample(n=100) %>%
+  collect()
+
+dim(my_text)
+```
+
+
+# Extracting occurrence of key terms from articles
+
+```{r source functions}
+functionsToSource <- c("clean_string.R", "screen.R","tokenization.R","utils.R")
+for(i in 1:length(functionsToSource)){
+  source(here::here("R", functionsToSource[i]))
+}
+
+```
+
+I assembled a list of keywords grouped by different descriptive factors we would like to extract information about. We then scanned the article title, abstract and keywords and counted the occurrences of matches to these terms (boolean response of "yes" for at least one match/article).
+
+```{r}
+
+
+# use NLP to extract topic names
+
+
+```
+
+
+
+# Geoparsing text
+
+Test whether I can have an r object with the strings of places to decode, and then use reticulate to process this using python
+
+```{r}
+use_virtualenv(here::here("localGeocode_env"))
+#use_python("C:\\Users\\deviv\\AppData\\Local\\Programs\\Python\\PYTHON~1\\python.exe")
+```
+
+```{r}
+vec2geocode <- c('I went to Ottawa and then London.','Tel Aviv')
+```
+
+```{python}
+from geocode.geocode import Geocode
+gc = Geocode()
+gc.load()
+test = gc.decode('I went to Ottawa and then London.')
+gc.decode(r.vec2geocode)
+
+
+for input_text in r.vec2geocode:
+    locations = gc.decode(input_text)
+    print(locations)
+
+
+```
+
+```{r}
+print(py$locations)
+```
+

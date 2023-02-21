@@ -38,7 +38,7 @@ vignettes/*.pdf
 # R Environment Variables
 .Renviron
 
-# files where I've stored references because otherwise the storage is massive
+# files that are too large to upload to github
 *.bib
 *.ris
 *.sqlite
@@ -47,3 +47,4 @@ vignettes/*.pdf
 /data/derived-data/screening/screened-records/*.csv
 /data/derived-data/screening/records-to-screen/*.rds
 /data/raw-data/deduplication-files/unique_references.txt
+/localGeocode_env/
