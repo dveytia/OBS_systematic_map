@@ -47,6 +47,8 @@ dim(my_text)
 
 # Extracting occurrence of key terms from articles
 
+## Process text
+
 ```{r source functions}
 functionsToSource <- c("clean_string.R", "screen.R","tokenization.R","utils.R")
 for(i in 1:length(functionsToSource)){
@@ -57,15 +59,129 @@ for(i in 1:length(functionsToSource)){
 
 I assembled a list of keywords grouped by different descriptive factors we would like to extract information about. We then scanned the article title, abstract and keywords and counted the occurrences of matches to these terms (boolean response of "yes" for at least one match/article).
 
-```{r}
+```{r clean text}
+
+## Load spreadsheet of keywords to extract and clean the text
+nlp_search_terms <- readxl::read_excel(here::here("data","derived-data","coding","keyword-search-tokens.xlsx"))
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+
+# separate out into single terms and expressions
+single_words <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "single")]
+expressions <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "expression")]
+# name them by their corresponding group
+names(single_words) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "single")]
+names(expressions) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "expression")]
 
 
-# use NLP to extract topic names
 
+## Process the text to screen
+
+# group title, abstract together
+nlptxt <- my_text %>%
+  mutate(text = paste(title, abstract))%>%
+  select(duplicate_id, text)
+
+# Lemmitization and clean string to remove extra spaces, numbers and punctuation
+nlptxt$text <- clean_string(nlptxt$text)
+nlptxt$text <- textstem::lemmatize_strings(nlptxt$text)
 
 ```
 
 
+## Screen for keywords
+
+```{r  screen for matches to make a document feature matrix takes a while to run}
+start <- Sys.time()
+
+screens_swd <- screen(nlptxt$text, single_words)
+save(screens_swd, file=here::here("data","derived-data","coding","keyword-matches","single-word-matches.RData"))
+
+screens_expr <- screen(nlptxt$text, expressions)
+save(screens_expr, file=here::here("data","derived-data","coding","keyword-matches","expression-matches.RData"))
+
+end <- Sys.time()
+
+end-start*(300000/100)/3600 # number of hours it would take to process all records, about 2.5 hours
+
+
+# # remove files
+rm(screens_swd, screens_expr)
+
+```
+
+
+## Visualizing keyword search results
+
+identify numbers of papers relevant to each topic
+
+```{r load in screening results}
+
+load(here::here("data","derived-data","coding","keyword-matches","single-word-matches.RData"))
+load(here::here("data","derived-data","coding","keyword-matches","expression-matches.RData"))
+
+# order dataset according to spreadsheet
+screens_all <- cbind(screens_expr, screens_swd)
+screens_all[,match(gsub(" ","_", nlp_search_terms$Term), colnames(screens_all))] 
+
+
+
+# some concepts require co-occurrences between two terms (i.e. AND statements)
+# so make a new matrix with these values
+complexTerms <- matrix(nrow=nrow(screens_swd),
+                       ncol = 4,
+                       dimnames = list(
+                         nlptxt$duplicate_id,
+                         c("carbon removal or storage","coastal communities and safe space or fish")
+                       ))
+
+# for carbon AND removal
+carb_ind <- which(nlp_search_terms$`Group name` == "carbon")
+rem_ind <- which(nlp_search_terms$`Group name` == "removal")
+
+carb <- ifelse(rowSums(1 <= screens_all[,carb_ind]), 1,0)
+rem <- ifelse(rowSums(1 <= screens_all[,rem_ind]), 1,0) 
+
+complexTerms[,1] <- ifelse(carb == 1 & rem == 1, 1, 0)
+
+
+# for coasts and communities
+
+
+# for safe space or fish
+
+
+
+# condense complex terms by just their 
+
+
+## Add these new concepts in to a new matrix
+screens_new <- screens_all[,-c(carb_ind, rem_ind)]
+newGroups <- nlp_search_terms$Group[-c(carb_ind, rem_ind)]
+screens_new <- cbind(screens_new, complexTerms)
+newGroups <- c(newGroups, "Paper1","Paper4")
+```
+
+
+
+
+Maybe grouping the documents that contain keywords pertaining to differnet subjects, then build a word clound? Or maybe fit a topic model?
+
+
+Using Quanteda
+quant_dfm <- dfm(data_corpus_irishbudget2010, 
+                remove_punct = TRUE, remove_numbers = TRUE, remove = stopwords("english"))
+quant_dfm <- dfm_trim(quant_dfm, min_termfreq = 4, max_docfreq = 10)
+quant_dfm
+
+set.seed(100)
+if (require(stm)) {
+    my_lda_fit20 <- stm(quant_dfm, K = 20, verbose = FALSE)
+    plot(my_lda_fit20)    
+}
 
 # Geoparsing text
 
