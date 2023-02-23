@@ -280,13 +280,38 @@ Repeat the set up chunk from the beginning of the doc to load files
 ```
 
 ```{r combine text for geoparsing}
-geoparse_txt <- my_text %>%
-  mutate(text = paste(title, abstract))%>%
-  select(duplicate_id, text)
+
+vec2geocode <- paste(my_text$title, my_text$abstract)
+vec2geocode_duplicate_id <- my_text$duplicate_id
+
+rm(my_text)
+
 ```
 
 
-Test whether I can have an r object with the strings of places to decode, and then use reticulate to process this using python
+
+```{r clean text and remove stopwords}
+#vec2geocode <- c('I went to Ottawa and then London.','Pacific northwest')
+
+
+# # clean 
+# vec2geocode <- clean_string(vec2geocode[1:2])
+# 
+# # remove stopwords
+# 
+# # identify stopwords
+# my_stopwords <- unique(c(quanteda::stopwords(),revtools::revwords(), litsearchr::get_stopwords(), "sea", "ocean", "marine", "coast", "south", "part"))
+# 
+# # remove
+# for(i in 1:length(vec2geocode)){
+#   vec2geocode[i] <- paste(quanteda::tokens_remove(quanteda::tokens(vec2geocode[i]),
+#                                                   my_stopwords),collapse = " ")
+# }
+
+
+```
+
+
 
 ```{r}
 use_virtualenv(here::here("spaCy_env"))
@@ -295,34 +320,31 @@ use_virtualenv(here::here("spaCy_env"))
 ```
 
 
-using: https://spacyr.quanteda.io/index.html
-```{r install spaCy, eval=FALSE}
-devtools::install_github("quanteda/spacyr", build_vignettes = FALSE)
+```{python}
+
+import spacy
+nlp = spacy.load("en_core_web_sm")
+
+
+
+Entarr = [] ;
+
+for i in range(len(r.vec2geocode)):
+  doc = nlp(r.vec2geocode[i])
+  
+  for entity in doc.ents:
+    
+    if entity.label_ in ('GPE' 'LOC'):
+    
+      ents = [r.vec2geocode_duplicate_id[i], entity.label_, entity.text]
+      Entarr.append(ents)
+
+
+print(Entarr[0])
 
 
 ```
 
-```{r}
-#vec2geocode <- c('I went to Ottawa and then London.','Pacific northwest')
-vec2geocode <- geoparse_txt$text
-
-# clean 
-vec2geocode <- clean_string(vec2geocode[1:2])
-
-# remove stopwords
-my_stopwords <- unique(c(quanteda::stopwords(),revtools::revwords(), litsearchr::get_stopwords(),
-                       colours(), "sea", "ocean", "marine", "coast", "south", "part"))
-
-# NOTE maybe extract nouns?? --------------
-
-
-for(i in 1:length(vec2geocode)){
-  vec2geocode[i] <- paste(quanteda::tokens_remove(quanteda::tokens(vec2geocode[i]),
-                                                  my_stopwords),collapse = " ")
-}
-
-
-```
 
 ```{python test Geocode}
 from geocode.geocode import Geocode
@@ -337,7 +359,28 @@ arr = [] ;
 for input_text in r.vec2geocode:
     locations = gc.decode(input_text)
     arr.append(locations);
-    
+
+```
+
+call the output from location tagging in spacy directly to retreive metadata about the location
+```{python}
+from geocode.geocode import Geocode
+gc = Geocode()
+gc.load()
+
+
+import numpy as np
+
+Entarr = np.array(Entarr)
+
+Geocodearr = [] ;
+
+for i in range(len(Entarr)):
+  location = gc.decode(Entarr[i,2])
+  Geocodearr.append(location)
+  
+  
+print(Geocodearr)
 
 ```
 
@@ -407,5 +450,30 @@ ggplot()+
 ```
 
 
+# Junk code
 
+Unfortunately couldn't get spacyr to work -- got stuck on spcay_install()
+
+using: https://spacyr.quanteda.io/index.html
+```{r install spaCy, eval=FALSE}
+devtools::install_github("quanteda/spacyr", build_vignettes = FALSE)
+
+library("spacyr")
+spacy_install()
+
+```
+
+
+```{r use spacy to parse text and identify nouns}
+
+library("spacyr")
+spacy_initialize(model = "en_core_web_sm")
+
+entities <- spacy_extract_entity(vec2geocode, output = "data.frame", type = "GPE")
+
+entities
+
+# finish spacy session
+spacy_finalize()
+```
 
