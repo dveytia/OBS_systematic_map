@@ -273,10 +273,6 @@ rm(list=ls())
 
 # Geoparsing text
 
-```{r}
-library(reticulate)
-
-```
 
 Repeat the set up chunk from the beginning of the doc to load files
 ```{r set up dataset}
@@ -293,8 +289,17 @@ geoparse_txt <- my_text %>%
 Test whether I can have an r object with the strings of places to decode, and then use reticulate to process this using python
 
 ```{r}
-use_virtualenv(here::here("localGeocode_env"))
+use_virtualenv(here::here("spaCy_env"))
+#use_virtualenv(here::here("localGeocode_env"))
 #use_python("C:\\Users\\deviv\\AppData\\Local\\Programs\\Python\\PYTHON~1\\python.exe")
+```
+
+
+using: https://spacyr.quanteda.io/index.html
+```{r install spaCy, eval=FALSE}
+devtools::install_github("quanteda/spacyr", build_vignettes = FALSE)
+
+
 ```
 
 ```{r}
