@@ -319,15 +319,38 @@ use_virtualenv(here::here("spaCy_env"))
 #use_python("C:\\Users\\deviv\\AppData\\Local\\Programs\\Python\\PYTHON~1\\python.exe")
 ```
 
+Use spacy to extract components of sentences that contain locations.
 
+Types of entity labels available:
+PERSON:      People, including fictional.
+NORP:        Nationalities or religious or political groups.
+FAC:         Buildings, airports, highways, bridges, etc.
+ORG:         Companies, agencies, institutions, etc.
+GPE:         Countries, cities, states.
+LOC:         Non-GPE locations, mountain ranges, bodies of water.
+PRODUCT:     Objects, vehicles, foods, etc. (Not services.)
+EVENT:       Named hurricanes, battles, wars, sports events, etc.
+WORK_OF_ART: Titles of books, songs, etc.
+LAW:         Named documents made into laws.
+LANGUAGE:    Any named language.
+DATE:        Absolute or relative dates or periods.
+TIME:        Times smaller than a day.
+PERCENT:     Percentage, including ”%“.
+MONEY:       Monetary values, including unit.
+QUANTITY:    Measurements, as of weight or distance.
+ORDINAL:     “first”, “second”, etc.
+CARDINAL:    Numerals that do not fall under another type.
+
+attributes can be displayed using dir(doc)
 ```{python}
 
 import spacy
 nlp = spacy.load("en_core_web_sm")
 
 
-
 Entarr = [] ;
+Datearr = [] ;
+
 
 for i in range(len(r.vec2geocode)):
   doc = nlp(r.vec2geocode[i])
@@ -335,32 +358,31 @@ for i in range(len(r.vec2geocode)):
   for entity in doc.ents:
     
     if entity.label_ in ('GPE' 'LOC'):
-    
       ents = [r.vec2geocode_duplicate_id[i], entity.label_, entity.text]
       Entarr.append(ents)
+      
+    if entity.label_ == 'DATE':
+      ents = [r.vec2geocode_duplicate_id[i], entity.label_, entity.text]
+      Datearr.append(ents)
 
 
 print(Entarr[0])
+print(Datearr[0])
 
 
+
+import pickle
+import os
+
+pickle.dump(Entarr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "wb"))
+pickle.dump(Datearr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Dates.pickle"]), "wb"))
+
+del Datearr
+del Entarr
 ```
 
+note there will likely be duplicates in place names within a duplicate_id, so make sure to clean afterwards. Columns are: duplicate_id, entity_label, entity_text
 
-```{python test Geocode}
-from geocode.geocode import Geocode
-gc = Geocode()
-gc.load()
-gc.decode('I went to Ottawa')
-
-```
-
-```{python run Geocode for loop}
-arr = [] ;
-for input_text in r.vec2geocode:
-    locations = gc.decode(input_text)
-    arr.append(locations);
-
-```
 
 call the output from location tagging in spacy directly to retreive metadata about the location
 ```{python}
@@ -368,58 +390,76 @@ from geocode.geocode import Geocode
 gc = Geocode()
 gc.load()
 
-
 import numpy as np
 
-Entarr = np.array(Entarr)
+
+Entarr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "rb"))
+Entarr_numpy = np.array(Entarr)
 
 Geocodearr = [] ;
 
 for i in range(len(Entarr)):
-  location = gc.decode(Entarr[i,2])
+  location = gc.decode(Entarr_numpy[i,2])
   Geocodearr.append(location)
   
-  
-print(Geocodearr)
 
+pickle.dump(Geocodearr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Geocode-Metadata.pickle"]), "wb"))
+
+
+
+del Geocodearr
+del Entarr
 ```
 
 Note also the option of gc.decode_parallel in https://github.com/mar-muel/local-geocode
 
-```{r}
-print(py$arr[[1]])
-print(vec2geocode[1])
-```
 
 
 Map the distribution of locations mentioned
+
+```{python}
+Entarr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "rb"))
+Geocodearr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"geocode-metadata.pickle"]), "rb"))
+```
 
 ```{r}
 require(tidyverse)
 
 # add the duplicate id to each entry
-n_recs <- length(py$arr)
-arr <- py$arr
+geoarr <- list()
 
-for(i in 1:n_recs){
-  tmp <- lapply(arr[[i]], function(x) append(x, geoparse_txt$duplicate_id[i]))
-  tmp <- lapply(tmp, function(x) {names(x)[9] <- "duplicate_id"; x})
-  arr[[i]] <- tmp
+for(i in 1:length(py$Entarr)){
+  # append each element of the list with the corresponding duplicate id -- sometimes multiple entries for each entity because returns
+  # multiple matches
+  tmp <- lapply(py$Geocodearr[[i]], function(x) append(x, py$Entarr[[i]]))
+  # Add names to these new columns
+  tmp <- lapply(tmp, function(x) {names(x)[9:11] <- c("duplicate_id","entity_label","entity_text"); x})
+  geoarr[[i]] <- tmp
 }
 
-locationsDf <- flatten(arr)
+locationsDf <- flatten(geoarr)
+rm(geoarr)
 
 locationsDf <- lapply(locationsDf, function(x) as.data.frame(x))
 
 locationsDf <- do.call(rbind.data.frame, locationsDf)
 
-View(locationsDf)
 
-save(locationsDf, file = here::here("data","derived-data","coding","geoparsing","geoparsed_locations.RData"))
+# remove any duplicated identifiations within each article
+# sometimes there will also be multiple values for an entity label -- in this case take the first?
+locationsDf <- locationsDf %>%
+  distinct(geoname_id, duplicate_id, entity_text, .keep_all=TRUE) 
+
+## BUT geolocating only really works on GPE, not LOC types, so maybe seperate as several columns in the metadata
+
+
+save(locationsDf, file = here::here("data","derived-data","coding","nlp-extracted","geocode-metadata.RData"))
 ```
 
 ```{r}
 library(maps)
+
+load(here::here("data","derived-data","coding","nlp-extracted","geocode-metadata.RData"))
 
 world_map <- map_data("world")
 
@@ -432,8 +472,8 @@ world_map <- map_data("world")
 ggplot()+
   geom_polygon(data = world_map, aes(x=long, y=lat, group=group), fill="grey")+
 
-  geom_point(data=locationsDf %>% arrange(population), 
-             aes(longitude, latitude, size = log(population), color = log(population)), alpha=0.3)
+  geom_point(data=locationsDf %>% filter(entity_label == "GPE") %>% arrange(population), 
+             aes(longitude, latitude, size = log(population), color = log(population)), alpha=0.3)+
   scale_size_continuous()+
   scale_color_viridis_c(option = "magma")+
   theme_void()+
