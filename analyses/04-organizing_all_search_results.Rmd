@@ -1259,6 +1259,9 @@ dim(dedupRefs)
 #             file = file.path(resultsPath, "deduplication-files","unique_references.txt"),
 #             row.names=F, col.names=TRUE, sep='\t', quote=FALSE)
 
+
+# close connection
+dbDisconnect(db)
 ```
 
 
