@@ -636,6 +636,34 @@ save(screen_results_merged,
 ```
 
 
+
+```{r summarise screening results}
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+
+screen_effort_summary <- screen_results_merged %>%
+  filter(sample_screen != "test list") %>%
+  summarise(
+    DV = sum(grepl("devi", screener)),
+    JGP = sum(grepl("jean", screener)),
+    AC = sum(grepl("adrien", screener)),
+    LB = sum(grepl("bopp", screener)),
+    YS = sum(grepl("yunne", screener))
+  )
+screen_effort_summary
+
+#     DV JGP  AC  LB  YS
+# 1 1170 245 454 527 536
+
+screen_effort_summary <- reshape2::melt(screen_effort_summary)
+
+mean(screen_effort_summary$value) # 586.4
+sd(screen_effort_summary$value) # 346.6775
+median(screen_effort_summary$value) # 527
+
+rm(screen_effort_summary)
+
+```
+
 # Write included articles to pdfs for coding
 
 
@@ -1163,7 +1191,9 @@ DBI::dbDisconnect(allrefs_db)
 Now that the duplicates are identified, deduplicate the database using Rossi
 
 
-```{r examine the deduplicated database to check that it has the number of entries expected}
+```{r summarise the deduplicated database}
+library(dbplyr)
+
 # open the connection
 db <- dbConnect(RSQLite::SQLite(),sqlite_unique_ref_file, create=FALSE)
 src_dbi(db)
@@ -1184,6 +1214,15 @@ dedupRefs %>% group_by(source_database) %>% summarise(n=n())
 # 1 Scopus                   64061
 # 2 Web Of Science          138989
 # 3 Web Of Science | Scopus  66431
+
+
+# number of abstracts missing
+dedupRefs %>% summarise(num_na = sum(is.na(abstract)))
+#   num_na
+#    <int>
+# 1   4045
+
+
 
 
 # number of unique records by search string
