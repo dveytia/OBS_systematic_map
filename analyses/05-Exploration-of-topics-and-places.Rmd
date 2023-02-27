@@ -379,6 +379,8 @@ pickle.dump(Datearr, file= open("\\".join([os.getcwd(),'data','derived-data','co
 
 del Datearr
 del Entarr
+
+
 ```
 
 note there will likely be duplicates in place names within a duplicate_id, so make sure to clean afterwards. Columns are: duplicate_id, entity_label, entity_text
@@ -409,6 +411,8 @@ pickle.dump(Geocodearr, file= open("\\".join([os.getcwd(),'data','derived-data',
 
 del Geocodearr
 del Entarr
+
+
 ```
 
 Note also the option of gc.decode_parallel in https://github.com/mar-muel/local-geocode
@@ -420,6 +424,8 @@ Map the distribution of locations mentioned
 ```{python}
 Entarr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "rb"))
 Geocodearr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"geocode-metadata.pickle"]), "rb"))
+
+quit
 ```
 
 ```{r}
@@ -474,6 +480,8 @@ ggplot()+
 
   geom_point(data=locationsDf %>% filter(entity_label == "GPE") %>% arrange(population), 
              aes(longitude, latitude, size = log(population), color = log(population)), alpha=0.3)+
+  
+  coord_sf()+
   scale_size_continuous()+
   scale_color_viridis_c(option = "magma")+
   theme_void()+
