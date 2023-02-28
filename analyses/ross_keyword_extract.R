@@ -129,15 +129,18 @@ DBI::dbDisconnect(db)
 ## TABULATE TOTALS
 # Add these new concepts in to the tabulated matrix and convert to data frame
 screens$analysis_id <- NULL
-ind <- which(!(colnames(screens) %in% nlp_search_terms$Term[c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind)]))
-tab_screens <- colSums(screens[,ind])
+
+
+# ind <- which((nlp_search_terms$Term[c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind)] %in% colnames(screens)))
+# tab_screens <- colSums(screens[,ind])
+tab_screens <- colSums(screens[,-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind)])
 tab_screens <- as.data.frame(tab_screens)
 colnames(tab_screens) <- c("n_matches")
 # new vector of which paper each column belongs to
-tab_screens$Topic <- c(nlp_search_terms[rownames(tab_screens) %in% nlp_search_terms$Term,1], "Paper1","Paper4")
+tab_screens$Topic <- c(nlp_search_terms[-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind),1], "Paper1","Paper4")
 tab_screens$Keyword <- rownames(tab_screens)
 tab_screens$Keyword_group <- c(
-  nlp_search_terms[rownames(tab_screens) %in% nlp_search_terms$Term,2], 
+  nlp_search_terms[-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind),2], 
   c("carbon removal or storage","coastal communities and safe space or fish")
 )
 rownames(tab_screens) <- NULL
