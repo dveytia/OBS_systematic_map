@@ -37,16 +37,59 @@ recs <- tbl(dbcon, tbl.name)
 
 ## perhaps just to on a subsample
 my_text <- recs %>%
-  select(duplicate_id, title, abstract) %>%
+  select(analysis_id, duplicate_id, title, abstract) %>%
   slice_sample(n=100) %>%
   collect()
 
 dim(my_text)
+head(my_text)
 
 
 ## Clost database connection
 DBI::dbDisconnect(dbcon)
 ```
+
+
+```{r load in predicted relevance and convert to sqlite}
+
+## Write xlsx file to a sqlite database for easy joining
+
+predRel <- readxl::read_excel(here::here("data","raw-data","relevance-predictions","1_document_relevance_28022023.xlsx"))
+
+# rename columns
+colnames(predRel) <- c("analysis_id","relevance_mean","relevance_std","relevance_lower","relevance_upper")
+
+predRel_db <- dbConnect(SQLite(),
+                        dbname = here::here("data","raw-data","sql-databases","relevance-predictions.sqlite"),
+                        create = TRUE)
+
+dbWriteTable(predRel_db, "predRel", predRel, overwrite = TRUE)
+dbDisconnect(predRel_db)
+```
+
+
+# Summarise relevance predictions
+
+```{r}
+
+## Database connection
+predRel_db <- dbConnect(SQLite(), dbname = here::here("data","raw-data","sql-databases","relevance-predictions.sqlite"),create = FALSE)
+predRel <- tbl(predRel_db, "predRel")
+
+
+## Summaries
+predRel %>%
+  summarise(
+    mean = sum(0.5 <= relevance_mean),
+    lower = sum(0.5 <= relevance_lower),
+    upper = sum(0.5 <= relevance_upper)
+  )
+
+## close database
+dbDisconnect(predRel_db)
+
+```
+
 
 
 # Extracting occurrence of key terms from articles
@@ -60,6 +103,42 @@ for(i in 1:length(functionsToSource)){
 }
 
 ```
+
+
+```{r get corresponding title and abstract info for predicted relevance greater than 0.5}
+require(dbplyr)
+
+## Get tables from databases
+dedup_db <- dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite"), 
+                                 create=FALSE)
+src_dbi(dedup_db)
+dedups <- tbl(dedup_db, "uniquerefs")
+
+predRel_db <- dbConnect(SQLite(), dbname = here::here("data","raw-data","sql-databases","relevance-predictions.sqlite"),create = FALSE)
+predRel <- tbl(predRel_db, "predRel")
+
+
+
+## Filter and join
+
+# subset to the records I want to join (pred rel => 0.5)
+relRefs <- predRel %>%
+  select(analysis_id, relevance_mean) %>%
+  filter(0.5 <= relevance_mean) 
+
+# use join to retreive metadata for those records
+relRefs_join <- left_join(relRefs, dedups %>% select(analysis_id,title, abstract), by = "analysis_id", copy=TRUE)
+relRefs_join <- relRefs_join %>%
+  collect()
+
+
+## Disconnect databases
+dbDisconnect(dedup_db)
+dbDisconnect(predRel_db)
+
+```
+
 
 I assembled a list of keywords grouped by different descriptive factors we would like to extract information about. We then scanned the article title, abstract and keywords and counted the occurrences of matches to these terms (boolean response of "yes" for at least one match/article).
 
