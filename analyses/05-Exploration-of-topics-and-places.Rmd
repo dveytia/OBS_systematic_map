@@ -149,7 +149,7 @@ I assembled a list of keywords grouped by different descriptive factors we would
 ```{r clean text}
 
 ## Load spreadsheet of keywords to extract and clean the text
-nlp_search_terms <- readxl::read_excel(here::here("data","derived-data","coding","keyword-search-tokens.xlsx"))
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-search-tokens.csv"))
 nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
 nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
 nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
