@@ -1,0 +1,93 @@
+Group,Group name,Term,Term type
+Paper1,renewables,renewable,single
+Paper1,renewables,OTEC,single
+Paper1,renewables,offshore,single
+Paper1,renewables,wind,single
+Paper1,renewables,wave,single
+Paper1,renewables,tide,single
+Paper1,renewables,solar,single
+Paper1,renewables,photovoltaic,single
+Paper1,renewables,geothermal,single
+Paper1,efficiency,efficient,single
+Paper1,efficiency,sustainable,single
+Paper1,efficiency,alternative,single
+Paper1,carbon,carbon,single
+Paper1,removal,capture,single
+Paper1,removal,removal,single
+Paper1,removal,storage,single
+Paper1,removal,uptake,single
+Paper1,removal,sequester,single
+Paper1,removal,bury,single
+Paper1,removal,export,single
+Paper1,removal,sediment,single
+Paper1,removal,seafloor,single
+Paper1,removal,deep sea,expression
+Paper1,bioenergy,bioenergy,single
+Paper1,bioenergy,biochar,single
+Paper1,bioenergy,pyrolysis,single
+Paper1,OIF,iron fertilization,expression
+Paper1,OIF,artificial upwelling,expression
+Paper1,CO2 removal from seawater,alkalinity enhancement,expression
+Paper1,CO2 removal from seawater,water split,expression
+Paper1,CO2 removal from seawater,bubble strip,expression
+Paper1,CO2 removal from seawater,liming,single
+Paper1,blue carbon,blue carbon,expression
+Paper1,blue carbon,macroalgae cultivation,expression
+Paper1,blue carbon,macroalgae farm,expression
+Paper1,blue carbon,sea weed farm,expression
+Paper2,biodiversity,biodiversity,single
+Paper2,biodiversity,functional diversity,expression
+Paper2,biodiversity,taxonomic diversity,expression
+Paper2,biodiversity,species richness,expression
+Paper2,biodiversity,simpson index,expression
+Paper2,biodiversity,shannon-wiener index,expression
+Paper2,biodiversity,species diversity,expression
+Paper2,biodiversity,ecological diversity,expression
+Paper2,biodiversity,morphological diversity,expression
+Paper2,biodiversity,genetic diversity,expression
+Paper2,biodiversity,phylogenetic diversity,expression
+Paper2,biodiversity,functional group richness,expression
+Paper2,biodiversity,alpha diversity,expression
+Paper2,biodiversity,beta diversity,expression
+Paper2,biodiversity,gamma diversity,expression
+Paper2,ecosystem services,ecosystem services,expression
+Paper2,ecosystem services,environmental services,expression
+Paper2,ecosystem services,provisioning services,expression
+Paper2,ecosystem services,cultural services,expression
+Paper2,ecosystem services,supporting services,expression
+Paper2,ecosystem services,regulating services,expression
+Paper2,ecosystem services,natural capital,expression
+Paper2,ecosystem services,nature's contributions to people,expression
+Paper3,restoration,restoration,single
+Paper3,restoration,rehabilitation,single
+Paper3,restoration,environmental hardening,expression
+Paper3,restoration,hybrid solutions,expression
+Paper3,eco-engineering,living shorelines,expression
+Paper3,eco-engineering,natural climate buffer,expression
+Paper3,eco-engineering,natural climate solution,expression
+Paper3,restoration,intervention ecology,expression
+Paper3,restoration,reclaim,single
+Paper3,restoration,reconstruct,single
+Paper3,restoration,revegetate,single
+Paper3,restoration,depolderisation,single
+Paper3,eco-engineering,eco engineering,expression
+Paper3,eco-engineering,blue engineering,expression
+Paper3,eco-engineering,beach nourishment,expression
+Paper3,eco-engineering,shore nourishment,expression
+Paper4,SLR,sea level,expression
+Paper4,SLR,flood,single
+Paper4,climate change,climate change,expression
+Paper4,extreme weather,storm,single
+Paper4,extreme weather,extreme weather,expression
+Paper4,coasts,coast,single
+Paper4,coasts,beach,single
+Paper4,coasts,shore,single
+Paper4,coasts,island,single
+Paper4,coasts,fisher,single
+Paper4,sustainable fishing,fishery,single
+Paper4,communities,community,single
+Paper4,communities,resident,single
+Paper4,communities,city,single
+Paper4,communities,local,single
+Paper4,communities,town,single
+Paper4,communities,people,single

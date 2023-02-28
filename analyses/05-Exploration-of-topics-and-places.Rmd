@@ -128,14 +128,18 @@ relRefs <- predRel %>%
   filter(0.5 <= relevance_mean) 
 
 # use join to retreive metadata for those records
-relRefs_join <- left_join(relRefs, dedups %>% select(analysis_id,title, abstract), by = "analysis_id", copy=TRUE)
-relRefs_join <- relRefs_join %>%
+my_text <- left_join(relRefs, dedups %>% select(analysis_id,title, abstract), by = "analysis_id", copy=TRUE)
+my_text <- my_text %>%
   collect()
 
 
 ## Disconnect databases
 dbDisconnect(dedup_db)
 dbDisconnect(predRel_db)
+
+
+## Write to file
+save(my_text, file = here::here("data","raw-data","relevance-predictions","include_text.RData"))
 
 ```
 
