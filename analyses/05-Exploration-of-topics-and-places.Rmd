@@ -50,7 +50,7 @@ DBI::dbDisconnect(dbcon)
 ```
 
 
-```{r load in predicted relevance and convert to sqlite}
+```{r load in predicted relevance and convert to sqlite, eval=FALSE}
 
 ## Write xlsx file to a sqlite database for easy joining
 
@@ -90,6 +90,69 @@ dbDisconnect(predRel_db)
 
 ```
 
+## Check relevance predictions
+
+```{r compare to our manual screen results}
+## Load data
+
+# screen results
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData")) # screen results
+
+# metadata for all unique refs
+uniqueRefs_db <- dbConnect(RSQLite::SQLite(), here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite"), create = FALSE)
+uniqueRefs <- tbl(uniqueRefs_db, "uniquerefs")
+
+# relevance predictions
+predRel_db <- dbConnect(SQLite(), dbname = here::here("data","raw-data","sql-databases","relevance-predictions.sqlite"),create = FALSE)
+predRel <- tbl(predRel_db, "predRel")
+
+
+## Subset tables to only the columns I want
+uniqueRefs <- uniqueRefs %>%
+  select(analysis_id, doi)
+
+screen_results_merged <- screen_results_merged %>%
+  select(include_screen, title, year, doi, author, multiple_oro_screen, outcome_section, blue_carbon_flux_storage, sample_screen, abstract) 
+
+predRel <- predRel
+
+
+## Join dataframes together
+
+# Join relevance predictions with metadata
+
+# get analysis_id
+screen_results_pred <- inner_join(screen_results_merged, uniqueRefs, by = "doi", copy=TRUE) 
+
+# join to relevance predictions by analysis_id
+screen_results_pred <- left_join(screen_results_pred, predRel, by = "analysis_id", copy=TRUE)
+
+
+
+## Plot results
+
+require(ggplot2)
+
+ggplot(screen_results_pred %>% filter(include_screen==TRUE), aes(x= sample_screen, y=relevance_mean, fill = sample_screen)) +
+  geom_violin(trim=TRUE)+
+  scale_y_continuous(limits = c(0.5,1))+
+  ggtitle("relevance of included articles")+
+  labs(caption = "NB 2 articles with pred rel < 0.5 were truncated")+
+  theme_bw()
+
+
+screen_results_pred %>% 
+  arrange(relevance_mean) %>% 
+  mutate(id = seq(1:nrow(screen_results_pred))) %>%
+  ggplot(aes(id, relevance_mean))+ 
+  geom_ribbon(aes(ymin = relevance_lower, ymax = relevance_upper), alpha = 0.5, fill="pink")+
+  geom_point(size=1, alpha = 0.3)+
+  geom_hline(yintercept = 0.5, col="darkgrey")+
+  facet_wrap(vars(include_screen))+
+  ggtitle("relevance predictions for screened abstracts")+
+  theme_bw()
+
+```
 
 
 # Extracting occurrence of key terms from articles
@@ -283,6 +346,8 @@ rownames(tab_screens) <- NULL
 ```{r plot the number of matches}
 library(ggplot2)
 
+load(here::here("data","derived-data","coding","keyword-matches","keyword-matches-tabulated.RData"))
+
 # change groupings of mitigation keywords
 tab_screens$Keyword_group[
   which(tab_screens$Keyword_group %in% c("CO2 removal from seawater",
@@ -298,11 +363,12 @@ topicNames <- c(
 )
 
 
-# ymax <- tab_screens %>%
-#   group_by(Topic) %>%
-#   summarise(n = sum(n_matches, na.rm=T))
-# ymax <- ymax$n[which.max(ymax$n)]
+ymax <- tab_screens %>%
+  group_by(Topic) %>%
+  summarise(n = sum(n_matches, na.rm=T))
+ymax <- ymax$n[which.max(ymax$n)]
 
+yoffset = 5000
 
 ggp_list <- list()
 
@@ -316,16 +382,17 @@ for(i in 1:length(topics)){
   
   tempTitle <- paste0(letters[i],". Paper ", i, ": ",topicNames[i], collapse="")
   
-  
   ggp_list[[i]] <- tab_screens %>%
-    filter(Topic == topics[i]) %>%
+    filter(Topic == topics[i], n_matches > 0) %>%
+    
     ggplot(aes(Topic, n_matches, fill = Keyword_group)) +
     geom_col()+
+    geom_text(aes(Topic, sum(n_matches)+yoffset, label = sum(n_matches)))+
     labs(
       title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
       y=yaxis_title
     )+
-    #ylim(0, ymax)+
+    ylim(0, ymax+yoffset)+
     scale_fill_brewer(type="qual", palette = i)+
     theme(
       legend.position = "bottom",
