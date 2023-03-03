@@ -44,7 +44,7 @@ vignettes/*.pdf
 *.sqlite
 /data/derived-data/coding/coding-pdfs/
 /data/derived-data/coding/geoparsing/
-/data/derived-data/coding/nlp-extracted/
+/data/derived-data/coding/nlp-extracted/*.RData
 /data/derived-data/coding/coding-pdfs-training/
 /data/derived-data/coding/keyword-matches/
 /data/derived-data/screening/screened-records/*.csv
@@ -52,5 +52,5 @@ vignettes/*.pdf
 /data/raw-data/deduplication-files/unique_references.txt
 /data/raw-data/relevance-predictions/
 /*_env/
-/*.pickle
+*.pickle
 

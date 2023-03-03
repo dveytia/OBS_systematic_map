@@ -426,7 +426,30 @@ rm(list=ls())
 
 Repeat the set up chunk from the beginning of the doc to load files
 ```{r set up dataset}
+## inputs (need to change)
+sqlite.fp <- here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite")
+tbl.name <- "uniquerefs"
 
+
+## Get records from database
+dbcon <- dbConnect(RSQLite::SQLite(), sqlite.fp, create = FALSE)
+recs <- tbl(dbcon, tbl.name)
+
+
+## perhaps just to on a subsample
+my_text <- recs %>%
+  select(analysis_id, duplicate_id, title, abstract) %>%
+  slice_sample(n=100) %>%
+  collect()
+
+dim(my_text)
+head(my_text)
+
+## save
+write.csv(my_text,here::here("data","derived-data","coding","nlp-extracted","geocode-text.csv"))
+
+## Clost database connection
+DBI::dbDisconnect(dbcon)
 ```
 
 ```{r combine text for geoparsing}
