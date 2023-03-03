@@ -453,6 +453,7 @@ DBI::dbDisconnect(dbcon)
 ```
 
 ```{r combine text for geoparsing}
+my_text <- read.csv(here::here("data","derived-data","coding","nlp-extracted","geocode-text.csv"))
 
 vec2geocode <- paste(my_text$title, my_text$abstract)
 vec2geocode_duplicate_id <- my_text$duplicate_id
@@ -515,6 +516,8 @@ ORDINAL:     “first”, “second”, etc.
 CARDINAL:    Numerals that do not fall under another type.
 
 attributes can be displayed using dir(doc)
+
+First extract the entities from the text. If GPE or LOC, store seperatelyfrom dates
 ```{python}
 
 import spacy
@@ -595,12 +598,16 @@ Note also the option of gc.decode_parallel in https://github.com/mar-muel/local-
 Map the distribution of locations mentioned
 
 ```{python}
+import pickle
+import os
+
 Entarr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "rb"))
 Geocodearr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"geocode-metadata.pickle"]), "rb"))
 
 quit
 ```
 
+Use r to format data frame
 ```{r}
 require(tidyverse)
 
@@ -624,12 +631,65 @@ locationsDf <- lapply(locationsDf, function(x) as.data.frame(x))
 locationsDf <- do.call(rbind.data.frame, locationsDf)
 
 
-# remove any duplicated identifiations within each article
-# sometimes there will also be multiple values for an entity label -- in this case take the first?
+# remove any duplicated identifications within each article
+# sometimes there will also be multiple values for an entity label -- in this case take the first? ****
 locationsDf <- locationsDf %>%
   distinct(geoname_id, duplicate_id, entity_text, .keep_all=TRUE) 
 
+
+## Format the data frame
+locationsDf <- locationsDf %>%
+  mutate(
+    entity_label = factor(entity_label, levels=c("LOC","GPE"))
+  )
+
 ## BUT geolocating only really works on GPE, not LOC types, so maybe seperate as several columns in the metadata
+```
+
+
+Work on coding the location types
+```{r}
+library(mregions)
+
+
+# get records
+types <- mr_place_types()
+
+mrec <- mr_records_by_type(type = types$type[1])
+
+
+
+# identify which records correspond to each entry
+mreg_text <- locationsDf %>%
+  filter(entity_label == "LOC")
+
+mreg_code <- mregions::mr_geo_code(mreg_text$entity_text[2], fuzzy=TRUE)
+mreg_code <- mreg_code[1,]
+
+
+# get the area of the bounding box
+
+library(geosphere)
+
+xlim <- c(mreg_code$minLongitude, mreg_code$maxLongitude)
+ylim <- c(mreg_code$minLatitude, mreg_code$maxLatitude)
+l.out = 50
+
+bb = rbind(cbind(xlim[1], seq(ylim[1],ylim[2],length.out = l.out)),
+            cbind(seq(xlim[1],xlim[2],length.out = l.out),ylim[2]),
+            cbind(xlim[2],seq(ylim[2],ylim[1],length.out = l.out)),
+            cbind(seq(xlim[2],xlim[1],length.out = l.out),ylim[1]))
+
+
+area <- geosphere::areaPolygon(bb)
+
+area # in m2
+
+
+# extract shp file?
+
+
+
 
 
 save(locationsDf, file = here::here("data","derived-data","coding","nlp-extracted","geocode-metadata.RData"))
