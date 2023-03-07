@@ -11,7 +11,8 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 # Read in codebooks and format for distilBert
-Note that I might need to match by doi with the db below to get corresponding duplicate_id
+
+Note that I might need to match by doi with the db below to get corresponding duplicate_id and abstract
 
 ```{r}
 dbcon <- dbConnect(RSQLite::SQLite(), 
@@ -28,15 +29,23 @@ dbDisconnect(dbcon)
 
 
 ```{r}
+
+## READ IN FILES
+
+# files of coding results
 codingDir <- here::here("data","derived-data","coding","manual-coding")
 codingFiles <- dir(codingDir)
+codingFiles <- codingFiles[grepl(".xl", codingFiles)] # only include xl files
 
 
 for(f in 1:length(codingFiles)){
   
+  print(paste("f = ", f))
+  
   # read in but skip extra header rows and row indicating type of variable
   temp <- readxl::read_excel(file.path(codingDir, codingFiles[f]),sheet = "Codebook",
                              trim_ws = TRUE, skip = 2)
+  
   
   # Column names
   colnames(temp) <- tolower(colnames(temp))
@@ -55,37 +64,50 @@ for(f in 1:length(codingFiles)){
     
     # each variable will be stored in a list
     responseList <- vector("list", length(values))
+    names(responseList) <- colnames(temp)
   }
   
   
   ## For all the variables, spread factors into binary columns for each value
   for(j in 1:length(values)){
     
+    print(paste("j = ", j))
+    
     if(grepl("pre-filled",values[j], ignore.case = TRUE)){
-        tempMat <- as.character(temp[,j])
-        colnames(tempMat) <- colnames(temp)[j]
+      tempMat <- as.data.frame(temp[,j])
+      colnames(tempMat) <- colnames(temp)[j]
+      tempMat[,1] <- as.character(tempMat[,1])
+      dim(tempMat)
     }  
     
     if(grepl("text",values[j], ignore.case = TRUE)){
-        tempMat <- as.character(temp[,j])
-        colnames(tempMat) <- colnames(temp)[j]
+      tempMat <- as.data.frame(temp[,j])
+      colnames(tempMat) <- colnames(temp)[j]
+      tempMat[,1] <- as.character(tempMat[,1])
+      dim(tempMat)
     }
     
       
     if(grepl("integer", values[j], ignore.case = TRUE)){
-        tempMat <- as.factor(temp[,j])
-        colnames(tempMat) <- colnames(temp)[j]
+      tempMat <- as.data.frame(temp[,j])
+      colnames(tempMat) <- colnames(temp)[j]
+      tempMat[,1] <- as.factor(tempMat[,1])
+      dim(tempMat)
     }
     
     
     if(grepl("automatic fill", values[j], ignore.case = TRUE)){
-      tempMat <- as.character(temp[,j])
+      tempMat <- as.data.frame(temp[,j])
       colnames(tempMat) <- colnames(temp)[j]
+      tempMat[,1] <- as.character(tempMat[,1])
+      dim(tempMat)
     }
     
     if(grepl("alpha-numeric", values[j], ignore.case = TRUE)){
-      tempMat <- as.character(temp[,j])
+      tempMat <- as.data.frame(temp[,j])
       colnames(tempMat) <- colnames(temp)[j]
+      tempMat[,1] <- as.character(tempMat[,1])
+      dim(tempMat)
     }
     
     
@@ -94,7 +116,9 @@ for(f in 1:length(codingFiles)){
           ifelse(isTRUE(temp[,j]), 1, 0),
           ifelse(!isTRUE(temp[,j]), 1, 0)
         )
-      colnames(tempMat) <- paste(colnames(temp)[j], c("TRUE","FALSE"), sep = "__")
+      tempMat <- as.data.frame(tempMat)
+      #colnames(tempMat) <- paste(colnames(temp)[j], c("TRUE","FALSE"), sep = "__")
+      colnames(tempMat) <- c("TRUE","FALSE")
     }
     
     
@@ -102,88 +126,60 @@ for(f in 1:length(codingFiles)){
       vals <- unlist(strsplit(gsub("Select One: ","", values[j]),","))
       valLabels <- gsub(" ","_",gsub("[[:punct:]]","", vals))
       tempMat <- matrix(nrow = nrow(temp), ncol = length(vals))
-      colnames(tempMat) <- paste(colnames(temp)[j], valLabels, sep = "__")
+      #colnames(tempMat) <- paste(colnames(temp)[j], valLabels, sep = "__")
+      colnames(tempMat) <- valLabels
       for(v in 1:length(vals)){
         tempMat[,v] <- grepl(vals[v], temp[,j], ignore.case = TRUE)
       }
+      tempMat <- as.data.frame(tempMat)
+      tempMat[tempMat==TRUE] <- 1
+      tempMat[tempMat==FALSE] <- 0
     }
+    
     
     ## after all the processing, save
+    
     if(f==1){
       responseList[[j]] <- tempMat
+      #dbWriteTable(codingResultsDbCon, colnames(temp)[j], tempMat, append=FALSE)
+      
     }else{
       responseList[[j]] <- rbind(responseList[[j]], tempMat)
+      #dbWriteTable(codingResultsDbCon, colnames(temp)[j], tempMat, append=TRUE)
     }
     
     
-    # as a table in a sqlite data base
-    
-      
   } # finish looping through columns
   
+  # if(f == length(codingFiles)){
+  #   dbDisconnect(codingResultsDbCon)
+  # }
   
-  
-  
-  
-  # format columns types for single answers
-  temp <- temp %>%
-    mutate(
-      sysrev_id = as.factor(sysrev_id),
-      title = as.character(title),
-      year = as.factor(year),
-      coder_1 = as.character(coder_1),
-      coder_2 = as.character(coder_2),
-      include_code = as.logical(include_code),
-      exclude_note = as.character(exclude_note),
-      oro_id = as.factor(oro_id),
-      row_id = as.factor(row_id),
-      oro_type = factor(oro_type,
-                      levels = unlist(strsplit(gsub("Select One: ","", values[which(names(values) == "oro_type")]),","))
-                      ),
-      data_type = factor(
-        data_type,
-        levels = unlist(strsplit(gsub("Select One: ","", values[which(names(values) == "data_type")]),","))
-      ),
-      climate_mitigation = as.logical(ifelse(is.na(climate_mitigation), FALSE, TRUE)),
-      adapt_to_threat = factor(
-        adapt_to_threat,
-        levels = unlist(strsplit(gsub("Select One: ","", values[which(names(values) == "adapt_to_threat")]),","))
-      ),
-      secondary_effect_h = as.logical(ifelse(is.na(secondary_effect_h), FALSE, TRUE)),
-      secondary_effect_n = as.logical(ifelse(is.na(secondary_effect_n), FALSE, TRUE)),
-      secondary_effect_oro = as.logical(ifelse(is.na(secondary_effect_oro), FALSE, TRUE)),
-      scalability = as.logical(ifelse(is.na(scalability), FALSE, TRUE)),
-      robustness = as.logical(ifelse(is.na(robustness), FALSE, TRUE)),
-      duration = as.logical(ifelse(is.na(duration), FALSE, TRUE)),
-      readiness = as.logical(ifelse(is.na(readiness), FALSE, TRUE)),
-      lead_time = as.logical(ifelse(is.na(lead_time), FALSE, TRUE)),
-      cost = as.logical(ifelse(is.na(cost), FALSE, TRUE)),
-      enabling_factors = as.logical(ifelse(is.na(enabling_factors), FALSE, TRUE)),
-      governability = as.logical(ifelse(is.na(governability), FALSE, TRUE)),
-      biodiv_ncp = as.factor(
-        biodiv_ncp,
-        levels = unlist(strsplit(gsub("Select One: ","", values[which(names(values) == "biodiv_ncp")]),","))
-      ),
-      restoration_action = as.logical(ifelse(is.na(restoration_action), FALSE, TRUE)),
-      aim_sustainable_catch = as.logical(ifelse(is.na(aim_sustainable_catch), FALSE, TRUE)),
-      aim_safe_space = as.logical(ifelse(is.na(aim_safe_space), FALSE, TRUE))
-    )
-  
-  # Expand out values
-  colTypes <- sapply(temp, "class")
-  
+} # finish looping through files
 
-  
-  
-  summary(temp)
-  
-  reshape2::dcast()
-  
-  if(f==1){
-    codingDf <- temp
-  }else{
-    codingDf <- rbind(codingDf, temp)
-  }
-}
+
+responseDf <- do.call(cbind.data.frame, responseList)
+View(responseDf)
+
+
+
+
+## JOIN with METADATA
+
+# corresponding metadata
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+
+responseDf <- screen_results_merged %>% 
+  select(sysrev_id, abstract) %>%
+  mutate(sysrev_id = as.character(sysrev_id)) %>%
+  right_join(responseDf, by = "sysrev_id")
+
+
+## Write
+write.table(
+  responseDf[1,],
+  file = file.path(codingDir, "manual-coding-format-distilBERT.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
 
 ```
