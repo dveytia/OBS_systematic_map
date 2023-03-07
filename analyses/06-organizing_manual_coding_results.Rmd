@@ -1,0 +1,189 @@
+---
+title: "06-organizing_manual_coding_results"
+author: "Devi Veytia"
+date: "2023-03-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Read in codebooks and format for distilBert
+Note that I might need to match by doi with the db below to get corresponding duplicate_id
+
+```{r}
+dbcon <- dbConnect(RSQLite::SQLite(), 
+                   here::here("data","raw-data","sql-databases","all-refs_v2_join-duplicate_id.sqlite"), 
+                   create = FALSE)
+src_dbi(dbcon)
+allrefs_join <- tbl(dbcon, "allrefs_join")
+
+allrefs_join %>% head %>% collect() %>% View
+
+dbDisconnect(dbcon)
+
+```
+
+
+```{r}
+codingDir <- here::here("data","derived-data","coding","manual-coding")
+codingFiles <- dir(codingDir)
+
+
+for(f in 1:length(codingFiles)){
+  
+  # read in but skip extra header rows and row indicating type of variable
+  temp <- readxl::read_excel(file.path(codingDir, codingFiles[f]),sheet = "Codebook",
+                             trim_ws = TRUE, skip = 2)
+  
+  # Column names
+  colnames(temp) <- tolower(colnames(temp))
+  colnames(temp) <- gsub(" ","_", colnames(temp))
+  
+  # change french formatting if needed
+  temp[temp == "VRAI"] <- TRUE
+  temp[temp == "FAUX"] <- FALSE
+  
+  
+  ## If f == 1, build the template to expand answers
+  # Extract possible values for each variable
+  if(f==1){
+    values <- temp[1,]
+    temp <- temp[-1,]
+    
+    # each variable will be stored in a list
+    responseList <- vector("list", length(values))
+  }
+  
+  
+  ## For all the variables, spread factors into binary columns for each value
+  for(j in 1:length(values)){
+    
+    if(grepl("pre-filled",values[j], ignore.case = TRUE)){
+        tempMat <- as.character(temp[,j])
+        colnames(tempMat) <- colnames(temp)[j]
+    }  
+    
+    if(grepl("text",values[j], ignore.case = TRUE)){
+        tempMat <- as.character(temp[,j])
+        colnames(tempMat) <- colnames(temp)[j]
+    }
+    
+      
+    if(grepl("integer", values[j], ignore.case = TRUE)){
+        tempMat <- as.factor(temp[,j])
+        colnames(tempMat) <- colnames(temp)[j]
+    }
+    
+    
+    if(grepl("automatic fill", values[j], ignore.case = TRUE)){
+      tempMat <- as.character(temp[,j])
+      colnames(tempMat) <- colnames(temp)[j]
+    }
+    
+    if(grepl("alpha-numeric", values[j], ignore.case = TRUE)){
+      tempMat <- as.character(temp[,j])
+      colnames(tempMat) <- colnames(temp)[j]
+    }
+    
+    
+    if(grepl("boolean", values[j], ignore.case = TRUE)){
+      tempMat <- cbind(
+          ifelse(isTRUE(temp[,j]), 1, 0),
+          ifelse(!isTRUE(temp[,j]), 1, 0)
+        )
+      colnames(tempMat) <- paste(colnames(temp)[j], c("TRUE","FALSE"), sep = "__")
+    }
+    
+    
+    if(grepl("Select", values[j], ignore.case = TRUE)){
+      vals <- unlist(strsplit(gsub("Select One: ","", values[j]),","))
+      valLabels <- gsub(" ","_",gsub("[[:punct:]]","", vals))
+      tempMat <- matrix(nrow = nrow(temp), ncol = length(vals))
+      colnames(tempMat) <- paste(colnames(temp)[j], valLabels, sep = "__")
+      for(v in 1:length(vals)){
+        tempMat[,v] <- grepl(vals[v], temp[,j], ignore.case = TRUE)
+      }
+    }
+    
+    ## after all the processing, save
+    if(f==1){
+      responseList[[j]] <- tempMat
+    }else{
+      responseList[[j]] <- rbind(responseList[[j]], tempMat)
+    }
+    
+    
+    # as a table in a sqlite data base
+    
+      
+  } # finish looping through columns
+  
+  
+  
+  
+  
+  # format columns types for single answers
+  temp <- temp %>%
+    mutate(
+      sysrev_id = as.factor(sysrev_id),
+      title = as.character(title),
+      year = as.factor(year),
+      coder_1 = as.character(coder_1),
+      coder_2 = as.character(coder_2),
+      include_code = as.logical(include_code),
+      exclude_note = as.character(exclude_note),
+      oro_id = as.factor(oro_id),
+      row_id = as.factor(row_id),
+      oro_type = factor(oro_type,
+                      levels = unlist(strsplit(gsub("Select One: ","", values[which(names(values) == "oro_type")]),","))
+                      ),
+      data_type = factor(
+        data_type,
+        levels = unlist(strsplit(gsub("Select One: ","", values[which(names(values) == "data_type")]),","))
+      ),
+      climate_mitigation = as.logical(ifelse(is.na(climate_mitigation), FALSE, TRUE)),
+      adapt_to_threat = factor(
+        adapt_to_threat,
+        levels = unlist(strsplit(gsub("Select One: ","", values[which(names(values) == "adapt_to_threat")]),","))
+      ),
+      secondary_effect_h = as.logical(ifelse(is.na(secondary_effect_h), FALSE, TRUE)),
+      secondary_effect_n = as.logical(ifelse(is.na(secondary_effect_n), FALSE, TRUE)),
+      secondary_effect_oro = as.logical(ifelse(is.na(secondary_effect_oro), FALSE, TRUE)),
+      scalability = as.logical(ifelse(is.na(scalability), FALSE, TRUE)),
+      robustness = as.logical(ifelse(is.na(robustness), FALSE, TRUE)),
+      duration = as.logical(ifelse(is.na(duration), FALSE, TRUE)),
+      readiness = as.logical(ifelse(is.na(readiness), FALSE, TRUE)),
+      lead_time = as.logical(ifelse(is.na(lead_time), FALSE, TRUE)),
+      cost = as.logical(ifelse(is.na(cost), FALSE, TRUE)),
+      enabling_factors = as.logical(ifelse(is.na(enabling_factors), FALSE, TRUE)),
+      governability = as.logical(ifelse(is.na(governability), FALSE, TRUE)),
+      biodiv_ncp = as.factor(
+        biodiv_ncp,
+        levels = unlist(strsplit(gsub("Select One: ","", values[which(names(values) == "biodiv_ncp")]),","))
+      ),
+      restoration_action = as.logical(ifelse(is.na(restoration_action), FALSE, TRUE)),
+      aim_sustainable_catch = as.logical(ifelse(is.na(aim_sustainable_catch), FALSE, TRUE)),
+      aim_safe_space = as.logical(ifelse(is.na(aim_safe_space), FALSE, TRUE))
+    )
+  
+  # Expand out values
+  colTypes <- sapply(temp, "class")
+  
+
+  
+  
+  summary(temp)
+  
+  reshape2::dcast()
+  
+  if(f==1){
+    codingDf <- temp
+  }else{
+    codingDf <- rbind(codingDf, temp)
+  }
+}
+
+```
