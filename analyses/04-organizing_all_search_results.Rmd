@@ -1267,9 +1267,87 @@ dbDisconnect(db)
 
 
 
-# PRISMA SUMMARY
+# Check against other benchmark articles
 
-check this out: PRISMA2020 R Package https://www.youtube.com/watch?v=IySomccfnFE&list=PLt4D0fZLWzSlVzzhZTeyOCJDyMoDHNEDK&index=18
+```{r}
+#install.packages("citationchaser")
+```
+
+But the API is only a 14 day free trial, so use the shiny app: https://estech.shinyapps.io/citationchaser/
+
+
+## Galparsoro 2022 -- reviewing ecological impacts of offshore wind farms
+
+DOI searched: https://doi.org/10.1038/s44183-022-00003-5
+
+```{r}
+library(dbplyr)
+
+
+## References retrieved from backwards citation chasing
+
+# read in
+galRef <- revtools::read_bibliography(here::here("data","raw-data","citation-chasing","Galparsoro_etal_2002_references.ris"))
+
+# only search by doi, so remove if doi is na
+galRef <- subset(galRef, !is.na(doi))
+
+# load database with all references in our database (not deduplicated)
+dbcon <- DBI::dbConnect(RSQLite::SQLite(),
+                        here::here("data","raw-data","sql-databases","all-refs_v2.sqlite"),
+                        create=FALSE)
+dbplyr::src_dbi(dbcon)
+allrefs <- tbl(dbcon, "refs")
+
+# join the two dataframes to find matches
+allrefs <- allrefs %>%
+  select(doi, analysis_id, duplicate_id)
+
+galRefRetreived <- galRef %>%
+  left_join(allrefs, by = "doi", copy = TRUE)
+
+# note there are duplicates because some dois match with multiple entries, so remove
+galRefRetreived <- revtools::extract_unique_references(galRefRetreived, matches = "doi")
+
+
+
+## Were the missed references indexed in WOS?
+
+# string to search in WOS
+cat(paste0(galRefRetreived$doi[which(is.na(galRefRetreived$analysis_id))], sep=" OR "))
+# only 26 indexed in WOS
+
+# read in wos results
+indexWos <- revtools::read_bibliography(here::here("data","raw-data","citation-chasing","missed-Galparsoro-indexed-in-wos-zotero.ris"))
+
+# join with the retreived dataset
+galRefRetreived <- galRefRetreived %>%
+  left_join(indexWos %>% select(doi,accession), by = "doi")%>%
+  rename(wos_id = accession)
+
+## None were indexed in Scopus
+
+
+
+## Summaries
+
+# how many are retreived
+sum(!is.na(galRefRetreived$analysis_id))
+
+# out of how many are cited
+nrow(galRef)
+
+# how many were missed that were indexed?
+galRefRetreived %>%
+  filter(is.na(analysis_id), !is.na(wos_id)) %>%
+  nrow
+
+## Export for Fred
+writexl::write_xlsx(galRefRetreived %>% select(-duplicate_id, -n_duplicates), 
+                    path = here::here("data","raw-data","citation-chasing","Galparsoro_etal_2002_retrieved-references.xlsx"))
+
+``` 
+
 
 
 

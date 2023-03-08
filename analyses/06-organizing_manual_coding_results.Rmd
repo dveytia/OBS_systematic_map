@@ -14,7 +14,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Note that I might need to match by doi with the db below to get corresponding duplicate_id and abstract
 
-```{r}
+```{r join with full corpus database to get duplicate_id}
 dbcon <- dbConnect(RSQLite::SQLite(), 
                    here::here("data","raw-data","sql-databases","all-refs_v2_join-duplicate_id.sqlite"), 
                    create = FALSE)
@@ -28,7 +28,7 @@ dbDisconnect(dbcon)
 ```
 
 
-```{r}
+```{r format into binary columns for predictions in distilBERT}
 
 ## READ IN FILES
 
@@ -183,3 +183,4 @@ write.table(
 )
 
 ```
+
