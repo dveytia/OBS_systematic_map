@@ -267,7 +267,122 @@ rm(screens_swd, screens_expr)
 
 ## Visualizing keyword search results
 
-identify numbers of papers relevant to each topic
+identify numbers of papers relevant to each topic. The tokens to search for are stored in /data/derived-data/coding/keyword-matches/keyword-search-tokens.csv. These keyword occurrences are extracted using the code ross_keyword_extract.R. 
+
+```{r lookup table of groups for different keywords}
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+
+
+## Process terms so that they match the column names in the sqlite database
+colnames(nlp_search_terms) <- c("Group","Group name", "Term","Term type")
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+nlp_search_terms$Term <- gsub(" ","_", nlp_search_terms$Term)
+
+
+## Change names of some groupings
+
+# change groupings of mitigation keywords
+nlp_search_terms$`Group name`[
+  which(nlp_search_terms$`Group name` %in% c("removal","CO2 removal from seawater",
+                                   "OIF","blue carbon","bioenergy"))
+] <- "carbon removal or storage"
+
+
+## Names for each of the papers
+topicNames <- c(
+  "R&D vs implementation of mitigation OROs",
+  "Biodiv & NCP outcomes",
+  "Restoration practices",
+  "Coastal community adaptation portfolio"
+)
+
+```
+
+Now visualize these results 
+```{r create an object to store all the plots}
+ggp_list <- list()
+```
+
+
+For paper 1, I just want a barchart, and then the total number with any occurrence
+```{r paper 1}
+## Identify which paper
+PaperNumber=1
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+## Connect to database
+keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
+                                 dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
+src_dbi(keywordCon)
+
+keywordMatches <- tbl(keywordCon, "keywordMatches")
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper 1
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  #head() %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+  
+
+# by keyword group (Group name) tabulate how many hits there were
+paper_tab <- paper_df %>%
+  group_by(`Group name`) %>%
+  summarise(n=n_distinct(analysis_id))
+
+# how many articles retreived any hit
+paper_total <- length(unique(paper_df$analysis_id))
+
+
+## Display 
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- paper_tab %>%
+  mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+```
+
 
 ```{r load in screening results}
 ## Load and format matching results
