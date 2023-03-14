@@ -393,8 +393,17 @@ paper_df <- keywordMatches %>%
   
   
 
-# how man articles have either or both biodiv or ncp
+# # how man articles have either or both biodiv or ncp
 counts = with(paper_df, table(tapply(`Group name`, analysis_id, function(x) paste(as.character(sort(unique(x))), collapse=' & '))))
+counts = as.data.frame(t(counts))
+colnames(counts) <- c("Topic", "Group name","n")
+counts$Topic <- paste("Paper", PaperNumber)
+
+
+# # by keyword group (Group name) tabulate how many hits there were
+# paper_tab <- paper_df %>%
+#   group_by(`Group name`) %>%
+#   summarise(n=n_distinct(analysis_id))
 
 
 # how many articles retreived any hit
@@ -411,15 +420,16 @@ yoffset = 5000
 require(ggplot2)
 
 ggp_list[[PaperNumber]] <- counts %>%
-  mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  #mutate(Topic = paste("Paper", PaperNumber)) %>% 
   ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
     geom_col()+
-    geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    geom_text(aes(x=paste("Paper", PaperNumber), y = n, label=paste(n),group = `Group name`), position = position_stack(vjust=0.5))+
+    #geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
     labs(
       title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
       y=yaxis_title
     )+
-    ylim(0, ymax+yoffset)+
+    #ylim(0, ymax+yoffset)+
     scale_fill_brewer(type="qual", palette = PaperNumber)+
     theme(
       legend.position = "bottom",
