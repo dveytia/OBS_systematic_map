@@ -47,7 +47,8 @@ vignettes/*.pdf
 /data/derived-data/coding/geoparsing/
 /data/derived-data/coding/nlp-extracted/*.RData
 /data/derived-data/coding/coding-pdfs-training/
-/data/derived-data/coding/keyword-matches/
+/data/derived-data/coding/keyword-matches/*.RData
+/data/derived-data/coding/keyword-matches/*.sqlite
 /data/derived-data/screening/screened-records/*.csv
 /data/derived-data/screening/records-to-screen/*.rds
 /data/raw-data/deduplication-files/unique_references.txt
