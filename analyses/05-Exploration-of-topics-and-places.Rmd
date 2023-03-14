@@ -17,7 +17,7 @@ library(dbplyr)
 library(R.utils)
 library(RSQLite)
 library(reticulate)
-
+library(ggplot2)
 ```
 
 
@@ -202,7 +202,7 @@ dbDisconnect(predRel_db)
 
 
 ## Write to file
-save(my_text, file = here::here("data","raw-data","relevance-predictions","include_text.RData"))
+#save(my_text, file = here::here("data","raw-data","relevance-predictions","include_text.RData"))
 
 ```
 
@@ -212,7 +212,7 @@ I assembled a list of keywords grouped by different descriptive factors we would
 ```{r clean text}
 
 ## Load spreadsheet of keywords to extract and clean the text
-nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-search-tokens.csv"))
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
 nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
 nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
 nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
@@ -244,30 +244,12 @@ nlptxt$text <- textstem::lemmatize_strings(nlptxt$text)
 
 ## Screen for keywords
 
-```{r  screen for matches to make a document feature matrix takes a while to run}
-start <- Sys.time()
-
-screens_swd <- screen(nlptxt$text, single_words)
-save(screens_swd, file=here::here("data","derived-data","coding","keyword-matches","single-word-matches.RData"))
-
-screens_expr <- screen(nlptxt$text, expressions)
-save(screens_expr, file=here::here("data","derived-data","coding","keyword-matches","expression-matches.RData"))
-
-end <- Sys.time()
-
-diff <- end-start
-as.numeric(diff)*(300000/100)/3600 # number of hours it would take to process all records, about 2.5 hours
-
-
-# # remove files
-rm(screens_swd, screens_expr)
-
-```
+These keyword occurrences are extracted using the code ross_keyword_extract.R. 
 
 
 ## Visualizing keyword search results
 
-identify numbers of papers relevant to each topic. The tokens to search for are stored in /data/derived-data/coding/keyword-matches/keyword-search-tokens.csv. These keyword occurrences are extracted using the code ross_keyword_extract.R. 
+identify numbers of papers relevant to each topic. The tokens to search for are stored in /data/derived-data/coding/keyword-matches/keyword-search-tokens.csv. 
 
 ```{r lookup table of groups for different keywords}
 nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
@@ -302,6 +284,16 @@ topicNames <- c(
 
 ```
 
+```{r connect to database with the keyword matches}
+## Connect to database
+keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
+                                 dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
+src_dbi(keywordCon)
+
+keywordMatches <- tbl(keywordCon, "keywordMatches")
+
+```
+
 Now visualize these results 
 ```{r create an object to store all the plots}
 ggp_list <- list()
@@ -315,13 +307,6 @@ PaperNumber=1
 Paper = paste0("Paper", PaperNumber)
 tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
 
-
-## Connect to database
-keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
-                                 dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
-src_dbi(keywordCon)
-
-keywordMatches <- tbl(keywordCon, "keywordMatches")
 
 
 ## Calculate tabulation summaries
@@ -380,6 +365,79 @@ ggp_list[[PaperNumber]] <- paper_tab %>%
     )
   
 ggp_list[[PaperNumber]]
+
+
+```
+
+
+For paper 2, they want to know papers that have biodiv, ES, or both
+```{r paper 2}
+## Identify which paper
+PaperNumber=2
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+  
+
+# how man articles have either or both biodiv or ncp
+counts = with(paper_df, table(tapply(`Group name`, analysis_id, function(x) paste(as.character(sort(unique(x))), collapse=' & '))))
+
+
+# how many articles retreived any hit
+paper_total <- length(unique(paper_df$analysis_id))
+
+
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- counts %>%
+  mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+```
+
+```{r close databset connection}
+## Close connection
+RSQLite::dbDisconnect(keywordCon)
 
 ```
 
