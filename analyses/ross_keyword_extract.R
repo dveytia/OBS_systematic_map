@@ -13,7 +13,7 @@ for(i in 1:length(functionsToSource)){
 
 
 ## Process words to search
-
+colnames(nlp_search_terms) <- c("Group","Group name", "Term","Term type")
 nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
 nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
 nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
@@ -27,16 +27,16 @@ expressions <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "expression")
 names(single_words) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "single")]
 names(expressions) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "expression")]
 
-# indices for compound terms
-# carbon and removal
-carb_ind <- which(nlp_search_terms[,2] == "carbon")
-rem_ind <- which(nlp_search_terms[,2] == "removal")
-# coasts and communities
-coast_ind <- which(nlp_search_terms[,2] == "coasts")
-comm_ind <- which(nlp_search_terms[,2] == "communities")
-# safe space and fish
-rest_ind <- which(nlp_search_terms$Group == "Paper4")
-rest_ind <- rest_ind[which(!(rest_ind %in% c(coast_ind, comm_ind)))]
+# # indices for compound terms
+# # carbon and removal
+# carb_ind <- which(nlp_search_terms[,2] == "carbon")
+# rem_ind <- which(nlp_search_terms[,2] == "removal")
+# # coasts and communities
+# coast_ind <- which(nlp_search_terms[,2] == "coasts")
+# comm_ind <- which(nlp_search_terms[,2] == "communities")
+# # safe space and fish
+# rest_ind <- which(nlp_search_terms$Group == "Paper4")
+# rest_ind <- rest_ind[which(!(rest_ind %in% c(coast_ind, comm_ind)))]
 
 
 
@@ -70,47 +70,47 @@ results = parallel::mclapply(1:nrow(my_text), function(i){
   # make sure everything is just a y/n response, to presence/absence
   screens_all <- ifelse(1 <= screens_all, 1, 0)
   
-  
-  ## Compound terms
-  # some concepts require co-occurrences between two terms (i.e. AND statements)
-  # so make a new matrix with these values
-  complexTerms <- matrix(nrow=1,
-                         ncol = 2,
-                         dimnames = list(
-                           my_text$analysis_id[i],
-                           c("carbon removal or storage","coastal communities and safe space or fish")
-                         ))
-  
-  
-  # for carbon AND removal
-  # a y/n response for whether any of the synonymns are found
-  carb <- screens_all[,carb_ind]
-  rem <- ifelse(sum(1 <= screens_all[,rem_ind]), 1,0) 
-  # whether there are words matching both of the keyword groups for carbon AND removal
-  complexTerms[,1] <- ifelse(carb == 1 & rem == 1, 1, 0)
-  
-  
-  
-  # for coasts and communities
-  coast <- ifelse(sum(1 <= screens_all[,coast_ind]), 1,0)
-  comm <- ifelse(sum(1 <= screens_all[,comm_ind]), 1,0)
-  coastAndComm <- ifelse(coast == 1 & comm == 1, 1, 0)
-  
-  # for safe space or fish -- i.e. other Group names that aren't coasts or communities
-  rest <- ifelse(sum(1 <= screens_all[,rest_ind]), 1, 0)
-  
-  # for coasts and communities and safe space or fish
-  complexTerms[,2] <- ifelse(coastAndComm ==1 & rest == 1, 1,0)
+  # 
+  # ## Compound terms
+  # # some concepts require co-occurrences between two terms (i.e. AND statements)
+  # # so make a new matrix with these values
+  # complexTerms <- matrix(nrow=1,
+  #                        ncol = 2,
+  #                        dimnames = list(
+  #                          my_text$analysis_id[i],
+  #                          c("carbon removal or storage","coastal communities and safe space or fish")
+  #                        ))
+  # 
+  # 
+  # # for carbon AND removal
+  # # a y/n response for whether any of the synonymns are found
+  # carb <- screens_all[,carb_ind]
+  # rem <- ifelse(sum(1 <= screens_all[,rem_ind]), 1,0) 
+  # # whether there are words matching both of the keyword groups for carbon AND removal
+  # complexTerms[,1] <- ifelse(carb == 1 & rem == 1, 1, 0)
+  # 
+  # 
+  # 
+  # # for coasts and communities
+  # coast <- ifelse(sum(1 <= screens_all[,coast_ind]), 1,0)
+  # comm <- ifelse(sum(1 <= screens_all[,comm_ind]), 1,0)
+  # coastAndComm <- ifelse(coast == 1 & comm == 1, 1, 0)
+  # 
+  # # for safe space or fish -- i.e. other Group names that aren't coasts or communities
+  # rest <- ifelse(sum(1 <= screens_all[,rest_ind]), 1, 0)
+  # 
+  # # for coasts and communities and safe space or fish
+  # complexTerms[,2] <- ifelse(coastAndComm ==1 & rest == 1, 1,0)
   
   
   
   ## Bind both together
-  screens_all <- cbind(data.frame(analysis_id = my_text$analysis_id[i]),screens_all, as.data.frame(complexTerms))
+  screens_all <- cbind(data.frame(analysis_id = my_text$analysis_id[i]),screens_all) #, as.data.frame(complexTerms)
   
   # return the dataframe
   return(screens_all)
   
-}, mc.cores = 20)
+}, mc.cores = 11)
 
 
 ## Bind results together
@@ -126,26 +126,26 @@ DBI::dbDisconnect(db)
 
 
 
-## TABULATE TOTALS
-# Add these new concepts in to the tabulated matrix and convert to data frame
-screens$analysis_id <- NULL
-
-
-# ind <- which((nlp_search_terms$Term[c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind)] %in% colnames(screens)))
-# tab_screens <- colSums(screens[,ind])
-tab_screens <- colSums(screens[,-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind)])
-tab_screens <- as.data.frame(tab_screens)
-colnames(tab_screens) <- c("n_matches")
-# new vector of which paper each column belongs to
-tab_screens$Topic <- c(nlp_search_terms[-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind),1], "Paper1","Paper4")
-tab_screens$Keyword <- rownames(tab_screens)
-tab_screens$Keyword_group <- c(
-  nlp_search_terms[-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind),2], 
-  c("carbon removal or storage","coastal communities and safe space or fish")
-)
-rownames(tab_screens) <- NULL
-
-save(tab_screens, file = "keyword-matches-tabulated.RData")
+# ## TABULATE TOTALS
+# # Add these new concepts in to the tabulated matrix and convert to data frame
+# screens$analysis_id <- NULL
+# 
+# 
+# # ind <- which((nlp_search_terms$Term[c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind)] %in% colnames(screens)))
+# # tab_screens <- colSums(screens[,ind])
+# tab_screens <- colSums(screens[,-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind)])
+# tab_screens <- as.data.frame(tab_screens)
+# colnames(tab_screens) <- c("n_matches")
+# # new vector of which paper each column belongs to
+# tab_screens$Topic <- c(nlp_search_terms[-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind),1], "Paper1","Paper4")
+# tab_screens$Keyword <- rownames(tab_screens)
+# tab_screens$Keyword_group <- c(
+#   nlp_search_terms[-c(carb_ind, rem_ind, coast_ind, comm_ind, rest_ind),2], 
+#   c("carbon removal or storage","coastal communities and safe space or fish")
+# )
+# rownames(tab_screens) <- NULL
+# 
+# save(tab_screens, file = "keyword-matches-tabulated.RData")
 
 
 
