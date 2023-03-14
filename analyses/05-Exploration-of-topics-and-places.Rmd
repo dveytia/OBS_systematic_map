@@ -445,6 +445,89 @@ ggp_list[[PaperNumber]]
 
 ```
 
+
+For paper 3, do the same as for paper 2
+```{r paper 3}
+## Identify which paper
+PaperNumber=3
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+  
+
+# # how man articles have either or both biodiv or ncp
+counts = with(paper_df, table(tapply(`Group name`, analysis_id, function(x) paste(as.character(sort(unique(x))), collapse=' & '))))
+counts = as.data.frame(t(counts))
+colnames(counts) <- c("Topic", "Group name","n")
+counts$Topic <- paste("Paper", PaperNumber)
+
+
+# # by keyword group (Group name) tabulate how many hits there were
+# paper_tab <- paper_df %>%
+#   group_by(`Group name`) %>%
+#   summarise(n=n_distinct(analysis_id))
+
+
+# how many articles retreived any hit
+paper_total <- length(unique(paper_df$analysis_id))
+
+
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- counts %>%
+  #mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(x=paste("Paper", PaperNumber), y = n, label=paste(n),group = `Group name`), position = position_stack(vjust=0.5))+
+    #geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    #ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+```
+
+
+```{r}
+
+
+```
+
+
 ```{r close databset connection}
 ## Close connection
 RSQLite::dbDisconnect(keywordCon)
