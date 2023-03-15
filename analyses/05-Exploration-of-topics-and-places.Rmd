@@ -322,7 +322,7 @@ paper_df <- keywordMatches %>%
   # merge with grouping information for each term
   merge(nlp_search_terms, by="Term", all = FALSE)
   
-  
+nrow(paper_df)  
 
 # by keyword group (Group name) tabulate how many hits there were
 paper_tab <- paper_df %>%
@@ -330,7 +330,7 @@ paper_tab <- paper_df %>%
   summarise(n=n_distinct(analysis_id))
 
 # how many articles retreived any hit
-paper_total <- length(unique(paper_df$analysis_id))
+paper_total1 <- length(unique(paper_df$analysis_id))
 
 
 ## Display 
@@ -348,7 +348,7 @@ ggp_list[[PaperNumber]] <- paper_tab %>%
   mutate(Topic = paste("Paper", PaperNumber)) %>% 
   ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
     geom_col()+
-    geom_text(aes(y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    geom_text(aes(y = ymax+yoffset, label = paste("total papers = ", paper_total1)))+
     labs(
       title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
       y=yaxis_title
@@ -500,7 +500,7 @@ ggp_list[[PaperNumber]] <- counts %>%
   #mutate(Topic = paste("Paper", PaperNumber)) %>% 
   ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
     geom_col()+
-    geom_text(aes(x=paste("Paper", PaperNumber), y = n, label=paste(n),group = `Group name`), position = position_stack(vjust=0.5))+
+    geom_text(aes(y = n, label=paste(n),group = `Group name`), position = position_stack(vjust=0.5))+
     #geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
     labs(
       title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
@@ -528,7 +528,8 @@ ggp_list[[PaperNumber]]
 ## Identify which paper
 PaperNumber=4
 Paper = paste0("Paper", PaperNumber)
-tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+tempTitle1 <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+tempTitle2 <- paste0(letters[PaperNumber+1],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
 
 
 
@@ -544,55 +545,94 @@ paper_df <- keywordMatches %>%
   filter(value > 0) %>%
   # merge with grouping information for each term
   merge(nlp_search_terms, by="Term", all = FALSE)
-  
-
-library(ggvenn)
-
-# for each group of 'columns' format at T/F if there was a match or not
-
-
-# by keyword group (Group name) tabulate how many hits there were
-paper_tab <- paper_df %>%
-  group_by(`Group name`) %>%
-  summarise(n=n_distinct(analysis_id))
 
 # how many articles retreived any hit
-paper_total <- length(unique(paper_df$analysis_id))
+paper_total4 <- length(unique(paper_df$analysis_id))
 
 
-## Display 
-
-# plot parameters
-yaxis_title <- "N matches"
-ymax = sum(paper_tab$n, na.rm=T)   
-yoffset = 5000
+nrow(paper_df)
 
 
-# plot
-require(ggplot2)
+## Format to visualize as a heatmap
+library(reshape2)
+paper_tab <- paper_df[!duplicated(paper_df[,c("analysis_id","Group name")]),]
 
-ggp_list[[PaperNumber]] <- paper_tab %>%
-  mutate(Topic = paste("Paper", PaperNumber)) %>% 
-  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
-    geom_col()+
-    geom_text(aes(y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
-    labs(
-      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
-      y=yaxis_title
-    )+
-    ylim(0, ymax+yoffset)+
-    scale_fill_brewer(type="qual", palette = PaperNumber)+
-    theme(
-      legend.position = "bottom",
+
+paper_tab_Intervention <- paper_tab[grep("Intervention",paper_tab$`Group name`),c("analysis_id","Group name")]
+colnames(paper_tab_Intervention)[2] <- c("Intervention")
+paper_tab_Intervention$Intervention <- gsub("Intervention: ","",paper_tab_Intervention$Intervention)
+
+paper_tab_Population <- paper_tab[grep("Population",paper_tab$`Group name`),c("analysis_id","Group name")]
+colnames(paper_tab_Population)[2] <- c("Population")
+paper_tab_Population$Population <- gsub("Population: ","",paper_tab_Population$Population)
+
+paper_tab_Threat <- paper_tab[grep("threat",paper_tab$`Group name`),c("analysis_id","Term")]
+colnames(paper_tab_Threat)[2] <- c("Threat")
+
+
+paperMerge <- merge(paper_tab_Intervention, paper_tab_Population, by="analysis_id")
+paperMerge <- merge(paperMerge, paper_tab_Threat, by="analysis_id")
+
+
+## Display
+library(stringr)
+
+# Visualize Population by intervention
+ggp_list[[PaperNumber]] <- paperMerge %>%
+  group_by(Intervention, Population) %>%
+  summarise(n=n()) %>%
+  ggplot(aes(Population, Intervention, fill=n)) +
+  geom_tile() +
+  scale_fill_viridis_c()+
+  scale_y_discrete(labels = function(x) str_wrap(x, width=10))+
+  geom_text(aes(label = n), col="red")+
+  labs(title = paste(strwrap(tempTitle1, width = 40), collapse="\n"),
+       caption = paste("total articles = ", paper_total4))+
+  theme(
+      legend.position = "na",
       legend.title = element_blank(),
-      axis.text.x = element_blank(),
-      axis.title.x = element_blank(),
+      #axis.text.x = element_blank(),
+      #axis.title.x = element_blank(),
       panel.background = element_rect(fill = "transparent"),
       panel.grid.major = element_line(colour = "grey"),
       panel.border = element_rect(colour = "black", fill="transparent")
     )
-  
-ggp_list[[PaperNumber]]
+
+
+# Visualise threat by intervention
+ggp_list[[PaperNumber+1]] <- paperMerge %>%
+  group_by(Intervention, Threat) %>%
+  summarise(n=n()) %>%
+  ggplot(aes(Threat, Intervention, fill=n)) +
+  geom_tile() +
+  scale_fill_viridis_c()+
+  scale_y_discrete(labels = function(x) str_wrap(x, width=10))+
+  geom_text(aes(label = n), col="red")+
+  labs(title = paste(strwrap(tempTitle2, width = 40), collapse="\n"),
+       caption = paste("total articles = ", paper_total4))+
+  theme(
+      legend.position = "na",
+      legend.title = element_blank(),
+      axis.text.x = element_text(angle=45,hjust=1),
+      #axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+ggp_list[[PaperNumber+1]]
+```
+
+```{r create all plots together}
+
+pdf(file = here::here("data","derived-data","coding","keyword-matches","keyword-matches-plots.pdf"),
+    width = 10, height=15)
+egg::ggarrange(
+  plots = ggp_list,
+  nrow=3,
+  newpage=FALSE
+)
+dev.off()
+
 ```
 
 
