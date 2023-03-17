@@ -649,6 +649,113 @@ rm(list=ls())
 ```
 
 
+## Export metadata for review by teams
+
+```{r source functions}
+functionsToSource <- c("clean_string.R", "screen.R","tokenization.R","utils.R")
+for(i in 1:length(functionsToSource)){
+  source(here::here("R", functionsToSource[i]))
+}
+
+```
+
+
+```{r lookup table of groups for different keywords}
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+
+
+## Process terms so that they match the column names in the sqlite database
+colnames(nlp_search_terms) <- c("Group","Group name", "Term","Term type")
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+nlp_search_terms$Term <- gsub(" ","_", nlp_search_terms$Term)
+
+
+## Change names of some groupings
+
+# change groupings of mitigation keywords
+nlp_search_terms$`Group name`[
+  which(nlp_search_terms$`Group name` %in% c("carbon","removal","CO2 removal from seawater",
+                                   "OIF","blue carbon","bioenergy"))
+] <- "carbon removal or storage"
+
+
+## Names for each of the papers
+topicNames <- c(
+  "R&D vs implementation of mitigation OROs",
+  "Biodiv & NCP outcomes",
+  "Restoration practices",
+  "Coastal community adaptation portfolio"
+)
+
+```
+
+```{r connect to database with the keyword matches and load associated text}
+## Connect to database
+keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
+                                 dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
+src_dbi(keywordCon)
+
+keywordMatches <- tbl(keywordCon, "keywordMatches")
+keywordMatches %>%head %>% collect() %>% View
+keywordMatches %>%head %>% show_query()
+
+```
+
+```{r get associated metadata for the matches}
+
+## Get tables from databases
+dedup_db <- dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite"), 
+                                 create=FALSE)
+src_dbi(dedup_db)
+dedups <- tbl(dedup_db, "uniquerefs")
+
+dedups %>% head %>% collect %>% View
+
+
+
+## Filter and join
+
+# subset to the records I want to join (pred rel => 0.5)
+relRefs <- predRel %>%
+  select(analysis_id, relevance_mean) %>%
+  filter(0.5 <= relevance_mean) 
+
+# use join to retreive metadata for those records
+my_text <- left_join(relRefs, dedups %>% select(analysis_id,title, abstract), by = "analysis_id", copy=TRUE)
+my_text <- my_text %>%
+  collect()
+
+
+## Disconnect databases
+dbDisconnect(dedup_db)
+
+
+
+
+```
+
+
+
+```{r For each paper join keyword matches with metadata and }
+
+## For each paper, 
+
+
+```
+
+```{r disconnect databases}
+dbDisconnect(dedup_db)
+dbDisconnect(keywordCon)
+```
+
+
+
+
 # Geoparsing text
 
 

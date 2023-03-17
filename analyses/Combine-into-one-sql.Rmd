@@ -1,0 +1,75 @@
+---
+title: "Combine-into-one-sql"
+author: "Devi Veytia"
+date: "2023-03-17"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r load libraries}
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+```
+
+
+```{r}
+## Set inputs
+sql_dir <- here::here("data","raw-data","sql-databases")
+new_sql_file <- "all_tables_v1.sqlite"
+
+
+
+## get names of files to combine
+
+sql_files <- dir(sql_dir)
+
+rm_files <- c("all-refs.sqlite", "all-refs_v2 - Copy.sqlite",new_sql_file)
+
+# clean file list to only those to combine
+for(f in 1:length(rm_files)){
+  if(rm_files[f] %in% sql_files){
+    sql_files <- sql_files[-c(grep(paste(rm_files[f]), sql_files))]
+  }
+}
+
+
+
+## For each file, take all the tables and write to new file
+dbcon <-RSQLite::dbConnect(RSQLite::SQLite(), 
+                           dbname = file.path(sql_dir, new_sql_file),
+                           create=TRUE)
+
+for(f in 1:length(sql_files)){
+  tempcon <- RSQLite::dbConnect(RSQLite::SQLite(), 
+                           dbname = file.path(sql_dir, sql_files[f]),
+                           create=FALSE)
+  tbls <- dbListTables(tempcon)
+  
+  for(t in 1:length(tbls)){
+    
+    query <- paste0("SELECT * FROM `", tbls[t],"`")
+    
+    temp_tbl <- dbGetQuery(tempcon, query)
+    
+    dbWriteTable(dbcon, tbls[t], temp_tbl)
+    
+  }
+  
+  dbDisconnect(tempcon)
+  
+}
+
+dbDisconnect(dbcon)
+
+```
+
+
+
