@@ -71,5 +71,14 @@ dbDisconnect(dbcon)
 
 ```
 
+```{r check tables in database}
+dbcon <-RSQLite::dbConnect(RSQLite::SQLite(), 
+                           dbname = file.path(sql_dir, new_sql_file),
+                           create=FALSE)
+dbListTables(dbcon)
+
+dbDisconnect(dbcon)
+```
+
 
 

@@ -700,8 +700,8 @@ keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(),
 src_dbi(keywordCon)
 
 keywordMatches <- tbl(keywordCon, "keywordMatches")
-keywordMatches %>%head %>% collect() %>% View
-keywordMatches %>%head %>% show_query()
+keywordMatches <- keywordMatches %>% collect
+
 
 ```
 
@@ -714,25 +714,17 @@ dedup_db <- dbConnect(RSQLite::SQLite(),
 src_dbi(dedup_db)
 dedups <- tbl(dedup_db, "uniquerefs")
 
-dedups %>% head %>% collect %>% View
 
 
-
-## Filter and join
-
-# subset to the records I want to join (pred rel => 0.5)
-relRefs <- predRel %>%
-  select(analysis_id, relevance_mean) %>%
-  filter(0.5 <= relevance_mean) 
-
-# use join to retreive metadata for those records
-my_text <- left_join(relRefs, dedups %>% select(analysis_id,title, abstract), by = "analysis_id", copy=TRUE)
-my_text <- my_text %>%
+metadata <- dedups %>% 
+  select(analysis_id, author, title, source_title, year, abstract) %>%
   collect()
 
-
-## Disconnect databases
 dbDisconnect(dedup_db)
+```
+
+```{r join metadata to keyword matches}
+
 
 
 
