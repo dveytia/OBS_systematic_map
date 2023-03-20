@@ -674,9 +674,38 @@ load(here::here("data","derived-data","screening","screened-records","screen_res
 # only write the inclusions to pdf
 write2pdf <- subset(screen_results_merged, include_screen == "TRUE")
 
+
 # write into set folders with a max number of references
 setSize <- 50
 newSet <- seq(1, nrow(write2pdf), by=setSize)
+
+
+# within each set, randomly select articles to double check
+set.seed(100)
+n_dbCheck <- 2 # number of articles per set to double check
+
+for(s in 1:length(newSet)){
+  
+  # where the set starts
+  start <- newSet[s] 
+  
+  # where the set ends
+  end <- newSet[s]+setSize-1
+  if(end > nrow(write2pdf)){
+    end <- nrow(write2pdf)
+  }
+  
+  # randomly sample within that range
+  result <- sample(start:end, n_dbCheck)
+  
+  # save to a vector
+  if(s==1){
+    dbCheck <- result
+  }else{
+    dbCheck <- c(dbCheck, result)
+  }
+  
+}
 
 
 # filepath
@@ -722,13 +751,24 @@ for(i in 1:nrow(write2pdf)){
   
   # For each file,
   # get filename for the pdf
-  filename <- paste(write2pdf$sysrev_id[i], 
-                    gsub(" ","-",
+  # the title_year
+  filename <- paste(gsub(" ","-",
                          stringr::str_trim(
                       gsub('[[:punct:] ]+',' ',
                            tolower(
                              stringr::str_trunc(write2pdf$title[i], width = 40))))),write2pdf$year[i],sep="_")
+  
+  # if the file needs to be double checked, prefix with sysrevid_X_, else sysrevid
+  if(i %in% dbCheck){
+    filename <- paste(write2pdf$sysrev_id[i],"X",filename, sep="__")
+  }else{
+    filename <- paste(write2pdf$sysrev_id[i],filename, sep="_")
+  }
+  
+  # append with .pdf
   filename <- paste0(filename,".pdf")
+  filename
+  
   
   #if(filename %in% already_written){next}
   
