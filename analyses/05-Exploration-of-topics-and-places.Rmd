@@ -693,7 +693,7 @@ topicNames <- c(
 
 ```
 
-```{r connect to database with the keyword matches and load associated text}
+```{r connect to database with the keyword matches}
 ## Connect to database
 keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
                                  dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
@@ -702,7 +702,7 @@ src_dbi(keywordCon)
 keywordMatches <- tbl(keywordCon, "keywordMatches")
 keywordMatches <- keywordMatches %>% collect
 
-
+dbDisconnect(keywordCon)
 ```
 
 ```{r get associated metadata for the matches}
@@ -717,7 +717,7 @@ dedups <- tbl(dedup_db, "uniquerefs")
 
 
 metadata <- dedups %>% 
-  select(analysis_id, author, title, source_title, year, abstract) %>%
+  select(analysis_id, author, title, source_title, year, abstract, doi) %>%
   collect()
 
 dbDisconnect(dedup_db)
@@ -725,25 +725,82 @@ dbDisconnect(dedup_db)
 
 ```{r join metadata to keyword matches}
 
+keywordMatchesMerge <- merge(keywordMatches, metadata, by="analysis_id", all.x = TRUE, all.y=FALSE)
 
-
-
-
+# reorder columns so keyword matches come last
+cols <- colnames(keywordMatchesMerge)
+cols <- cols[-which(cols %in% c("analysis_id", "author","title","source_title","year","abstract","doi"))]
+keywordMatchesMerge <- keywordMatchesMerge[,c("analysis_id", "author","title","source_title","year","abstract","doi", cols)]
+  
 ```
 
 
 
-```{r For each paper join keyword matches with metadata and }
+```{r For each paper filter to relevant articles and export as a csv}
+## Inputs
+out_dir <- here::here("data","derived-data","coding","keyword-matches","keyword-matches-and-metadata-csv")
 
-## For each paper, 
 
+papers <- unique(nlp_search_terms$Group)
+
+# columns that contain the metadata variables -- the keep
+metadata_cols <- c("analysis_id", "author","title","source_title","year","abstract","doi")
+
+
+
+
+for(p in 1:length(papers)){
+  
+  # columns that contain the keywords relevant to that paper
+  paper_cols <- nlp_search_terms$Term[which(nlp_search_terms$Group == papers[p])]
+  
+  # subset the dataframe to only the metadata columns and the keywords relevant to the paper
+  tempDf <- keywordMatchesMerge[,c(metadata_cols, paper_cols)]
+  
+  
+  # compress all keyword columns into one column containing all the matches in one string
+  
+  # replace binary indicator with keyword name
+  for(j in 1:length(paper_cols)){
+    tempDf[,paper_cols[j]] <- ifelse(tempDf[,paper_cols[j]] > 0, paper_cols[j], NA)
+  }
+  
+  # make one column that joins all the keywords in that row
+  matches <- apply(tempDf[,paper_cols], 1, function(x){
+    x <- x[!is.na(x)]
+    if(length(x)==0){
+      x <- NA
+    }else{
+      x <- paste(x, collapse = ", ")
+    }
+    return(x)
+  })
+  
+  tempDf <- cbind(tempDf[,metadata_cols], data.frame(keyword_matches = matches))
+  tempDf <- tempDf %>%
+    filter(!is.na(abstract), !is.na(keyword_matches))
+  
+  
+  ## If it is paper 2, make another column if there is a doi match to Galparoso et al
+  if(papers[p] == "Paper2"){
+    # read in
+    galRef <- revtools::read_bibliography(here::here("data","raw-data","citation-chasing","Galparsoro_etal_2002_references.ris"))
+    galRef <- subset(galRef, !is.na(doi))
+    galmatch <- tempDf$doi %in% galRef$doi 
+    ngalmatch <- sum(galmatch)
+    
+    tempDf <- cbind(tempDf, galmatch)
+    
+    colnames(tempDf)[ncol(tempDf)] <- paste0("Galparsoro_match_total_",ngalmatch)
+  }
+
+  
+  ## Write to csv
+  write.csv(tempDf, file = file.path(out_dir, paste(papers[p],"keyword-matches.csv", sep="-")))
+}
 
 ```
 
-```{r disconnect databases}
-dbDisconnect(dedup_db)
-dbDisconnect(keywordCon)
-```
 
 
 
