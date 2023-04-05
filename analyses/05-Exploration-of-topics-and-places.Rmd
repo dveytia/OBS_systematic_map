@@ -78,6 +78,8 @@ predRel <- tbl(predRel_db, "predRel")
 
 
 ## Summaries
+
+# the number of pred relevance > 0.5
 predRel %>%
   summarise(
     mean = sum(0.5 <= relevance_mean),
@@ -85,9 +87,31 @@ predRel %>%
     upper = sum(0.5 <= relevance_upper)
   )
 
+
+# the distribution of relevance predictions -- if I change the threshold how will this change the number of inclusions?
+# perhaps since all test list articles are > 0.8, maybe I want to use a threshold of 0.7 because 0.5 might still include a lot of crap?
+counts <- predRel %>% 
+  summarise(
+    GreaterThan_0.5 = sum(0.5 <= relevance_mean),
+    GreaterThan_0.7 = sum(0.7 <= relevance_mean),
+    GreaterThan_0.8 = sum(0.8 <= relevance_mean),
+    GreaterThan_0.9 = sum(0.9 <= relevance_mean),
+  )
+
+counts <- as.data.frame(t(counts))
+colnames(counts) <- "count"
+counts$relevance_mean <- c(0.5,0.7,0.8,0.9)
+
+predRel %>%
+  ggplot(aes(x=relevance_mean))+
+  geom_histogram()+
+  geom_vline(data=counts, aes(xintercept =relevance_mean))+
+  geom_text(data=counts, aes(x = relevance_mean, label= count), y=50000, angle=60, hjust=0)+
+  scale_x_continuous(breaks=c(0,0.5,0.7,0.8,0.9,1))
+
+
 ## close database
 dbDisconnect(predRel_db)
-
 ```
 
 ## Check relevance predictions
