@@ -1,0 +1,179 @@
+$<NA>
+NULL
+
+$<NA>
+NULL
+
+$<NA>
+NULL
+
+$<NA>
+NULL
+
+$<NA>
+NULL
+
+$include_code
+[1] 456
+
+[[7]]
+NULL
+
+$oro_id
+[1] 414  42   7   1
+
+[[9]]
+NULL
+
+$oro_type
+                          M_Renewables                  M_Increase_efficiency               M_CO2_removal_or_storage 
+                                    61                                     23                                     62 
+            N_Human_assisted_evolution                           N_Protection                          N_Restoration 
+                                     4                                     57                                     48 
+SA_Built_infrastructure_and_technology                  SA_Socioinstitutional                                Unclear 
+                                    66                                    138                                      4 
+
+$oro_development_stage
+Design__observeconceptpreliminary_testingside_effects        Evaluating_future_placementupscaling_potential 
+                                                  228                                                    84 
+                                           Pilot_demo                      Implemented_continued_assessment 
+                                                   15                                                   165 
+                                              Unclear 
+                                                    4 
+
+$economic_sector_involved
+            Fisheries           Aquaculture       Pharmaceuticals              Shipping   Port_infrastructure 
+                   45                    11                     0                    20                     4 
+  Tourism__Recreation   Coastal_development Seabed_miningoil__gas      Renewable_energy              Informal 
+                   18                    17                     7                    60                     2 
+           Livelihood                 Other 
+                   15                    17 
+
+$m_co2_removal
+                     Bioenergy                   Openocean_PP    Macroalgae_kelp_cultivation 
+                             5                              2                              4 
+        Microalgae_cultivation  Weathering_and_alkinalization Coastal_blue_carbon_ecosystems 
+                             2                              2                             43 
+                         Other 
+                             6 
+
+$m_co2_ocean_storage
+Select_Muliple_Inorganic                  Organic           Deep_sediments                  Unclear 
+                       0                       64                       16                        3 
+
+$climate_threat
+    Temperature Marine_heatwave Sea_ice_changes   Acidification             SLR   Deoxygenation Extreme_weather 
+             13               2               2               4             142               1             103 
+Natural_impacts   Human_impacts      General_CC           Other         Unclear 
+              3               0             113               6               3 
+
+$data_type
+                      Primary Secondary__evidence_synthesis              Secondary__other 
+                          390                            68                             1 
+                      Unclear 
+                            0 
+
+$method_type
+              Experimental_exsitu               Experimental_insitu                    Expert_opinion 
+                               15                                18                                45 
+ Method_or_technology_development                     Observational Mathematical_predictionsimulation 
+                               23                               103                               131 
+                   Social_primary                             Other                           Unclear 
+                               84                                 0                                 0 
+
+$ocean_basin
+                   Pacific                   Atlantic                     Indian                   Southern 
+                       103                        153                         69                          5 
+                    Arctic Mediterranean_or_Black_Sea                     Global                    Unclear 
+                         8                         25                         13                          6 
+
+$ecosystem_type
+        Salt_marsh           Mangrove     Wetland__other        Oyster_reef         Coral_reef         Macroalgae 
+                20                 34                 18                  6                 19                  6 
+          Seagrass Blue_carbon__other              Other 
+                13                  1                 32 
+
+$marine_system
+      estuary          land coastal ocean    open-ocean    deep-ocean       unclear 
+           12           201           227            35            14             0 
+
+$time_period
+Before pre-ind Pre-industrial         Modern       Forecast 
+             1              7            323             65 
+
+$data_scale_spatial
+   Micro    Small    Local Regional    Large   Global  Unclear 
+       0       25      190       89       38       15        3 
+
+$climate_mitigation
+[1] 121
+
+$adapt_to_threat
+  Human Natural    Both 
+    143      27      58 
+
+$impact_nature
+[1] 54
+
+$impact_ncp
+ Regulating    Material Nonmaterial 
+         19          30          15 
+
+$impact_economy
+            Fisheries           Aquaculture       Pharmaceuticals              Shipping   Port_infrastructure 
+                   15                     5                     1                     1                     3 
+              Tourism   Coastal_development Seabed_miningoil__gas      Renewable_energy                 other 
+                   12                     5                     3                     1                    20 
+
+$impact_oro
+                          M_Renewables                  M_Increase_efficiency               M_CO2_removal_or_storage 
+                                     2                                      1                                      1 
+            N_Human_assisted_evolution                           N_Protection                          N_Restoration 
+                                     1                                      9                                      3 
+SA_Built_infrastructure_and_technology                  SA_Socioinstitutional                                Unclear 
+                                    12                                      6                                      0 
+
+$techological_scalability
+[1] 48
+
+$technological_readiness
+[1] 71
+
+$lead_time
+[1] 7
+
+$duration
+[1] 11
+
+$robustness
+[1] 27
+
+$cost
+[1] 83
+
+$enabling_factors
+[1] 126
+
+$governability
+[1] 153
+
+$biodiversity_metric
+[1] 7
+
+$restoration
+[1] 27
+
+$safe_fish
+[1] 43
+
+$safe_space
+[1] 181
+
+$scientific_discipline
+            Chemistry       Biogeochemistry               Biology             Economics           Engineering 
+                   35                    27                     3                    39                    84 
+              Ecology             Fisheries      Physical_science     Political_science  Science__tech__other 
+                  111                    22                   240                   240                   240 
+Social_science__other                 Other               Unclear 
+                  240                   177                     1 
+

@@ -54,6 +54,7 @@ for(f in 1:length(codingFiles)){
   # Column names
   colnames(temp) <- tolower(colnames(temp))
   colnames(temp) <- gsub(" ","_", colnames(temp))
+  colnames(temp) <- gsub("[.]","_", colnames(temp))
   
   # change french formatting if needed
   temp[temp == "VRAI"] <- TRUE
@@ -63,14 +64,16 @@ for(f in 1:length(codingFiles)){
   ## If f == 1, build the template to expand answers
   # Extract possible values for each variable
   if(f==1){
-    values <- temp[1,]
-    temp <- temp[-1,]
-    
     # each variable will be stored in a list
     responseList <- vector("list", length(values))
     names(responseList) <- colnames(temp)
+    
+    # all the possible values for each variable to search for
+    values <- temp[1,]
   }
   
+  # remove the row that contains all the possible variable values
+  temp <- temp[-1,]
   
   ## For all the variables, spread factors into binary columns for each value
   for(j in 1:length(values)){
@@ -112,12 +115,9 @@ for(f in 1:length(codingFiles)){
     
     if(grepl("boolean", values[j], ignore.case = TRUE)){
       tempMat <- as.data.frame(temp[,j])
-      tempMat <- cbind(ifelse(tempMat == "TRUE", 1, 0),
-                       ifelse(tempMat != "TRUE", 1, 0)
-                       )
-      tempMat <- as.data.frame(tempMat)
+      tempMat <- ifelse(tempMat == "TRUE", 1, 0)
       tempMat[is.na(tempMat)] <- 0
-      colnames(tempMat) <- c("TRUE","FALSE")
+      colnames(tempMat) <- colnames(temp)[j]
     }
     
     
@@ -129,19 +129,57 @@ for(f in 1:length(codingFiles)){
         vals <- unlist(strsplit(gsub("Select Multiple: ","", values[j]),","))
       }
       
+      # remove leading/trailing spaces
+      vals<-trimws(vals)
+      
+      # remove NA
+      if("NA" %in% vals){
+        vals <- vals[-which(vals == "NA")]
+      }
       
       valLabels <- gsub(" ","_",gsub("[[:punct:]]","", vals))
+      
+      # for some reason grep has trouble with some punctuation so simplify to search for implemented
+      if(length(grep("implemented",vals, ignore.case = TRUE))>0){
+        vals[grep("implemented",vals, ignore.case = TRUE)] <- "Implemented"
+      }
+      if(length(grep("tourism",vals, ignore.case = TRUE))>0){
+        vals[grep("tourism",vals, ignore.case = TRUE)] <- "tourism"
+      }
+      if(length(grep("mining",vals, ignore.case = TRUE))>0){
+        vals[grep("mining",vals, ignore.case = TRUE)] <- "mining"
+      }
+      if(length(grep("macroalgae",vals, ignore.case = TRUE))>0){
+        vals[grep("macroalgae",vals, ignore.case = TRUE)] <- "macroalgae"
+      }
+      if(length(grep("science",vals, ignore.case = TRUE))>0){
+        vals[grep("science",vals, ignore.case = TRUE)] <- "science"
+      }
+      
+      if(colnames(values)[j] == c("time_period")){
+        vals <- c("Before pre-ind","Pre-industrial", "Modern","Forecast")
+        valLabels <- vals # have to re-assign this because otherwise the column order won't match
+      }
+      if(colnames(values)[j] == c("marine_system")){
+        vals <- c("estuary","land","coastal ocean","open-ocean","deep-ocean","unclear")
+        valLabels <- vals
+      }
+      
+      # make empty matrix to fill
       tempMat <- matrix(nrow = nrow(temp), ncol = length(vals))
-      #colnames(tempMat) <- paste(colnames(temp)[j], valLabels, sep = "__")
       colnames(tempMat) <- valLabels
+      
+      # fill matrix with matches
       for(v in 1:length(vals)){
         tempMat[,v] <- grepl(vals[v], as.matrix(temp[,j]), ignore.case = TRUE)
       }
       tempMat <- as.data.frame(tempMat)
-      tempMat[tempMat==TRUE] <- 1
-      tempMat[tempMat==FALSE] <- 0
     }
     
+    
+    ## Final check to make sure all TRUE/FALSE is 0,1
+    tempMat[tempMat==TRUE] <- 1
+    tempMat[tempMat==FALSE] <- 0
     
     ## after all the processing, save
     
@@ -169,6 +207,10 @@ responseDf$row_id <- ifelse(responseDf$row_id == "FALSE", NA,responseDf$row_id)
 
 #View(responseDf)
 
+# save vectors for lookup
+variables <- colnames(temp)
+
+
 ```
 
 
@@ -194,6 +236,50 @@ write.table(
 )
 
 ```
+
+# Evaluate if supplemental coding is needed 
+
+Visualize frequencies to ensure balanced samples of most important variables: ORO_type, ORO_development_stage, Climate_threat, Impact_nature,  Restoration, Safe_fish, Safe_space
+
+
+```{r}
+# vector of variable names to tabulate
+variables_to_tab <- c("ORO_type", "ORO_development_stage", "Climate_threat", "climate_mitigation", "adapt_to_threat", "Impact_nature",  "Restoration")
+
+variables_to_tab <- variables
+
+# index of which columns belong to which variables
+variableInd <- unlist(lapply(strsplit(colnames(responseDf), "[.]"), function(x) x[[1]]))
+
+# change to all variables
+variables_to_tab <- unique(variableInd)
+  
+# empty list to fill with tabulated tables (one item for each variable)
+tabulated_variables <- list()
+
+for(v in 1:length(variables_to_tab)){
+  colsInd <- grep(variables_to_tab[v], variableInd, ignore.case = TRUE)
+  
+  if(is.character(responseDf[,colsInd])){next} # can't tabulate character vectors
+  
+  if(!is.null(dim(responseDf[,colsInd]))){
+    tab <- colSums(responseDf[,colsInd])
+    names(tab) <- unlist(lapply(strsplit(colnames(responseDf)[colsInd], "[.]"), function(x) x[[2]]))
+  }else{
+    tab <- tabulate(responseDf[,colsInd])
+  }
+  tabulated_variables[[v]] <- tab
+  names(tabulated_variables)[v] <- variables_to_tab[v]
+}
+
+
+sink(here::here("outputs","coding","tabulated_coding_round1.txt"))
+print(tabulated_variables)
+sink()
+
+```
+
+
 
 
 
