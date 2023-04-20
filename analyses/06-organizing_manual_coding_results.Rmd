@@ -75,6 +75,9 @@ for(f in 1:length(codingFiles)){
   # remove the row that contains all the possible variable values
   temp <- temp[-1,]
   
+  # filter out rows where include_code=FALSE
+  temp <- subset(temp, include_code == TRUE)
+  
   ## For all the variables, spread factors into binary columns for each value
   for(j in 1:length(values)){
     
