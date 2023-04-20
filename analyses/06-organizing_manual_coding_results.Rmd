@@ -7,35 +7,39 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
 ```
-
-
-# Read in codebooks and format for distilBert
 
 Note that I might need to match by doi with the db below to get corresponding duplicate_id and abstract
 
 ```{r join with full corpus database to get duplicate_id}
+
+# metadata from full corpus
 dbcon <- dbConnect(RSQLite::SQLite(), 
                    here::here("data","raw-data","sql-databases","all-refs_v2_join-duplicate_id.sqlite"), 
                    create = FALSE)
 src_dbi(dbcon)
 allrefs_join <- tbl(dbcon, "allrefs_join")
 
-allrefs_join %>% head %>% collect() %>% View
+allrefs_join %>% collect() 
 
 dbDisconnect(dbcon)
 
+
 ```
 
+
+
+# Read in codebooks and format for distilBert
 
 ```{r format into binary columns for predictions in distilBERT}
 
 ## READ IN FILES
 
 # files of coding results
-codingDir <- here::here("data","derived-data","coding","manual-coding")
+codingDir <- here::here("data","derived-data","coding","manual-coding","set-1-to-18")
 codingFiles <- dir(codingDir)
-codingFiles <- codingFiles[grepl(".xl", codingFiles)] # only include xl files
+codingFiles <- codingFiles[grepl(".xl", codingFiles)] # only include excel files
 
 
 for(f in 1:length(codingFiles)){
@@ -44,7 +48,7 @@ for(f in 1:length(codingFiles)){
   
   # read in but skip extra header rows and row indicating type of variable
   temp <- readxl::read_excel(file.path(codingDir, codingFiles[f]),sheet = "Codebook",
-                             trim_ws = TRUE, skip = 2)
+                             trim_ws = TRUE, skip = 3)
   
   
   # Column names
@@ -77,14 +81,12 @@ for(f in 1:length(codingFiles)){
       tempMat <- as.data.frame(temp[,j])
       colnames(tempMat) <- colnames(temp)[j]
       tempMat[,1] <- as.character(tempMat[,1])
-      dim(tempMat)
     }  
     
     if(grepl("text",values[j], ignore.case = TRUE)){
       tempMat <- as.data.frame(temp[,j])
       colnames(tempMat) <- colnames(temp)[j]
       tempMat[,1] <- as.character(tempMat[,1])
-      dim(tempMat)
     }
     
       
@@ -92,7 +94,6 @@ for(f in 1:length(codingFiles)){
       tempMat <- as.data.frame(temp[,j])
       colnames(tempMat) <- colnames(temp)[j]
       tempMat[,1] <- as.factor(tempMat[,1])
-      dim(tempMat)
     }
     
     
@@ -100,36 +101,41 @@ for(f in 1:length(codingFiles)){
       tempMat <- as.data.frame(temp[,j])
       colnames(tempMat) <- colnames(temp)[j]
       tempMat[,1] <- as.character(tempMat[,1])
-      dim(tempMat)
     }
     
     if(grepl("alpha-numeric", values[j], ignore.case = TRUE)){
       tempMat <- as.data.frame(temp[,j])
       colnames(tempMat) <- colnames(temp)[j]
       tempMat[,1] <- as.character(tempMat[,1])
-      dim(tempMat)
     }
     
     
     if(grepl("boolean", values[j], ignore.case = TRUE)){
-      tempMat <- cbind(
-          ifelse(isTRUE(temp[,j]), 1, 0),
-          ifelse(!isTRUE(temp[,j]), 1, 0)
-        )
+      tempMat <- as.data.frame(temp[,j])
+      tempMat <- cbind(ifelse(tempMat == "TRUE", 1, 0),
+                       ifelse(tempMat != "TRUE", 1, 0)
+                       )
       tempMat <- as.data.frame(tempMat)
-      #colnames(tempMat) <- paste(colnames(temp)[j], c("TRUE","FALSE"), sep = "__")
+      tempMat[is.na(tempMat)] <- 0
       colnames(tempMat) <- c("TRUE","FALSE")
     }
     
     
     if(grepl("Select", values[j], ignore.case = TRUE)){
-      vals <- unlist(strsplit(gsub("Select One: ","", values[j]),","))
+      
+      if(grepl("Select One", values[j], ignore.case = TRUE)){
+        vals <- unlist(strsplit(gsub("Select One: ","", values[j]),","))
+      }else{
+        vals <- unlist(strsplit(gsub("Select Multiple: ","", values[j]),","))
+      }
+      
+      
       valLabels <- gsub(" ","_",gsub("[[:punct:]]","", vals))
       tempMat <- matrix(nrow = nrow(temp), ncol = length(vals))
       #colnames(tempMat) <- paste(colnames(temp)[j], valLabels, sep = "__")
       colnames(tempMat) <- valLabels
       for(v in 1:length(vals)){
-        tempMat[,v] <- grepl(vals[v], temp[,j], ignore.case = TRUE)
+        tempMat[,v] <- grepl(vals[v], as.matrix(temp[,j]), ignore.case = TRUE)
       }
       tempMat <- as.data.frame(tempMat)
       tempMat[tempMat==TRUE] <- 1
@@ -159,28 +165,37 @@ for(f in 1:length(codingFiles)){
 
 
 responseDf <- do.call(cbind.data.frame, responseList)
-View(responseDf)
+responseDf$row_id <- ifelse(responseDf$row_id == "FALSE", NA,responseDf$row_id)
+
+#View(responseDf)
+
+```
 
 
-
-
-## JOIN with METADATA
-
-# corresponding metadata
+```{r Join with abstract by using sysref_id }
+# metadata from screening
 load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 
-responseDf <- screen_results_merged %>% 
+screen_results_merged_sub <- screen_results_merged %>% 
   select(sysrev_id, abstract) %>%
-  mutate(sysrev_id = as.character(sysrev_id)) %>%
-  right_join(responseDf, by = "sysrev_id")
+  mutate(sysrev_id = as.character(sysrev_id)) 
+rm(screen_results_merged)
 
+# merge in with coding results
+test <- merge.data.frame(responseDf[,1:3], screen_results_merged_sub, by="sysrev_id", all.x = TRUE, all.y=FALSE)
+responseDf <- cbind(test, responseDf[,-c(1:3)])
+rm(test)
 
 ## Write
 write.table(
-  responseDf[1,],
+  responseDf,
   file = file.path(codingDir, "manual-coding-format-distilBERT.txt"),
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
 
 ```
+
+
+
+
 
