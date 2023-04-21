@@ -10,24 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 ```
 
-Note that I might need to match by doi with the db below to get corresponding duplicate_id and abstract
-
-```{r join with full corpus database to get duplicate_id}
-
-# metadata from full corpus
-dbcon <- dbConnect(RSQLite::SQLite(), 
-                   here::here("data","raw-data","sql-databases","all-refs_v2_join-duplicate_id.sqlite"), 
-                   create = FALSE)
-src_dbi(dbcon)
-allrefs_join <- tbl(dbcon, "allrefs_join")
-
-allrefs_join %>% collect() 
-
-dbDisconnect(dbcon)
-
-
-```
-
 
 
 # Read in codebooks and format for distilBert
@@ -75,7 +57,7 @@ View(responseDf)
 
 
 
-```{r Join with abstract by using sysref_id and export}
+```{r Join with abstract by using sysrev_id and export}
 # metadata from screening
 load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 
@@ -85,9 +67,8 @@ screen_results_merged_sub <- screen_results_merged %>%
 rm(screen_results_merged)
 
 # merge in with coding results
-test <- merge.data.frame(responseDf[,1:3], screen_results_merged_sub, by="sysrev_id", all.x = TRUE, all.y=FALSE)
-responseDf <- cbind(test, responseDf[,-c(1:3)])
-rm(test)
+responseDf <- merge.data.frame(responseDf, screen_results_merged_sub, by="sysrev_id", all.x = TRUE, all.y=FALSE)
+
 
 ## Write
 write.table(
@@ -149,15 +130,9 @@ From this, yes I need to supplement the following categories:
 
 # Find keywords to search for more needed article categories
 
-```{r increase energy efficiency}
+```{r}
 library(litsearchr)
 library(dplyr)
-
-temp <- responseDf %>%
-  filter(climate_threat.Temperature == 1 | 
-           oro_type.M_Increase_efficiency == 1 | 
-           oro_type.N_Human_assisted_evolution ==1 |
-           adapt_to_threat.Natural == 1)
 
 
 # settings for keyword search
@@ -175,8 +150,10 @@ for(v in 1:length(vars)){
   ind <- which(colnames(responseDf) == vars[v])
   temp <- responseDf[which(responseDf[,ind] == 1),]
   
+  View(temp[,c("title","abstract")])
+  
   minFreq <- ceiling(0.1*nrow(temp)) # at least certain % of articles must include this word
-  minN <- 1 # minimum number of words in a keyword
+  minN <- 2 # minimum number of words in a keyword
   
   # rake keywords from text
   rakedkeywords <- 
@@ -230,7 +207,7 @@ for(v in 1:length(vars)){
 
 ```
 
-Overall, the terms are too generic -- will need to design simplified ones from the search string instead.
+Keywords are saved in coding/keyword-matches-supplemental-coding
 
 # Visualise correlations?
 

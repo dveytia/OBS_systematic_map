@@ -1,0 +1,71 @@
+Group,Term,Term type
+Efficiency,efficiency,single
+Efficiency,energy efficiency,expression
+Efficiency,emission reduction,expression
+Efficiency,zero emission,expression
+Efficiency,emission,single
+Efficiency,decarbonize,single
+Efficiency,hybrid,single
+Efficiency,alternative fuel,expression
+Efficiency,fuel consumption,expression
+Assisted_evo,genome engineering,expression
+Assisted_evo,genetic adaptation,expression
+Assisted_evo,phenotypic adaptation,expression
+Assisted_evo,assisted migration,expression
+Assisted_evo,assisted colonization,expression
+Assisted_evo,artificial selection,expression
+Temperature,temperature,single
+Temperature,bleaching,single
+Temperature,thermal stress,expression
+Temperature,heat wave,expression
+Natural_adapt,nursery,single
+Natural_adapt,natural resource,expression
+Natural_adapt,marine protected area,expression
+Biodiversity,functional diversity,expression
+Biodiversity,taxonomic diversity,expression
+Biodiversity,species richness,expression
+Biodiversity,simpson index,expression
+Biodiversity,species abundance,expression
+Biodiversity,shannon-wiener index,expression
+Biodiversity,species diversity,expression
+Biodiversity,ecological diversity,expression
+Biodiversity,morphological diversity,expression
+Biodiversity,genetic diversity,expression
+Biodiversity,phylogenetic diversity,expression
+Biodiversity,functional group richness,expression
+Biodiversity,alpha diversity,expression
+Biodiversity,beta diversity,expression
+Biodiversity,gamma diversity,expression
+Biodiversity,species growth,expression
+Biodiversity,fitness,single
+Biodiversity,reproduction,single
+Biodiversity,maturity,single
+Biodiversity,species health,expression
+Biodiversity,ecosystem health ,expression
+Biodiversity,trophic,single
+Biodiversity,foodweb,single
+Biodiversity,fish size,expression
+Biodiversity,shell size,expression
+Biodiversity,body size,expression
+Biodiversity,turnover,single
+Biodiversity,coral cover,expression
+Biodiversity,seagrass cover,expression
+Biodiversity,keystone species,expression
+Biodiversity,wildlife,single
+Biodiversity,predator,single
+Biodiversity,vulnerable species,expression
+Biodiversity,threatened species,expression
+Biodiversity,deoxygenation,single
+Biodiversity,non-indigenous species,expression
+Biodiversity,invasive species,expression
+Biodiversity,non-native species,expression
+Biodiversity,connectivity,single
+Biodiversity,genetic structure,expression
+Biodiversity,dispersal,single
+Biodiversity,stepping-stone,expression
+Biodiversity,mortality,single
+Biodiversity,survival,single
+Biodiversity,habitat provisioning,expression
+Biodiversity,biodiversity protection,expression
+Biodiversity,biodiversity conservation,expression
+Biodiversity,ecosystem functioning,expression

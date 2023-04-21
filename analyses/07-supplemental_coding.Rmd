@@ -27,10 +27,10 @@ Do this for each undersampled "category":
 
 
 
-## Process text
+## Assemble articles to search
 
 ```{r source functions}
-functionsToSource <- c("clean_string.R", "screen.R","tokenization.R")
+functionsToSource <- c("clean_string.R", "screen.R","tokenization.R","utils.R")
 for(i in 1:length(functionsToSource)){
   source(here::here("R", functionsToSource[i]))
 }
@@ -38,60 +38,74 @@ for(i in 1:length(functionsToSource)){
 ```
 
 
-```{r get corresponding title and abstract info for predicted relevance greater than 0.5}
+```{r get metadata for articles with predicted relevance greater than 0.5 and which haven't been screened}
 require(dbplyr)
 
 all_db <- dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
 
+src_dbi(all_db) # look at all the tables in the database
 
-## Get tables from databases
-dedup_db <- dbConnect(RSQLite::SQLite(),
-                      here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite"), 
-                                 create=FALSE)
-src_dbi(dedup_db)
-dedups <- tbl(dedup_db, "uniquerefs")
+# unique reference metadata
+dedups <- tbl(all_db, "uniquerefs")
+dedup_sub <- dedups %>% 
+  select(duplicate_id, analysis_id,title, author, year, journal, abstract, keywords, research_areas)
 
-predRel_db <- dbConnect(SQLite(), 
-                        dbname = here::here("data","raw-data","sql-databases","relevance-predictions.sqlite"),create = FALSE)
-predRel <- tbl(predRel_db, "predRel")
-
-
-
-## Filter and join
-
-# subset to the records I want to join (pred rel => 0.5)
+# predicted relevance for each article off of initial calculations
+predRel <- tbl(all_db, "predRel")
 relRefs <- predRel %>%
   select(analysis_id, relevance_mean) %>%
   filter(0.5 <= relevance_mean) 
 
-# use join to retreive metadata for those records
-my_text <- left_join(relRefs, dedups %>% 
-                       select(analysis_id,title, author, year, 
-                              journal, abstract, keywords, research_areas), 
-                     by = "analysis_id", copy=TRUE)
-my_text <- my_text %>%
-  collect()
+# the lookup table of sysrev_ids so I can filter out those articles which have already been screened
+sysrev_id <- tbl(all_db, "sysrevid_2_analysisid_lookup")
 
+# merge together to get metadata of references with predicted relevance > 0.5
+my_text <- left_join(relRefs, dedup_sub,by = "analysis_id") 
+my_text <- my_text %>%
+  left_join(sysrev_id %>% select(duplicate_id, sysrev_id), by="duplicate_id")
+
+# filter to exclude articles that already have a sysrev_id (i.e. have already been screened)
+my_text <- my_text %>%
+  filter(is.na(sysrev_id))
+
+my_text <- my_text %>% collect() # collect all entries
+
+nrow(my_text)
 
 ## Disconnect databases
-dbDisconnect(dedup_db)
-dbDisconnect(predRel_db)
+dbDisconnect(all_db)
 
-
-## Write to file
-#save(my_text, file = here::here("data","raw-data","relevance-predictions","include_text.RData"))
 
 ```
 
+```{r process the text to search}
+# group title, abstract together
+my_text <- my_text %>%
+  mutate(text = paste(title, abstract))
+
+# Lemmitization and clean string to remove extra spaces, numbers and punctuation
+# takes about 1-2 min
+my_text$text <- clean_string(my_text$text) 
+my_text$text <- textstem::lemmatize_strings(my_text$text)
+my_text$text <- uk2us::convert_uk2us(my_text$text)
+
+# save
+# saveRDS(my_text, 
+#         here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
+
+```
+
+## Search using keywords
 
 I assembled a list of keywords grouped by different descriptive factors we would like to extract information about. We then scanned the article title, abstract and keywords and counted the occurrences of matches to these terms (boolean response of "yes" for at least one match/article).
 
-```{r clean text}
+```{r load in keywords to search and process}
 
 ## Load spreadsheet of keywords to extract and clean the text
-nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding",
+                                        "keyword-matches-supplemental-coding","keyword-search-tokens.csv"))
 nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
 nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
 nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
@@ -99,31 +113,35 @@ nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remo
 nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
 
 # separate out into single terms and expressions
-single_words <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "single")]
-expressions <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "expression")]
+single_words <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "single")]
+expressions <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "expression")]
 # name them by their corresponding group
-names(single_words) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "single")]
-names(expressions) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "expression")]
-
-
-
-## Process the text to screen
-
-# group title, abstract together
-nlptxt <- my_text %>%
-  mutate(text = paste(title, abstract))%>%
-  select(duplicate_id, text)
-
-# Lemmitization and clean string to remove extra spaces, numbers and punctuation
-nlptxt$text <- clean_string(nlptxt$text)
-nlptxt$text <- textstem::lemmatize_strings(nlptxt$text)
+names(single_words) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "single")]
+names(expressions) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "expression")]
 
 ```
 
 
 ## Screen for keywords
 
-These keyword occurrences are extracted using the code ross_keyword_extract.R. 
+```{r}
+screens_swd <- screen(my_text$text, single_words)
+screens_expr <- screen(my_text$text, expressions)
+
+# order dataset according to spreadsheet of terms
+screens_all <- cbind(screens_expr, screens_swd)
+screens_all <- screens_all[,match(gsub(" ","_", nlp_search_terms$Term), colnames(screens_all))]
+
+# make sure everything is just a y/n response, to presence/absence
+screens_all <- ifelse(1 <= screens_all, 1, 0)
+
+screens_all <- cbind(data.frame(analysis_id = my_text$analysis_id),screens_all)
+
+
+saveRDS(screens_all, 
+        here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches.rds"))
+
+```
 
 
 ## Visualizing keyword search results

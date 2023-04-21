@@ -665,6 +665,17 @@ id_lookup <- id_lookup[!duplicated(id_lookup[,c("sysrev_id")]),]
 nrow(id_lookup)
 nrow(screen_results_merged)
 
+
+## Write to a lookup table in the database
+sql_dir <- here::here("data","raw-data","sql-databases")
+sql_file <- "all_tables_v1.sqlite"
+
+# dbcon <-RSQLite::dbConnect(RSQLite::SQLite(), 
+#                            dbname = file.path(sql_dir, sql_file),
+#                            create=FALSE)
+# dbWriteTable(dbcon, "sysrevid_2_analysisid_lookup", id_lookup)
+# 
+# dbDisconnect(dbcon)
 ```
 
 

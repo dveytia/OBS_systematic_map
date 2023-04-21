@@ -17,7 +17,8 @@ formatCoding2distilBert <- function(codebookFp, codebookSheet="Codebook", skipLi
   
   # read in but skip extra header rows
   temp <- readr::read_csv(codebookFp,
-                          trim_ws = TRUE, skip = skipLines, skip_empty_rows = TRUE)
+                          trim_ws = TRUE, skip = skipLines, skip_empty_rows = TRUE,
+                          show_col_types = FALSE)
   temp <- dplyr::filter_all(temp, any_vars(!is.na(.))) # sometimes empty rows are missed when reading in
   
   # Column names

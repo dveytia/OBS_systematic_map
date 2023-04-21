@@ -56,4 +56,5 @@ vignettes/*.pdf
 /data/raw-data/relevance-predictions/
 /*_env/
 *.pickle
+/data/derived-data/coding/keyword-matches-supplemental-coding/*.rds
 
