@@ -635,6 +635,38 @@ save(screen_results_merged,
      file = here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 ```
 
+```{r make a lookup table between sysrev_id and analysis_id}
+# load in the data of screening results and metadata
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+
+# connect to database with metadata from full corpus
+# metadata from full corpus
+dbcon <- dbConnect(RSQLite::SQLite(), 
+                   here::here("data","raw-data","sql-databases","all_tables_v1.sqlite"), 
+                   create = FALSE)
+src_dbi(dbcon)
+allrefs_join <- tbl(dbcon, "allrefs_join")
+
+allrefs_join <- allrefs_join %>% 
+  filter(!is.na(doi)) %>%
+  collect() 
+
+dbDisconnect(dbcon)
+
+## Join with the screened results
+id_lookup <- merge.data.frame(
+  x = screen_results_merged %>% select(sysrev_id, title, year, doi),
+  y = allrefs_join %>% select(analysis_id, duplicate_id, doi, title),
+  by = "doi",
+  all.x = TRUE, all.y=FALSE
+)
+id_lookup <- id_lookup[!duplicated(id_lookup[,c("sysrev_id")]),]
+
+nrow(id_lookup)
+nrow(screen_results_merged)
+
+```
+
 
 
 ```{r summarise screening results}

@@ -9,5 +9,677 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+
+```{r load libraries}
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+```
+
+
 # Identify which articles may fit needed categories
+
+Do this for each undersampled "category":
+- identify documents that have key terms
+- screen
+- code
+
+
+
+## Process text
+
+```{r source functions}
+functionsToSource <- c("clean_string.R", "screen.R","tokenization.R")
+for(i in 1:length(functionsToSource)){
+  source(here::here("R", functionsToSource[i]))
+}
+
+```
+
+
+```{r get corresponding title and abstract info for predicted relevance greater than 0.5}
+require(dbplyr)
+
+all_db <- dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+
+## Get tables from databases
+dedup_db <- dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite"), 
+                                 create=FALSE)
+src_dbi(dedup_db)
+dedups <- tbl(dedup_db, "uniquerefs")
+
+predRel_db <- dbConnect(SQLite(), 
+                        dbname = here::here("data","raw-data","sql-databases","relevance-predictions.sqlite"),create = FALSE)
+predRel <- tbl(predRel_db, "predRel")
+
+
+
+## Filter and join
+
+# subset to the records I want to join (pred rel => 0.5)
+relRefs <- predRel %>%
+  select(analysis_id, relevance_mean) %>%
+  filter(0.5 <= relevance_mean) 
+
+# use join to retreive metadata for those records
+my_text <- left_join(relRefs, dedups %>% 
+                       select(analysis_id,title, author, year, 
+                              journal, abstract, keywords, research_areas), 
+                     by = "analysis_id", copy=TRUE)
+my_text <- my_text %>%
+  collect()
+
+
+## Disconnect databases
+dbDisconnect(dedup_db)
+dbDisconnect(predRel_db)
+
+
+## Write to file
+#save(my_text, file = here::here("data","raw-data","relevance-predictions","include_text.RData"))
+
+```
+
+
+I assembled a list of keywords grouped by different descriptive factors we would like to extract information about. We then scanned the article title, abstract and keywords and counted the occurrences of matches to these terms (boolean response of "yes" for at least one match/article).
+
+```{r clean text}
+
+## Load spreadsheet of keywords to extract and clean the text
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+
+# separate out into single terms and expressions
+single_words <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "single")]
+expressions <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "expression")]
+# name them by their corresponding group
+names(single_words) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "single")]
+names(expressions) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "expression")]
+
+
+
+## Process the text to screen
+
+# group title, abstract together
+nlptxt <- my_text %>%
+  mutate(text = paste(title, abstract))%>%
+  select(duplicate_id, text)
+
+# Lemmitization and clean string to remove extra spaces, numbers and punctuation
+nlptxt$text <- clean_string(nlptxt$text)
+nlptxt$text <- textstem::lemmatize_strings(nlptxt$text)
+
+```
+
+
+## Screen for keywords
+
+These keyword occurrences are extracted using the code ross_keyword_extract.R. 
+
+
+## Visualizing keyword search results
+
+identify numbers of papers relevant to each topic. The tokens to search for are stored in /data/derived-data/coding/keyword-matches/keyword-search-tokens.csv. 
+
+```{r lookup table of groups for different keywords}
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+
+
+## Process terms so that they match the column names in the sqlite database
+colnames(nlp_search_terms) <- c("Group","Group name", "Term","Term type")
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+nlp_search_terms$Term <- gsub(" ","_", nlp_search_terms$Term)
+
+
+## Change names of some groupings
+
+# change groupings of mitigation keywords
+nlp_search_terms$`Group name`[
+  which(nlp_search_terms$`Group name` %in% c("removal","CO2 removal from seawater",
+                                   "OIF","blue carbon","bioenergy"))
+] <- "carbon removal or storage"
+
+
+## Names for each of the papers
+topicNames <- c(
+  "R&D vs implementation of mitigation OROs",
+  "Biodiv & NCP outcomes",
+  "Restoration practices",
+  "Coastal community adaptation portfolio"
+)
+
+```
+
+```{r connect to database with the keyword matches}
+## Connect to database
+keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
+                                 dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
+src_dbi(keywordCon)
+
+keywordMatches <- tbl(keywordCon, "keywordMatches")
+
+```
+
+Now visualize these results 
+```{r create an object to store all the plots}
+ggp_list <- list()
+```
+
+
+For paper 1, I just want a barchart, and then the total number with any occurrence
+```{r paper 1}
+## Identify which paper
+PaperNumber=1
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper 1
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  #head() %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+nrow(paper_df)  
+
+# by keyword group (Group name) tabulate how many hits there were
+paper_tab <- paper_df %>%
+  group_by(`Group name`) %>%
+  summarise(n=n_distinct(analysis_id))
+
+# how many articles retreived any hit
+paper_total1 <- length(unique(paper_df$analysis_id))
+
+
+## Display 
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- paper_tab %>%
+  mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(y = ymax+yoffset, label = paste("total papers = ", paper_total1)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+
+```
+
+
+For paper 2, they want to know papers that have biodiv, ES, or both
+```{r paper 2}
+## Identify which paper
+PaperNumber=2
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+  
+
+# # how man articles have either or both biodiv or ncp
+counts = with(paper_df, table(tapply(`Group name`, analysis_id, function(x) paste(as.character(sort(unique(x))), collapse=' & '))))
+counts = as.data.frame(t(counts))
+colnames(counts) <- c("Topic", "Group name","n")
+counts$Topic <- paste("Paper", PaperNumber)
+
+
+# # by keyword group (Group name) tabulate how many hits there were
+# paper_tab <- paper_df %>%
+#   group_by(`Group name`) %>%
+#   summarise(n=n_distinct(analysis_id))
+
+
+# how many articles retreived any hit
+paper_total <- length(unique(paper_df$analysis_id))
+
+
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- counts %>%
+  #mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(y = n, label=paste(n),group = `Group name`), position = position_stack(vjust=0.5))+
+    #geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    #ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+```
+
+
+For paper 3, do the same as for paper 2
+```{r paper 3}
+## Identify which paper
+PaperNumber=3
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+  
+
+# # how man articles have either or both biodiv or ncp
+counts = with(paper_df, table(tapply(`Group name`, analysis_id, function(x) paste(as.character(sort(unique(x))), collapse=' & '))))
+counts = as.data.frame(t(counts))
+colnames(counts) <- c("Topic", "Group name","n")
+counts$Topic <- paste("Paper", PaperNumber)
+
+
+# # by keyword group (Group name) tabulate how many hits there were
+# paper_tab <- paper_df %>%
+#   group_by(`Group name`) %>%
+#   summarise(n=n_distinct(analysis_id))
+
+
+# how many articles retreived any hit
+paper_total <- length(unique(paper_df$analysis_id))
+
+
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- counts %>%
+  #mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(y = n, label=paste(n),group = `Group name`), position = position_stack(vjust=0.5))+
+    #geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    #ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+```
+
+
+```{r paper 4}
+
+## Identify which paper
+PaperNumber=4
+Paper = paste0("Paper", PaperNumber)
+tempTitle1 <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+tempTitle2 <- paste0(letters[PaperNumber+1],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper 
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  #head() %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+
+# how many articles retreived any hit
+paper_total4 <- length(unique(paper_df$analysis_id))
+
+
+nrow(paper_df)
+
+
+## Format to visualize as a heatmap
+library(reshape2)
+paper_tab <- paper_df[!duplicated(paper_df[,c("analysis_id","Group name")]),]
+
+
+paper_tab_Intervention <- paper_tab[grep("Intervention",paper_tab$`Group name`),c("analysis_id","Group name")]
+colnames(paper_tab_Intervention)[2] <- c("Intervention")
+paper_tab_Intervention$Intervention <- gsub("Intervention: ","",paper_tab_Intervention$Intervention)
+
+paper_tab_Population <- paper_tab[grep("Population",paper_tab$`Group name`),c("analysis_id","Group name")]
+colnames(paper_tab_Population)[2] <- c("Population")
+paper_tab_Population$Population <- gsub("Population: ","",paper_tab_Population$Population)
+
+paper_tab_Threat <- paper_tab[grep("threat",paper_tab$`Group name`),c("analysis_id","Term")]
+colnames(paper_tab_Threat)[2] <- c("Threat")
+
+
+paperMerge <- merge(paper_tab_Intervention, paper_tab_Population, by="analysis_id")
+paperMerge <- merge(paperMerge, paper_tab_Threat, by="analysis_id")
+
+
+## Display
+library(stringr)
+
+# Visualize Population by intervention
+ggp_list[[PaperNumber]] <- paperMerge %>%
+  group_by(Intervention, Population) %>%
+  summarise(n=n()) %>%
+  ggplot(aes(Population, Intervention, fill=n)) +
+  geom_tile() +
+  scale_fill_viridis_c()+
+  scale_y_discrete(labels = function(x) str_wrap(x, width=10))+
+  geom_text(aes(label = n), col="red")+
+  labs(title = paste(strwrap(tempTitle1, width = 40), collapse="\n"),
+       caption = paste("total articles = ", paper_total4))+
+  theme(
+      legend.position = "na",
+      legend.title = element_blank(),
+      #axis.text.x = element_blank(),
+      #axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+
+
+# Visualise threat by intervention
+ggp_list[[PaperNumber+1]] <- paperMerge %>%
+  group_by(Intervention, Threat) %>%
+  summarise(n=n()) %>%
+  ggplot(aes(Threat, Intervention, fill=n)) +
+  geom_tile() +
+  scale_fill_viridis_c()+
+  scale_y_discrete(labels = function(x) str_wrap(x, width=10))+
+  geom_text(aes(label = n), col="red")+
+  labs(title = paste(strwrap(tempTitle2, width = 40), collapse="\n"),
+       caption = paste("total articles = ", paper_total4))+
+  theme(
+      legend.position = "na",
+      legend.title = element_blank(),
+      axis.text.x = element_text(angle=45,hjust=1),
+      #axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+ggp_list[[PaperNumber+1]]
+```
+
+```{r create all plots together}
+
+pdf(file = here::here("data","derived-data","coding","keyword-matches","keyword-matches-plots.pdf"),
+    width = 10, height=15)
+egg::ggarrange(
+  plots = ggp_list,
+  nrow=3,
+  newpage=FALSE
+)
+dev.off()
+
+```
+
+
+```{r close databset connection}
+## Close connection
+RSQLite::dbDisconnect(keywordCon)
+
+```
+
+
+
+```{r clean environment}
+rm(list=ls())
+```
+
+
+## Export metadata for review by teams
+
+```{r source functions}
+functionsToSource <- c("clean_string.R", "screen.R","tokenization.R","utils.R")
+for(i in 1:length(functionsToSource)){
+  source(here::here("R", functionsToSource[i]))
+}
+
+```
+
+
+```{r lookup table of groups for different keywords}
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+
+
+## Process terms so that they match the column names in the sqlite database
+colnames(nlp_search_terms) <- c("Group","Group name", "Term","Term type")
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+nlp_search_terms$Term <- gsub(" ","_", nlp_search_terms$Term)
+
+
+## Change names of some groupings
+
+# change groupings of mitigation keywords
+nlp_search_terms$`Group name`[
+  which(nlp_search_terms$`Group name` %in% c("carbon","removal","CO2 removal from seawater",
+                                   "OIF","blue carbon","bioenergy"))
+] <- "carbon removal or storage"
+
+
+## Names for each of the papers
+topicNames <- c(
+  "R&D vs implementation of mitigation OROs",
+  "Biodiv & NCP outcomes",
+  "Restoration practices",
+  "Coastal community adaptation portfolio"
+)
+
+```
+
+```{r connect to database with the keyword matches}
+## Connect to database
+keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
+                                 dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
+src_dbi(keywordCon)
+
+keywordMatches <- tbl(keywordCon, "keywordMatches")
+keywordMatches <- keywordMatches %>% collect
+
+dbDisconnect(keywordCon)
+```
+
+```{r get associated metadata for the matches}
+
+## Get tables from databases
+dedup_db <- dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite"), 
+                                 create=FALSE)
+src_dbi(dedup_db)
+dedups <- tbl(dedup_db, "uniquerefs")
+
+
+
+metadata <- dedups %>% 
+  select(analysis_id, author, title, source_title, year, abstract, doi) %>%
+  collect()
+
+dbDisconnect(dedup_db)
+```
+
+```{r join metadata to keyword matches}
+
+keywordMatchesMerge <- merge(keywordMatches, metadata, by="analysis_id", all.x = TRUE, all.y=FALSE)
+
+# reorder columns so keyword matches come last
+cols <- colnames(keywordMatchesMerge)
+cols <- cols[-which(cols %in% c("analysis_id", "author","title","source_title","year","abstract","doi"))]
+keywordMatchesMerge <- keywordMatchesMerge[,c("analysis_id", "author","title","source_title","year","abstract","doi", cols)]
+  
+```
+
+
+
+```{r For each paper filter to relevant articles and export as a csv}
+## Inputs
+out_dir <- here::here("data","derived-data","coding","keyword-matches","keyword-matches-and-metadata-csv")
+
+
+papers <- unique(nlp_search_terms$Group)
+
+# columns that contain the metadata variables -- the keep
+metadata_cols <- c("analysis_id", "author","title","source_title","year","abstract","doi")
+
+
+
+
+for(p in 1:length(papers)){
+  
+  # columns that contain the keywords relevant to that paper
+  paper_cols <- nlp_search_terms$Term[which(nlp_search_terms$Group == papers[p])]
+  
+  # subset the dataframe to only the metadata columns and the keywords relevant to the paper
+  tempDf <- keywordMatchesMerge[,c(metadata_cols, paper_cols)]
+  
+  
+  # compress all keyword columns into one column containing all the matches in one string
+  
+  # replace binary indicator with keyword name
+  for(j in 1:length(paper_cols)){
+    tempDf[,paper_cols[j]] <- ifelse(tempDf[,paper_cols[j]] > 0, paper_cols[j], NA)
+  }
+  
+  # make one column that joins all the keywords in that row
+  matches <- apply(tempDf[,paper_cols], 1, function(x){
+    x <- x[!is.na(x)]
+    if(length(x)==0){
+      x <- NA
+    }else{
+      x <- paste(x, collapse = ", ")
+    }
+    return(x)
+  })
+  
+  tempDf <- cbind(tempDf[,metadata_cols], data.frame(keyword_matches = matches))
+  tempDf <- tempDf %>%
+    filter(!is.na(abstract), !is.na(keyword_matches))
+  
+  
+  ## If it is paper 2, make another column if there is a doi match to Galparoso et al
+  if(papers[p] == "Paper2"){
+    # read in
+    galRef <- revtools::read_bibliography(here::here("data","raw-data","citation-chasing","Galparsoro_etal_2002_references.ris"))
+    galRef <- subset(galRef, !is.na(doi))
+    galmatch <- tempDf$doi %in% galRef$doi 
+    ngalmatch <- sum(galmatch)
+    
+    tempDf <- cbind(tempDf, galmatch)
+    
+    colnames(tempDf)[ncol(tempDf)] <- paste0("Galparsoro_match_total_",ngalmatch)
+  }
+
+  
+  ## Write to csv
+  write.csv(tempDf, file = file.path(out_dir, paste(papers[p],"keyword-matches.csv", sep="-")))
+}
+
+```
+
+
+
 
