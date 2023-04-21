@@ -140,7 +140,99 @@ sink()
 ```
 
 
+From this, yes I need to supplement the following categories:
 
+1. oro_type (we need more articles on M.Increase efficiency and N.Human assisted evolution)
+2. climate_threat (need at least more articles on temperature -- we could group the others into the other category)
+3. adapt_to_threat = Natural 
+
+
+# Find keywords to search for more needed article categories
+
+```{r increase energy efficiency}
+library(litsearchr)
+library(dplyr)
+
+temp <- responseDf %>%
+  filter(climate_threat.Temperature == 1 | 
+           oro_type.M_Increase_efficiency == 1 | 
+           oro_type.N_Human_assisted_evolution ==1 |
+           adapt_to_threat.Natural == 1)
+
+
+# settings for keyword search
+vars <- c("climate_threat.Temperature",
+          "oro_type.M_Increase_efficiency",
+          "oro_type.N_Human_assisted_evolution",
+          "adapt_to_threat.Natural")
+
+all_stopwords <- get_stopwords("English")
+
+
+## loop through to get keywords
+
+for(v in 1:length(vars)){
+  ind <- which(colnames(responseDf) == vars[v])
+  temp <- responseDf[which(responseDf[,ind] == 1),]
+  
+  minFreq <- ceiling(0.1*nrow(temp)) # at least certain % of articles must include this word
+  minN <- 1 # minimum number of words in a keyword
+  
+  # rake keywords from text
+  rakedkeywords <- 
+  litsearchr::extract_terms(
+    text = paste(temp$title, temp$abstract),
+    method = "fakerake",
+    min_freq = minFreq,
+    ngrams = TRUE,
+    min_n = minN,
+    language = "English",
+    stopwords = all_stopwords
+  )
+  length(rakedkeywords)
+  
+  # Create a co-occurrence network
+  naivedfm <-
+    litsearchr::create_dfm(
+      elements = paste(temp$title, temp$abstract),
+      features = rakedkeywords
+    )
+  
+  naivegraph <-
+    litsearchr::create_network(
+      search_dfm = naivedfm,
+      min_studies = 2,
+      min_occ = 2
+    )
+  
+  
+  # Calculate strength for each keyword
+  strengths <- igraph::strength(naivegraph)
+  
+  require(dplyr)
+  term_strengths <- data.frame(term=names(strengths), strength=strengths, row.names=NULL) %>%
+    mutate(rank=rank(strength, ties.method="min")) %>%
+    arrange(strength)
+  
+  # finds the cutoff that retains 80% of the total strength
+  cutoff <-
+    litsearchr::find_cutoff(
+      naivegraph,
+      method = "cumulative",
+      percent = .80,
+      imp_method = "strength"
+    )
+  
+  View(term_strengths)
+  
+
+}
+
+```
+
+Overall, the terms are too generic -- will need to design simplified ones from the search string instead.
+
+# Visualise correlations?
 
 
 
