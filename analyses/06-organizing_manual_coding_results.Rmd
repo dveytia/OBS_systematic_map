@@ -39,7 +39,7 @@ dbDisconnect(dbcon)
 # files of coding results
 codingDir <- here::here("data","derived-data","coding","manual-coding","set-1-to-18")
 codingFiles <- dir(codingDir)
-codingFiles <- codingFiles[grepl(".xl", codingFiles)] # only include excel files
+codingFiles <- codingFiles[grepl(".xl", codingFiles)] # only include csv files
 
 
 for(f in 1:length(codingFiles)){
@@ -217,6 +217,49 @@ variables <- colnames(temp)
 ```
 
 
+```{r}
+## Source formatting function
+source(here::here("R","formatCoding2distilBert.R"))
+
+## READ IN FILES
+
+# files of coding results
+codingDir <- here::here("data","derived-data","coding","manual-coding","set-1-to-18")
+codingFiles <- dir(codingDir)
+codingFiles <- codingFiles[grepl(".csv", codingFiles)] # only include csv files
+
+for(f in 1:length(codingFiles)){
+  
+  # determine whether to also produce a string of variable names 
+  # only do this for the first loop
+  if(f==1){
+    returnVariableString = TRUE
+  }else{
+    returnVariableString = FALSE
+  }
+  
+  # read in codebook and format
+  df <- formatCoding2distilBert(
+    codebookFp=file.path(codingDir, codingFiles[f]),
+    codebookSheet="Codebook",
+    skipLines=3,returnVariableString = returnVariableString)
+  
+  # save
+  if(f==1){
+    variables <- df$variables
+    responseDf <- df$data
+  }else{
+    responseDf <- rbind(responseDf, df$data)
+  }
+  
+}
+
+View(responseDf)
+
+```
+
+
+
 ```{r Join with abstract by using sysref_id }
 # metadata from screening
 load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
@@ -249,7 +292,6 @@ Visualize frequencies to ensure balanced samples of most important variables: OR
 # vector of variable names to tabulate
 variables_to_tab <- c("ORO_type", "ORO_development_stage", "Climate_threat", "climate_mitigation", "adapt_to_threat", "Impact_nature",  "Restoration")
 
-variables_to_tab <- variables
 
 # index of which columns belong to which variables
 variableInd <- unlist(lapply(strsplit(colnames(responseDf), "[.]"), function(x) x[[1]]))

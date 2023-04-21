@@ -13,19 +13,16 @@ NULL
 $<NA>
 NULL
 
-$<NA>
-NULL
-
 $include_code
 [1] 456
 
-[[8]]
+[[7]]
 NULL
 
 $oro_id
 [1] 406  42   7
 
-[[10]]
+[[9]]
 NULL
 
 $oro_type
