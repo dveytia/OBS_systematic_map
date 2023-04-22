@@ -119,12 +119,16 @@ expressions <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "expres
 names(single_words) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "single")]
 names(expressions) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "expression")]
 
+# save
+saveRDS(nlp_search_terms,
+        here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keyword-search-tokens-format.rds"))
+
 ```
 
 
 ## Screen for keywords
 
-```{r}
+```{r screen for keywords}
 screens_swd <- screen(my_text$text, single_words)
 screens_expr <- screen(my_text$text, expressions)
 
@@ -138,10 +142,103 @@ screens_all <- ifelse(1 <= screens_all, 1, 0)
 screens_all <- cbind(data.frame(analysis_id = my_text$analysis_id),screens_all)
 
 
-saveRDS(screens_all, 
-        here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches.rds"))
+# saveRDS(screens_all, 
+#         here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches.rds"))
 
 ```
+
+```{r tabulate results by group to see how many matches overall}
+dim(screens_all)
+colnames(screens_all)
+
+groups <- unique(nlp_search_terms$Group)
+
+# empty matrix with one row for every group and a column for number of matches
+tabSums <- data.frame(
+  Group = groups,
+  n_matches = rep(NA, length(groups))
+) 
+
+
+## Loop through the groups and tabulate sums 
+for(g in 1:length(groups)){
+  
+  # which columns (terms) in the screens_all matrix apply to a given group
+  colInd <- which(colnames(screens_all) %in% 
+                    nlp_search_terms$Term[which(nlp_search_terms$Group == groups[g])])
+  
+  # across all the terms, I only care if there is a match to any term
+  if(length(colInd)>1){
+    tempTab <- rowSums(screens_all[,colInd], na.rm = TRUE)
+  }else{
+    tempTab <- screens_all[,colInd]
+  }
+  tempTab[tempTab > 1] <- 1
+  
+  # save to data frame
+  tabSums$n_matches[which(tabSums$Group == groups[g])] <- sum(tempTab, na.rm=T)
+  
+  if(g == length(groups)){
+    rm(colInd, tempTab)
+  }
+}
+
+print(tabSums)
+```
+
+No matches for assisted adaptation -- Add a few more or maybe extend to looking at whole corpus again
+
+
+# Screen articles within each keyword group
+
+```{r source functions and libraries to tabulate and screen articles}
+source(here::here("R","tabMatches.R"))
+
+require(dplyr)
+```
+
+```{r load in data for screening}
+screens_all <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches.rds"))
+nlp_search_terms <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding",
+                                       "keyword-search-tokens-format.rds"))
+my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
+
+```
+
+```{r screen efficiency articles}
+
+## Identify and sort articles by number of matches -- this way hopefully prioritizing most relevant
+
+screenDf <- tabMatches( # tablulate number of matches retrieved for each article
+  screenMatrix = screens_all,
+  group = "Efficiency",
+  keywordGroupLookupTable = nlp_search_terms)
+
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+# are the number of matches show a correlation with predicted relevance? Not really
+# with(screenDf[sample(1:nrow(screenDf), 500),], plot(relevance_mean, n_matches), type = ".")
+
+
+
+## Screen articles
+# To avoid error, I have to rename analysis_id column as label
+
+revtools::screen_abstracts(
+  x = screenDf %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
+
+```
+
 
 
 ## Visualizing keyword search results
