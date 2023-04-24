@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dplyr)
 ```
 
+Note -- need to re-compile screening results to reflect additional exclusions from coding.
 
 
 # Read in codebooks and format for distilBert

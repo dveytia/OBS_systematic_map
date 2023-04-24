@@ -4,14 +4,23 @@
 #' 
 #' @param group The group to tabulate keywords by
 #' 
+#' @param colExclude The name of some columns to exclude if desired
+#' 
 #' @param keywordGroupLookupTable A lookup table with the keywords (Term) and corresponding groups (Group)
 
 
-tabMatches <- function(screenMatrix, group, keywordGroupLookupTable){
+tabMatches <- function(screenMatrix, group, keywordGroupLookupTable, colExclude = NULL){
   
   # find matches
-  colInd <- which(colnames(screenMatrix) %in% 
-                    keywordGroupLookupTable$Term[which(keywordGroupLookupTable$Group == group)])
+  colNames <- keywordGroupLookupTable$Term[which(keywordGroupLookupTable$Group == group)]
+  colNames <- gsub(" ","_", colNames)
+  
+  colInd <- which(colnames(screenMatrix) %in% colNames)
+  
+  if(!is.null(colExclude)){
+    colExInd <- which(colnames(screenMatrix) %in% colExclude)
+    colInd <- colInd[-c(which(colInd %in% colExInd))]
+  }
   
   # across all the terms, I only care if there is a match to any term
   if(length(colInd)>1){

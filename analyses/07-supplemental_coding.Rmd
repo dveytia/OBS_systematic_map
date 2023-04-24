@@ -223,16 +223,106 @@ screenDf <- merge.data.frame( # join with metadata
 screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
   arrange(desc(n_matches), desc(relevance_mean))
 
-# are the number of matches show a correlation with predicted relevance? Not really
+# # are the number of matches show a correlation with predicted relevance? Not really
 # with(screenDf[sample(1:nrow(screenDf), 500),], plot(relevance_mean, n_matches), type = ".")
+
+# write.csv(screenDf, 
+#           here::here("data","derived-data","coding","keyword-matches-supplemental-coding","efficiencyMatches2Screen.csv"))
+
 
 
 
 ## Screen articles
-# To avoid error, I have to rename analysis_id column as label
 
+# to avoid not saving, do in chunks
+starts <- seq(1, nrow(screenDf), by=20)
+ends <- starts-1
+
+i=2 # which chunk I'm at
+
+# To avoid error, I have to rename analysis_id column as label
 revtools::screen_abstracts(
-  x = screenDf %>% 
+  x = screenDf[starts[i]:ends[i+1],] %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
+
+```
+
+```{r screen Temperature articles}
+
+## Identify and sort articles by number of matches -- this way hopefully prioritizing most relevant
+
+screenDf <- tabMatches( # tablulate number of matches retrieved for each article
+  screenMatrix = screens_all,
+  group = "Temperature",
+  keywordGroupLookupTable = nlp_search_terms)
+
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+
+
+
+## Screen articles
+
+# to avoid not saving, do in chunks
+starts <- seq(1, nrow(screenDf), by=20)
+ends <- starts-1
+
+i=1 # which chunk I'm at
+
+# To avoid error, I have to rename analysis_id column as label
+revtools::screen_abstracts(
+  x = screenDf[starts[i]:ends[i+1],] %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
+
+
+
+
+## I've got enough examples of bleaching, so now remove those keyword matches
+screenDf <- tabMatches( # tablulate number of matches retrieved for each article
+  screenMatrix = screens_all,
+  group = "Temperature",
+  keywordGroupLookupTable = nlp_search_terms,
+  colExclude = "bleach")
+
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+# filter out those I've already screened
+alreadyScreenedDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
+alreadyScreenedFiles <- dir(alreadyScreenedDir)
+
+for(f in 1:length(alreadyScreenedFiles)){
+  temp <- read.csv(file.path(alreadyScreenedDir, alreadyScreenedFiles[f]))
+  if(f==1){
+    alreadyScreened <- temp
+  }else{
+    alreadyScreened <- rbind(alreadyScreened, temp)
+  }
+}
+
+screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
+
+
+# screen
+revtools::screen_abstracts(
+  x = screenDf[starts[i]:ends[i+1],] %>% 
     select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
     rename(label = duplicate_id) 
 )
