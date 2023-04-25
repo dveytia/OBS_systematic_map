@@ -190,7 +190,7 @@ screens_expr <- screen(my_text$text, expressions)
 
 # order dataset according to spreadsheet of terms
 screens_all2 <- cbind(screens_expr, screens_swd)
-screens_all2 <- screens_all2[,match(gsub(" ","_", nlp_search_terms$Term), colnames(screens_all2))]
+screens_all2 <- screens_all2[,match(gsub(" ","_", nlp_search_terms$Term[which(nlp_search_terms$Group %in% subGroups)]), colnames(screens_all2))]
 
 # make sure everything is just a y/n response, to presence/absence
 screens_all2 <- ifelse(1 <= screens_all2, 1, 0)
