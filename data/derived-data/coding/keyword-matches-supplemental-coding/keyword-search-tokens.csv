@@ -13,7 +13,9 @@ Assisted_evo,genetic adaptation,expression
 Assisted_evo,phenotypic adaptation,expression
 Assisted_evo,assisted migration,expression
 Assisted_evo,assisted colonization,expression
+Assisted_evo,experimental evolution,expression
 Assisted_evo,artificial selection,expression
+Assisted_evo,microbiome Engineering,expression
 Temperature,temperature,single
 Temperature,bleaching,single
 Temperature,thermal stress,expression
@@ -69,3 +71,8 @@ Biodiversity,habitat provisioning,expression
 Biodiversity,biodiversity protection,expression
 Biodiversity,biodiversity conservation,expression
 Biodiversity,ecosystem functioning,expression
+Acidification,ocean acidification,expression
+Acidification,acidification,single
+Acidification,reduced pH,expression
+Acidification,lower pH,expression
+Acidification,aragonite saturation,expression

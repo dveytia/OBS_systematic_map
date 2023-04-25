@@ -20,6 +20,15 @@ tabMatches <- function(screenMatrix, group, keywordGroupLookupTable, colExclude 
   if(!is.null(colExclude)){
     colExInd <- which(colnames(screenMatrix) %in% colExclude)
     colInd <- colInd[-c(which(colInd %in% colExInd))]
+    
+    # tabulate matches of these columns to exclude rows which have matches
+    if(length(colExInd)>1){
+      rmTab <- rowSums(screenMatrix[,colExInd], na.rm = TRUE)
+    }else{
+      rmTab <- screenMatrix[,colExInd]
+    }
+    rowExInd <- which(rmTab == 0)
+    screenMatrix <- screenMatrix[rowExInd,]
   }
   
   # across all the terms, I only care if there is a match to any term

@@ -112,12 +112,6 @@ nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuatio
 nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
 nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
 
-# separate out into single terms and expressions
-single_words <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "single")]
-expressions <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "expression")]
-# name them by their corresponding group
-names(single_words) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "single")]
-names(expressions) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "expression")]
 
 # save
 saveRDS(nlp_search_terms,
@@ -129,6 +123,23 @@ saveRDS(nlp_search_terms,
 ## Screen for keywords
 
 ```{r screen for keywords}
+
+## Read in data
+my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
+
+nlp_search_terms <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keyword-search-tokens-format.rds"))
+
+
+## Separate out words to screen
+# separate out into single terms and expressions
+single_words <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "single")]
+expressions <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "expression")]
+# name them by their corresponding group
+names(single_words) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "single")]
+names(expressions) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "expression")]
+
+
+## Screen for keywords (takes a while to run)
 screens_swd <- screen(my_text$text, single_words)
 screens_expr <- screen(my_text$text, expressions)
 
@@ -142,8 +153,53 @@ screens_all <- ifelse(1 <= screens_all, 1, 0)
 screens_all <- cbind(data.frame(analysis_id = my_text$analysis_id),screens_all)
 
 
-# saveRDS(screens_all, 
-#         here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches.rds"))
+saveRDS(screens_all,
+        here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches.rds"))
+
+```
+
+```{r just screen for acidification and evolutionary adaptation}
+## Read in data
+my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
+
+nlp_search_terms <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keyword-search-tokens-format.rds"))
+
+
+
+## Separate out words to screen
+
+# limit to only some groups
+subGroups <- c("Acidification", "Assisted_evo")
+
+# separate out into single terms and expressions
+single_words <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "single" &
+                                              nlp_search_terms$Group %in% subGroups)]
+expressions <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "expression" &
+                                              nlp_search_terms$Group %in% subGroups)]
+# name them by their corresponding group
+names(single_words) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "single" &
+                                              nlp_search_terms$Group %in% subGroups)]
+names(expressions) <- nlp_search_terms$Group[which(nlp_search_terms$Term.type == "expression" &
+                                              nlp_search_terms$Group %in% subGroups)]
+
+
+
+## Screen for keywords (takes a while to run)
+screens_swd <- screen(my_text$text, single_words)
+screens_expr <- screen(my_text$text, expressions)
+
+# order dataset according to spreadsheet of terms
+screens_all2 <- cbind(screens_expr, screens_swd)
+screens_all2 <- screens_all2[,match(gsub(" ","_", nlp_search_terms$Term), colnames(screens_all2))]
+
+# make sure everything is just a y/n response, to presence/absence
+screens_all2 <- ifelse(1 <= screens_all2, 1, 0)
+
+screens_all2 <- cbind(data.frame(analysis_id = my_text$analysis_id),screens_all2)
+
+
+saveRDS(screens_all2,
+        here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches2.rds"))
 
 ```
 
@@ -326,6 +382,65 @@ revtools::screen_abstracts(
     select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
     rename(label = duplicate_id) 
 )
+
+```
+
+```{r screen biodiversity articles}
+
+## Identify and sort articles by number of matches -- this way hopefully prioritizing most relevant
+
+# tablulate number of matches retrieved for each article
+# remove coral cover as a keyword because I already have enough coral articles from temperature screening
+screenDf <- tabMatches( 
+  screenMatrix = screens_all,
+  group = "Biodiversity",
+  keywordGroupLookupTable = nlp_search_terms,colExclude = "coral_cover")
+
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+
+# filter out those I've already screened
+alreadyScreenedDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
+alreadyScreenedFiles <- dir(alreadyScreenedDir)
+
+for(f in 1:length(alreadyScreenedFiles)){
+  temp <- read.csv(file.path(alreadyScreenedDir, alreadyScreenedFiles[f]))
+  temp <- subset(temp, !is.na("screened_abstracts"))
+  if(f==1){
+    alreadyScreened <- temp
+  }else{
+    alreadyScreened <- rbind(alreadyScreened, temp)
+  }
+}
+
+screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
+
+
+## screen
+
+# to avoid not saving, do in chunks
+starts <- seq(1, nrow(screenDf), by=20)
+ends <- starts-1
+i=3
+
+revtools::screen_abstracts(
+  x = screenDf[starts[i]:ends[i+1],] %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
+
+```
+
+
+```{r screen acidification articles}
+
 
 ```
 
