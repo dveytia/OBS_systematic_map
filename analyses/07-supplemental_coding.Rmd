@@ -220,8 +220,8 @@ tabSums <- data.frame(
 for(g in 1:length(groups)){
   
   # which columns (terms) in the screens_all matrix apply to a given group
-  colInd <- which(colnames(screens_all) %in% 
-                    nlp_search_terms$Term[which(nlp_search_terms$Group == groups[g])])
+  colInd <- which(colnames(screens_all2) %in% 
+                    gsub(" ","_", nlp_search_terms$Term[which(nlp_search_terms$Group == groups[g])]))
   
   # across all the terms, I only care if there is a match to any term
   if(length(colInd)>1){
@@ -242,7 +242,48 @@ for(g in 1:length(groups)){
 print(tabSums)
 ```
 
-No matches for assisted adaptation -- Add a few more or maybe extend to looking at whole corpus again
+
+```{r tabulate results by group to see how many matches overall}
+dim(screens_all2)
+colnames(screens_all2)
+
+groups <- subGroups
+
+# empty matrix with one row for every group and a column for number of matches
+tabSums <- data.frame(
+  Group = groups,
+  n_matches = rep(NA, length(groups))
+) 
+
+
+## Loop through the groups and tabulate sums 
+for(g in 1:length(groups)){
+  
+  # which columns (terms) in the screens_all2 matrix apply to a given group
+  colInd <- which(colnames(screens_all2) %in% 
+                    gsub(" ","_", nlp_search_terms$Term[which(nlp_search_terms$Group == groups[g])]))
+  
+  # across all the terms, I only care if there is a match to any term
+  if(length(colInd)>1){
+    tempTab <- rowSums(screens_all2[,colInd], na.rm = TRUE)
+  }else{
+    tempTab <- screens_all2[,colInd]
+  }
+  tempTab[tempTab > 1] <- 1
+  
+  # save to data frame
+  tabSums$n_matches[which(tabSums$Group == groups[g])] <- sum(tempTab, na.rm=T)
+  
+  if(g == length(groups)){
+    rm(colInd, tempTab)
+  }
+}
+
+print(tabSums)
+
+```
+
+
 
 
 # Screen articles within each keyword group
@@ -428,7 +469,7 @@ screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
 # to avoid not saving, do in chunks
 starts <- seq(1, nrow(screenDf), by=20)
 ends <- starts-1
-i=3
+i=4
 
 revtools::screen_abstracts(
   x = screenDf[starts[i]:ends[i+1],] %>% 
@@ -444,6 +485,10 @@ revtools::screen_abstracts(
 
 ```
 
+```{r screen assisted evolution articles}
+
+
+```
 
 
 ## Visualizing keyword search results
