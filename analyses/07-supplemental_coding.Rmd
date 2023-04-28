@@ -695,6 +695,83 @@ revtools::screen_abstracts(
 ```
 
 
+```{r screen alkalinity or weathering articles}
+## Identify and sort articles by number of matches -- this way hopefully prioritizing most relevant
+
+# tablulate number of matches retrieved for each article
+# remove lime as keyword because it was popping up matches for wind energy, etc
+screenDf1 <- tabMatches( 
+  screenMatrix = screens_all3,
+  group = "Weathering",
+  keywordGroupLookupTable = nlp_search_terms)
+
+screenDf <- tabMatches( 
+  screenMatrix = screens_all3,
+  group = "Weathering",
+  keywordGroupLookupTable = nlp_search_terms,
+  colExclude = "lime")
+
+
+screenDf1 <- subset(screenDf1, n_matches > 0) # subset to only the matches
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf1 <- merge.data.frame( # join with metadata
+  screenDf1, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+
+screenDf1 <- screenDf1 %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+
+
+# filter out those I've already screened
+alreadyScreenedDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
+alreadyScreenedFiles <- dir(alreadyScreenedDir)
+
+for(f in 1:length(alreadyScreenedFiles)){
+  temp <- read.csv(file.path(alreadyScreenedDir, alreadyScreenedFiles[f]))
+  temp <- subset(temp, !is.na("screened_abstracts"))
+  if(f==1){
+    alreadyScreened <- temp
+  }else{
+    alreadyScreened <- rbind(alreadyScreened, temp)
+  }
+}
+
+screenDf1 <-  subset(screenDf1, !(duplicate_id %in% alreadyScreened$label))
+screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
+
+
+dim(screenDf)
+
+
+ 
+
+## screen
+
+revtools::screen_abstracts(
+  x = screenDf %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
+
+revtools::screen_abstracts(
+  x= screenDf1[which(screenDf1$duplicate_id %in% c("2022.2982","2013.2715","2022.2020","2022.4772")),] %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id)
+)
+
+
+```
+
+Note that excel changes the formatting of duplciate id (e.g. 2022.2020 -> 2022.202). So merge based on title if I can
+
 ## Visualizing keyword search results
 
 identify numbers of papers relevant to each topic. The tokens to search for are stored in /data/derived-data/coding/keyword-matches/keyword-search-tokens.csv. 
