@@ -76,3 +76,13 @@ Acidification,acidification,single
 Acidification,reduced pH,expression
 Acidification,lower pH,expression
 Acidification,aragonite saturation,expression
+Ocean_PP,iron fertilization,expression
+Ocean_PP,artificial upwelling,expression
+Algae_cultivation,macroalgae cultivation,expression
+Algae_cultivation,phytoplankton cultivation,expression
+Algae_cultivation,microalgae cultivation,expression
+Algae_cultivation,kelp cultivation,expression
+Algae_cultivation,kelp farm,expression
+Weathering,alkalinization,single
+Weathering,alkalinity enhancement,expression
+Weathering,liming,single

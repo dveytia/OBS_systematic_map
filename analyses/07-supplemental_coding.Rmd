@@ -169,7 +169,7 @@ nlp_search_terms <- readRDS(here::here("data","derived-data","coding","keyword-m
 ## Separate out words to screen
 
 # limit to only some groups
-subGroups <- c("Acidification", "Assisted_evo")
+subGroups <- c("Acidification", "Assisted_evo", "Ocean_PP","Algae_cultivation","Weathering")
 
 # separate out into single terms and expressions
 single_words <- nlp_search_terms$Term[which(nlp_search_terms$Term.type == "single" &
@@ -189,17 +189,17 @@ screens_swd <- screen(my_text$text, single_words)
 screens_expr <- screen(my_text$text, expressions)
 
 # order dataset according to spreadsheet of terms
-screens_all2 <- cbind(screens_expr, screens_swd)
-screens_all2 <- screens_all2[,match(gsub(" ","_", nlp_search_terms$Term[which(nlp_search_terms$Group %in% subGroups)]), colnames(screens_all2))]
+screens_all3 <- cbind(screens_expr, screens_swd)
+screens_all3 <- screens_all3[,match(gsub(" ","_", nlp_search_terms$Term[which(nlp_search_terms$Group %in% subGroups)]), colnames(screens_all3))]
 
 # make sure everything is just a y/n response, to presence/absence
-screens_all2 <- ifelse(1 <= screens_all2, 1, 0)
+screens_all3 <- ifelse(1 <= screens_all3, 1, 0)
 
-screens_all2 <- cbind(data.frame(analysis_id = my_text$analysis_id),screens_all2)
+screens_all3 <- cbind(data.frame(analysis_id = my_text$analysis_id),screens_all3)
 
 
-saveRDS(screens_all2,
-        here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches2.rds"))
+saveRDS(screens_all3,
+        here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches3.rds"))
 
 ```
 
@@ -244,8 +244,8 @@ print(tabSums)
 
 
 ```{r tabulate results by group to see how many matches overall}
-dim(screens_all2)
-colnames(screens_all2)
+dim(screens_all3)
+colnames(screens_all3)
 
 groups <- subGroups
 
@@ -260,14 +260,14 @@ tabSums <- data.frame(
 for(g in 1:length(groups)){
   
   # which columns (terms) in the screens_all2 matrix apply to a given group
-  colInd <- which(colnames(screens_all2) %in% 
+  colInd <- which(colnames(screens_all3) %in% 
                     gsub(" ","_", nlp_search_terms$Term[which(nlp_search_terms$Group == groups[g])]))
   
   # across all the terms, I only care if there is a match to any term
   if(length(colInd)>1){
-    tempTab <- rowSums(screens_all2[,colInd], na.rm = TRUE)
+    tempTab <- rowSums(screens_all3[,colInd], na.rm = TRUE)
   }else{
-    tempTab <- screens_all2[,colInd]
+    tempTab <- screens_all3[,colInd]
   }
   tempTab[tempTab > 1] <- 1
   
@@ -296,6 +296,9 @@ require(dplyr)
 
 ```{r load in data for screening}
 screens_all <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches.rds"))
+
+screens_all3 <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","keywordMatches3.rds"))
+
 nlp_search_terms <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding",
                                        "keyword-search-tokens-format.rds"))
 my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
@@ -469,7 +472,7 @@ screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
 # to avoid not saving, do in chunks
 starts <- seq(1, nrow(screenDf), by=20)
 ends <- starts-1
-i=4
+i=3
 
 revtools::screen_abstracts(
   x = screenDf[starts[i]:ends[i+1],] %>% 
@@ -481,11 +484,212 @@ revtools::screen_abstracts(
 
 
 ```{r screen acidification articles}
+## Identify and sort articles by number of matches -- this way hopefully prioritizing most relevant
+
+# tablulate number of matches retrieved for each article
+# remove coral cover as a keyword because I already have enough coral articles from temperature screening
+screenDf <- tabMatches( 
+  screenMatrix = screens_all2,
+  group = "Acidification",
+  keywordGroupLookupTable = nlp_search_terms)
+
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+
+# filter out those I've already screened
+alreadyScreenedDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
+alreadyScreenedFiles <- dir(alreadyScreenedDir)
+
+for(f in 1:length(alreadyScreenedFiles)){
+  temp <- read.csv(file.path(alreadyScreenedDir, alreadyScreenedFiles[f]))
+  temp <- subset(temp, !is.na("screened_abstracts"))
+  if(f==1){
+    alreadyScreened <- temp
+  }else{
+    alreadyScreened <- rbind(alreadyScreened, temp)
+  }
+}
+
+screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
+
+
+## screen
+
+# to avoid not saving, do in chunks
+starts <- seq(1, nrow(screenDf), by=20)
+ends <- starts-1
+i=5
+
+revtools::screen_abstracts(
+  x = screenDf[starts[i]:ends[i+1],] %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
 
 
 ```
 
 ```{r screen assisted evolution articles}
+## Identify and sort articles by number of matches -- this way hopefully prioritizing most relevant
+
+# tablulate number of matches retrieved for each article
+# remove coral cover as a keyword because I already have enough coral articles from temperature screening
+screenDf <- tabMatches( 
+  screenMatrix = screens_all3,
+  group = "Assisted_evo",
+  keywordGroupLookupTable = nlp_search_terms)
+
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+
+# filter out those I've already screened
+alreadyScreenedDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
+alreadyScreenedFiles <- dir(alreadyScreenedDir)
+
+for(f in 1:length(alreadyScreenedFiles)){
+  temp <- read.csv(file.path(alreadyScreenedDir, alreadyScreenedFiles[f]))
+  temp <- subset(temp, !is.na("screened_abstracts"))
+  if(f==1){
+    alreadyScreened <- temp
+  }else{
+    alreadyScreened <- rbind(alreadyScreened, temp)
+  }
+}
+
+screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
+
+
+## screen all because only ~30
+
+revtools::screen_abstracts(
+  x = screenDf %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
+
+```
+
+
+```{r screen ocean primary production articles}
+## Identify and sort articles by number of matches -- this way hopefully prioritizing most relevant
+
+# tablulate number of matches retrieved for each article
+# remove coral cover as a keyword because I already have enough coral articles from temperature screening
+screenDf <- tabMatches( 
+  screenMatrix = screens_all3,
+  group = "Ocean_PP",
+  keywordGroupLookupTable = nlp_search_terms)
+
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+
+# filter out those I've already screened
+alreadyScreenedDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
+alreadyScreenedFiles <- dir(alreadyScreenedDir)
+
+for(f in 1:length(alreadyScreenedFiles)){
+  temp <- read.csv(file.path(alreadyScreenedDir, alreadyScreenedFiles[f]))
+  temp <- subset(temp, !is.na("screened_abstracts"))
+  if(f==1){
+    alreadyScreened <- temp
+  }else{
+    alreadyScreened <- rbind(alreadyScreened, temp)
+  }
+}
+
+screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
+
+
+## screen
+
+# to avoid not saving, do in chunks
+starts <- seq(1, nrow(screenDf), by=20)
+ends <- starts-1
+i=2
+
+revtools::screen_abstracts(
+  x = screenDf[starts[i]:ends[i+1],] %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
+
+
+
+```
+
+
+```{r screen algae cultivation articles}
+## Identify and sort articles by number of matches -- this way hopefully prioritizing most relevant
+
+# tablulate number of matches retrieved for each article
+# remove coral cover as a keyword because I already have enough coral articles from temperature screening
+screenDf <- tabMatches( 
+  screenMatrix = screens_all3,
+  group = "Algae_cultivation",
+  keywordGroupLookupTable = nlp_search_terms)
+
+screenDf <- subset(screenDf, n_matches > 0) # subset to only the matches
+
+screenDf <- merge.data.frame( # join with metadata
+  screenDf, my_text %>% select(-text), by = "analysis_id", all.x = TRUE, all.y = FALSE
+)
+
+screenDf <- screenDf %>% # sort dataframe in order of likely decreasing relevance
+  arrange(desc(n_matches), desc(relevance_mean))
+
+
+# filter out those I've already screened
+alreadyScreenedDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
+alreadyScreenedFiles <- dir(alreadyScreenedDir)
+
+for(f in 1:length(alreadyScreenedFiles)){
+  temp <- read.csv(file.path(alreadyScreenedDir, alreadyScreenedFiles[f]))
+  temp <- subset(temp, !is.na("screened_abstracts"))
+  if(f==1){
+    alreadyScreened <- temp
+  }else{
+    alreadyScreened <- rbind(alreadyScreened, temp)
+  }
+}
+
+screenDf <-  subset(screenDf, !(duplicate_id %in% alreadyScreened$label))
+
+dim(screenDf)
+
+## screen
+
+# to avoid not saving, do in chunks
+starts <- seq(1, nrow(screenDf), by=20)
+ends <- starts-1
+i=2
+
+revtools::screen_abstracts(
+  x = screenDf[starts[i]:ends[i+1],] %>% 
+    select(title, author, year, journal, abstract, research_areas, duplicate_id) %>%
+    rename(label = duplicate_id) 
+)
+
 
 
 ```
