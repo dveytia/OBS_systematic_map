@@ -94,7 +94,7 @@ for(f in 1:length(set0Files)){
 
 
 # # save
-#save(responseArray, file=file.path(set0Dir, "responseArray.RData"))
+save(responseArray, file=file.path(set0Dir, "responseArray.RData"))
 ```
 
 ```{r calculate kappa statistic}
@@ -130,7 +130,9 @@ responseDf[,"coder_1"] <- rep("all_combined", nrow(responseDf))
 
 
 # # save
-write.csv(responseDf, file.path(set0Dir,"codebook_combined-formatted_set-0.csv"),row.names = FALSE)
+write.csv(responseDf[,1:6], file.path(set0Dir,"coding-screening_combined-formatted_set-0.csv"),row.names = FALSE)
+
+write.csv(responseDf[,which(colnames(responseDf) != "include_code")], file.path(set0Dir,"codebook_combined-formatted_set-0.csv"),row.names = FALSE)
 
 ```
 
@@ -160,7 +162,7 @@ for(f in 1:length(codingFiles)){
   df <- formatCoding2distilBert(
     codebookFp=file.path(codingDir, codingFiles[f]),
     skipLines=3,returnVariableString = returnVariableString,
-    exclusions = FALSE)
+    exclusions = TRUE)
   
   
   # for now, just condense everything so it is 1 row x publication

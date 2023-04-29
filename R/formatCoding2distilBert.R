@@ -171,7 +171,12 @@ formatCoding2distilBert <- function(codebookFp, skipLines=3,
   out$row_id <- ifelse(out$row_id == "FALSE", NA,out$row_id)
   
   # because I removed exclusions can get rid of redundant columns
-  out <- subset(out, select = -c(include_code,exclude_note,oro_id,row_id))
+  if(exclusions == FALSE){
+    out <- subset(out, select = -c(include_code,exclude_note,oro_id,row_id))
+  }else{
+    out <- subset(out, select = -c(exclude_note,oro_id,row_id))
+  }
+  
   
   # prepare opject to return
   if(returnVariableString){

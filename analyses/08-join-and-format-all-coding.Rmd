@@ -23,6 +23,7 @@ library(RSQLite)
 
 ## Initial sets
 
+** still need to run once the code checking is finalized
 
 ```{r format initial sets into binary columns for predictions in distilBERT}
 ## READ IN FILES
@@ -46,7 +47,7 @@ for(f in 1:length(codingFiles)){
   df <- formatCoding2distilBert(
     codebookFp=file.path(codingDir, codingFiles[f]),
     skipLines=3,returnVariableString = returnVariableString,
-    exclusions = FALSE)
+    exclusions = TRUE)
   
   
   # for now, just condense everything so it is 1 row x publication
@@ -81,6 +82,14 @@ for(f in 1:length(codingFiles)){
 
 #View(responseDf)
 
+```
+
+```{r save screening decisions seperately}
+write.csv(responseDf[,1:6], 
+          here::here("data","derived-data","coding","manual-coding","coding-screening_combined-formatted_sets.csv"),
+          row.names = FALSE)
+
+responseDf <- responseDf[,which(colnames(responseDf) != "include_code")]
 ```
 
 
@@ -322,6 +331,115 @@ dbDisconnect(all_db)
 
 
 
+
+
+# Compare these with all the articles that were screened to come up with updated screening decisions data
+
+
+```{r read in all articles screened}
+
+## From initial round 
+codingScreen0 <- read.csv(
+  here::here("data","derived-data","coding","manual-coding","set-0_check", "coding-screening_combined-formatted_set-0.csv"))
+codingScreen <- read.csv(
+  here::here("data","derived-data","coding","manual-coding","coding-screening_combined-formatted_sets.csv"))
+codingScreen <- rbind(codingScreen, codingScreen0)
+rm(codingScreen0)
+
+# rename columns
+codingScreen <- codingScreen %>%
+  rename(reviewer = coder_1, reviewer_2 = coder_2, include_screen = include_code) %>%
+  select(sysrev_id, reviewer, reviewer_2, include_screen)
+
+# use the lookup table to join sysrev_id to analysis_id and duplicate_id
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"),
+                                 create=FALSE)
+
+sysrevIDLookup <- tbl(all_db, "sysrevid_2_analysisid_lookup")
+
+dedups <- tbl(all_db,"uniquerefs")
+
+codingScreen <- codingScreen %>%
+  left_join(sysrevIDLookup, by="sysrev_id", copy=TRUE) %>%
+  left_join(dedups %>% select(duplicate_id, abstract, keywords), by = "duplicate_id", copy=TRUE)
+
+if("title.x" %in% colnames(codingScreen)){
+  codingScreen$title.x <- NULL
+  codingScreen <- codingScreen %>% rename(title = title.y)
+}
+
+RSQLite::dbDisconnect(all_db)
+
+# need to get sample_screen from initial screening results
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+
+codingScreen <- codingScreen %>%
+  left_join(screen_results_merged %>% select(sysrev_id, sample_screen))
+
+# format columns
+codingScreen$include_screen <- codingScreen$include_screen == 1
+codingScreen$sample_screen <- as.character(codingScreen$sample_screen)
+
+
+
+
+
+
+
+## From the supplementary round
+supplementalScreenDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
+supplementalScreenFiles <- dir(supplementalScreenDir)
+
+for(f in 1:length(supplementalScreenFiles)){
+  temp <- read.csv(file.path(supplementalScreenDir, supplementalScreenFiles[f]))
+  temp <- subset(temp, !is.na("screened_abstracts"))
+  if(f==1){
+    supplementalScreen <- temp
+  }else{
+    supplementalScreen <- rbind(supplementalScreen, temp)
+  }
+}
+# remove skipped articles
+supplementalScreen <- subset(supplementalScreen, !is.na(screened_abstracts))
+
+# add columns to be consistent with above
+supplementalScreen$reviewer <- rep("Devi", nrow(supplementalScreen))
+supplementalScreen$reviewer_2 <- rep(NA, nrow(supplementalScreen))
+supplementalScreen$include_screen <- supplementalScreen$screened_abstracts == "selected"
+supplementalScreen$sample_screen <- "supplemental coding"
+
+
+# join with metadata id information
+# text used for supplemental search
+my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
+
+# find title matches
+matches <- rep(NA, nrow(supplementalScreen))
+
+for(i in 1:length(matches)){
+  matches[i] <- stringdist::amatch(tolower(supplementalScreen$title[i]), tolower(my_text$title), method = "osa", maxDist = 5, nomatch = NA)
+}
+
+sum(is.na(matches))
+
+# join with matches
+supplementalScreen2 <- cbind(
+  my_text[matches,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
+  supplementalScreen[,c("reviewer","include_screen","sample_screen")]
+)
+
+
+
+
+## Join both data frames together
+
+```
+
+
+
+
+
 # Junk
 
 ```{r supplementary coding}
@@ -356,7 +474,6 @@ summary(supCodingDf[,idCols])
 # but there are some which have not abstract matches
 RSQLite::dbDisconnect(all_db)
 ```
-
 
 
 
