@@ -80,7 +80,6 @@ for(f in 1:length(set0Files)){
   # merge with template so formatting is the same
   df$data <- merge.data.frame(metadataTemplate, df$data, by="sysrev_id")
   
-  # make sure no values greater 
  
   # save
   if(f==1){
@@ -95,7 +94,7 @@ for(f in 1:length(set0Files)){
 
 
 # # save
-# save(responseArray, file=file.path(set0Dir, "responseArray.RData"))
+#save(responseArray, file=file.path(set0Dir, "responseArray.RData"))
 ```
 
 ```{r calculate kappa statistic}
@@ -131,7 +130,7 @@ responseDf[,"coder_1"] <- rep("all_combined", nrow(responseDf))
 
 
 # # save
-# write.csv(responseDf, file.path(set0Dir,"codebook_combined-formatted_set-0.csv"),row.names = FALSE)
+write.csv(responseDf, file.path(set0Dir,"codebook_combined-formatted_set-0.csv"),row.names = FALSE)
 
 ```
 
@@ -160,8 +159,29 @@ for(f in 1:length(codingFiles)){
   # read in codebook and format
   df <- formatCoding2distilBert(
     codebookFp=file.path(codingDir, codingFiles[f]),
-    codebookSheet="Codebook",
-    skipLines=3,returnVariableString = returnVariableString)
+    skipLines=3,returnVariableString = returnVariableString,
+    exclusions = FALSE)
+  
+  
+  # for now, just condense everything so it is 1 row x publication
+  # columns 1:5 and last column are ID columns, and 6 onwards have data
+  # condense data columns
+  condensedDat <- apply(df$data[,7:ncol(df$data)-1], 2, FUN=function(x) tapply(X=x, INDEX=df$data$sysrev_id, FUN=sum, na.rm=T))
+  condensedDat[condensedDat>1] <- 1 # reduce all sums to just p/a
+  condensedDat <- as.data.frame(condensedDat, row.names = rownames(condensedDat))
+  condensedDat <- tibble::rownames_to_column(condensedDat, "sysrev_id")
+  
+  # join back with corresponding id columns
+  # I don't know why, but even with left_join duplciates in y cause duplication in x so need to rm duplicates first
+  idCols <- df$data[,c("sysrev_id","title","year","coder_1","coder_2")]
+  idCols <- idCols[!duplicated(idCols),]
+  condensedDat <- condensedDat %>% left_join(idCols, by="sysrev_id")
+  # get column names in right order
+  colOrder <- colnames(df$data)
+  colOrder <- colOrder[-which(colOrder %in% c("notes"))]
+  condensedDat <- condensedDat[,colOrder]
+  df$data <- condensedDat; rm(condensedDat)
+
   
   # save
   if(f==1){
@@ -175,14 +195,9 @@ for(f in 1:length(codingFiles)){
 
 View(responseDf)
 
+
 ```
 
-
-## Combine all responses together
-
-```{r read in combined answers from set-0}
-set0Responses <- readr::read_csv(file.path(set0Dir,"codebook_combined-formatted_set-0.csv"), show_col_types = FALSE)
-```
 
 
 ```{r Join with abstract by using sysrev_id and export}
@@ -190,7 +205,7 @@ set0Responses <- readr::read_csv(file.path(set0Dir,"codebook_combined-formatted_
 load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 
 screen_results_merged_sub <- screen_results_merged %>% 
-  select(sysrev_id, abstract) %>%
+  select(sysrev_id, abstract, doi, keywords) %>%
   mutate(sysrev_id = as.character(sysrev_id)) 
 rm(screen_results_merged)
 
@@ -337,7 +352,7 @@ for(v in 1:length(vars)){
 
 Keywords are saved in coding/keyword-matches-supplemental-coding
 
-# Visualise correlations?
+
 
 
 

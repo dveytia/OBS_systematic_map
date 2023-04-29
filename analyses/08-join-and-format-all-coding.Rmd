@@ -1,0 +1,363 @@
+---
+title: "08-join-and-format-all-coding"
+author: "Devi Veytia"
+date: "2023-04-29"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load libraries}
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+```
+
+
+
+# Read in all coding results and format
+
+## Initial sets
+
+
+```{r format initial sets into binary columns for predictions in distilBERT}
+## READ IN FILES
+
+# files of coding results
+codingDir <- here::here("data","derived-data","coding","manual-coding","sets")
+codingFiles <- dir(codingDir)
+codingFiles <- codingFiles[grepl(".csv", codingFiles)] # only include csv files
+
+for(f in 1:length(codingFiles)){
+  
+  # determine whether to also produce a string of variable names 
+  # only do this for the first loop
+  if(f==1){
+    returnVariableString = TRUE
+  }else{
+    returnVariableString = FALSE
+  }
+  
+  # read in codebook and format
+  df <- formatCoding2distilBert(
+    codebookFp=file.path(codingDir, codingFiles[f]),
+    skipLines=3,returnVariableString = returnVariableString,
+    exclusions = FALSE)
+  
+  
+  # for now, just condense everything so it is 1 row x publication
+  # columns 1:5 and last column are ID columns, and 6 onwards have data
+  # condense data columns
+  condensedDat <- apply(df$data[,7:ncol(df$data)-1], 2, FUN=function(x) tapply(X=x, INDEX=df$data$sysrev_id, FUN=sum, na.rm=T))
+  condensedDat[condensedDat>1] <- 1 # reduce all sums to just p/a
+  condensedDat <- as.data.frame(condensedDat, row.names = rownames(condensedDat))
+  condensedDat <- tibble::rownames_to_column(condensedDat, "sysrev_id")
+  
+  # join back with corresponding id columns
+  # I don't know why, but even with left_join duplciates in y cause duplication in x so need to rm duplicates first
+  idCols <- df$data[,c("sysrev_id","title","year","coder_1","coder_2")]
+  idCols <- idCols[!duplicated(idCols),]
+  condensedDat <- condensedDat %>% left_join(idCols, by="sysrev_id")
+  # get column names in right order
+  colOrder <- colnames(df$data)
+  colOrder <- colOrder[-which(colOrder %in% c("notes"))]
+  condensedDat <- condensedDat[,colOrder]
+  df$data <- condensedDat; rm(condensedDat)
+
+  
+  # save
+  if(f==1){
+    variables <- df$variables
+    responseDf <- df$data
+  }else{
+    responseDf <- rbind(responseDf, df$data)
+  }
+  
+}
+
+#View(responseDf)
+
+```
+
+
+```{r read in combined answers from set-0 and merge in with responses from other sets}
+set0Responses <- readr::read_csv(
+  here::here("data","derived-data","coding","manual-coding","set-0_check","codebook_combined-formatted_set-0.csv"), 
+  show_col_types = FALSE
+  )
+
+responseDf <- rbind(set0Responses, responseDf)
+```
+
+```{r use the lookup table to join with analysis_id duplicate_id abstract and keywords}
+require(dbplyr)
+require(R.utils)
+require(RSQLite)
+
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+src_dbi(all_db) # look at all the tables in the database
+
+# unique reference metadata
+dedups <- tbl(all_db, "uniquerefs")
+dedup_sub <- dedups %>% 
+  select(analysis_id, duplicate_id, title, year, abstract, keywords)
+
+# lookup table of the sysrev_id to duplicate_id
+sysrev_id <- tbl(all_db, "sysrevid_2_analysisid_lookup")
+sysrev_id <- sysrev_id %>% select(duplicate_id, sysrev_id)
+
+# join to get the relevant ids
+relevantData <- sysrev_id %>%
+  left_join(dedup_sub, by = "duplicate_id") %>%
+  collect()
+
+# disconnect
+RSQLite::dbDisconnect(all_db)
+
+dim(responseDf)
+
+# merge metadata in by sysrev_id and order columns
+responseDf <- responseDf %>%
+  select(-c(title,year)) %>%
+  left_join(relevantData, by = "sysrev_id")
+
+idCols <- c("sysrev_id","analysis_id", "duplicate_id","title","abstract","keywords","year","coder_1","coder_2")
+responseDf <- responseDf[,c(idCols, colnames(responseDf)[which(!(colnames(responseDf) %in% idCols))])]
+
+# check there are now NAs for analysis_id or duplicate_id
+sum(is.na(responseDf$analysis_id))
+sum(is.na(responseDf$duplicate_id))
+```
+
+```{r add responses as a table to the sqlite database}
+require(dbplyr)
+require(R.utils)
+require(RSQLite)
+
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+RSQLite::dbWriteTable(all_db, "initial_coding", responseDf, overwrite=TRUE)
+
+src_dbi(all_db)
+
+RSQLite::dbDisconnect(all_db)
+
+```
+
+
+## Supplementary sets
+
+```{r format supplementary sets}
+
+## READ IN FILES
+
+# files of coding results
+codingDir <- here::here("data","derived-data","coding","manual-coding","supplementary-sets")
+codingFiles <- dir(codingDir)
+codingFiles <- codingFiles[grepl(".csv", codingFiles)] # only include csv files
+
+for(f in 1:length(codingFiles)){
+  
+  # determine whether to also produce a string of variable names 
+  # only do this for the first loop
+  if(f==1){
+    returnVariableString = TRUE
+  }else{
+    returnVariableString = FALSE
+  }
+  
+  # read in codebook and format
+  df <- formatCoding2distilBert(
+    codebookFp=file.path(codingDir, codingFiles[f]),
+    skipLines=3,returnVariableString = returnVariableString,
+    exclusions = FALSE)
+  
+  # change column name because actually these weren't screened in sysrev so they don't have a sysrev_id
+  colnames(df$data)[1] <- "duplicate_id"
+  
+  
+  # for now, just condense everything so it is 1 row x publication
+  # columns 1:5 and last column are ID columns, and 6 onwards have data
+  # condense data columns
+  condensedDat <- apply(df$data[,7:ncol(df$data)-1], 2, FUN=function(x) tapply(X=x, INDEX=df$data$duplicate_id, FUN=sum, na.rm=T))
+  condensedDat[condensedDat>1] <- 1 # reduce all sums to just p/a
+  condensedDat <- as.data.frame(condensedDat, row.names = rownames(condensedDat))
+  condensedDat <- tibble::rownames_to_column(condensedDat, "duplicate_id")
+  
+  # join back with corresponding id columns
+  # I don't know why, but even with left_join duplciates in y cause duplication in x so need to rm duplicates first
+  idCols <- df$data[,c("duplicate_id","title","year","coder_1","coder_2")]
+  idCols <- idCols[!duplicated(idCols),]
+  condensedDat <- condensedDat %>% left_join(idCols, by="duplicate_id")
+  # get column names in right order
+  colOrder <- colnames(df$data)
+  colOrder <- colOrder[-which(colOrder %in% c("notes"))]
+  condensedDat <- condensedDat[,colOrder]
+  df$data <- condensedDat; rm(condensedDat)
+
+
+  
+  
+  # save
+  if(f==1){
+    variables <- df$variables
+    responseDf <- df$data
+  }else{
+    responseDf <- rbind(responseDf, df$data)
+  }
+  
+}
+
+#View(responseDf)
+
+
+
+```
+
+```{r check that duplicate id is correct}
+# text used for supplemental search
+my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
+
+
+# find title matches
+matches <- rep(NA, nrow(responseDf))
+
+for(i in 1:length(matches)){
+  matches[i] <- stringdist::amatch(tolower(responseDf$title[i]), tolower(my_text$title), method = "osa", maxDist = 5, nomatch = NA)
+}
+
+
+# join with matches
+responseDf2 <- cbind(
+  my_text[matches,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
+  responseDf[,-c(1:3)]
+)
+
+
+```
+
+
+```{r add supplementary responses as a table to the sqlite database}
+require(dbplyr)
+require(R.utils)
+require(RSQLite)
+
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+#RSQLite::dbWriteTable(all_db, "supplementary_coding", responseDf2, overwrite=TRUE)
+
+
+
+RSQLite::dbDisconnect(all_db)
+
+```
+
+
+# Merge all together
+
+
+```{r merge with abstract and id metadata}
+
+require(dbplyr)
+
+all_db <- dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+src_dbi(all_db) # look at all the tables in the database
+
+# unique reference metadata
+dedups <- tbl(all_db, "uniquerefs")
+dedup_sub <- dedups %>% 
+  select(duplicate_id, title, abstract, keywords)
+
+# lookup table of the sysrev_id to duplicate_id
+sysrev_id <- tbl(all_db, "sysrevid_2_analysisid_lookup")
+sysrev_id_sub <- sysrev_id %>% select(duplicate_id, sysrev_id)
+
+
+# join 
+
+
+
+# predicted relevance for each article off of initial calculations
+predRel <- tbl(all_db, "predRel")
+relRefs <- predRel %>%
+  select(analysis_id, relevance_mean) %>%
+  filter(0.5 <= relevance_mean) 
+
+# the lookup table of sysrev_ids so I can filter out those articles which have already been screened
+sysrev_id <- tbl(all_db, "sysrevid_2_analysisid_lookup")
+
+# merge together to get metadata of references with predicted relevance > 0.5
+my_text <- left_join(relRefs, dedup_sub,by = "analysis_id") 
+my_text <- my_text %>%
+  left_join(sysrev_id %>% select(duplicate_id, sysrev_id), by="duplicate_id")
+
+# filter to exclude articles that already have a sysrev_id (i.e. have already been screened)
+my_text <- my_text %>%
+  filter(is.na(sysrev_id))
+
+my_text <- my_text %>% collect() # collect all entries
+
+nrow(my_text)
+
+## Disconnect databases
+dbDisconnect(all_db)
+
+
+```
+
+
+
+
+# Junk
+
+```{r supplementary coding}
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+src_dbi(all_db)
+
+# coding results
+supCoding <- tbl(all_db, "supplementary_coding")
+supCoding <- supCoding %>%
+  select(-c(title, year, coder_1, coder_2))
+
+# unique reference metadata
+dedups <- tbl(all_db, "uniquerefs")
+dedups <- dedups %>% 
+  select(analysis_id, title, abstract, keywords)
+
+# join together
+supCodingDf <- left_join(supCoding, dedups, by = "analysis_id") %>% collect() 
+
+# check for NAs
+sum(is.na(supCodingDf$abstract))
+View(supCodingDf[is.na(supCodingDf$abstract),])
+
+idCols <- c("duplicate_id","title","abstract","keywords")
+supCodingDf <- supCodingDf[,c(idCols, colnames(supCodingDf)[which(!(colnames(supCodingDf) %in% idCols))])]
+summary(supCodingDf[,idCols])
+
+
+# but there are some which have not abstract matches
+RSQLite::dbDisconnect(all_db)
+```
+
+
+
+
+
