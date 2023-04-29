@@ -7,9 +7,11 @@
 #' @param skipLines the number of lines to skip when reading in the file
 #' 
 #' @param returnVariableString logical -- whether or not to also return a string of just the variable names
+#' 
+#' @param exclusions TRUE or FALSE of whether to include exclusions
 
-formatCoding2distilBert <- function(codebookFp, codebookSheet="Codebook", skipLines=3,
-                                    returnVariableString = FALSE){
+formatCoding2distilBert <- function(codebookFp, skipLines=3,
+                                    returnVariableString = FALSE, exclusions=FALSE){
   
   
   
@@ -19,31 +21,36 @@ formatCoding2distilBert <- function(codebookFp, codebookSheet="Codebook", skipLi
   temp <- readr::read_csv(codebookFp,
                           trim_ws = TRUE, skip = skipLines, skip_empty_rows = TRUE,
                           show_col_types = FALSE)
-  temp <- dplyr::filter_all(temp, any_vars(!is.na(.))) # sometimes empty rows are missed when reading in
   
   # Column names
   colnames(temp) <- tolower(colnames(temp))
   colnames(temp) <- gsub(" ","_", colnames(temp))
   colnames(temp) <- gsub("[.]","_", colnames(temp))
   
+  # sometimes empty rows are missed when reading in because some columns are autofill
+  # remove rows where all other variables are NA
+  colInd <- which(!(colnames(temp) %in% c("include_code","row_id"))) # don't count columns which autofill
+  temp <- subset(temp, !rowSums(is.na(temp[,colInd])) == length(colInd)) # subset out rows where all values are NA
+  
   # change french formatting if needed
   temp[temp == "VRAI"] <- "TRUE"
   temp[temp == "FAUX"] <- "FALSE"
-  
-  # each variable will be stored in a list -- create empty list
-  responseList <- vector("list", length(values))
-  names(responseList) <- colnames(temp)
   
   # all the possible values for each variable to search for
   # for each entry, if accidentally duplicated value lists, remove after "|"
   values <- gsub("\\|.*","",temp[1,])
   
+  # each variable will be stored in a list -- create empty list
+  responseList <- vector("list", length(values))
+  names(responseList) <- colnames(temp)
+  
   # remove the row that contains all the possible variable values
   temp <- temp[-1,]
   
-  # filter out rows where include_code=FALSE
-  temp <- subset(temp, include_code == "TRUE")
-  
+  # filter out rows where include_code=FALSE if exclusions = FALSE
+  if(exclusions == FALSE){
+    temp <- subset(temp, include_code == "TRUE")
+  }
   
   ## Loop through all the variables and produce indices of presence/absence for each value
   
@@ -163,6 +170,8 @@ formatCoding2distilBert <- function(codebookFp, codebookSheet="Codebook", skipLi
   out <- do.call(cbind.data.frame, responseList)
   out$row_id <- ifelse(out$row_id == "FALSE", NA,out$row_id)
   
+  # because I removed exclusions can get rid of redundant columns
+  out <- subset(out, select = -c(include_code,exclude_note,oro_id,row_id))
   
   # prepare opject to return
   if(returnVariableString){
