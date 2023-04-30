@@ -84,13 +84,24 @@ for(f in 1:length(codingFiles)){
 
 ```
 
+
+Make sure that these column names are included: "impact_economy.Tourism__Recreation" "impact_economy.Informal"           
+[7] "impact_economy.Livelihood"          "impact_economy.Other"
+
+And not "impact_economy.Tourism" "impact_economy.other" --> then there is an error in the impact_economy column, row 1 of the .csv file
+```{r check for consistency in column names}
+colnames(responseDf)
+```
+
+
 ```{r save screening decisions seperately}
 write.csv(responseDf[,1:6], 
-          here::here("data","derived-data","coding","manual-coding","coding-screening_combined-formatted_sets.csv"),
+          here::here("data","derived-data","screening","screened-records","coding-screening_initialSets.csv"),
           row.names = FALSE)
 
 responseDf <- responseDf[,which(colnames(responseDf) != "include_code")]
 ```
+
 
 
 ```{r read in combined answers from set-0 and merge in with responses from other sets}
@@ -273,7 +284,7 @@ RSQLite::dbDisconnect(all_db)
 ```
 
 
-# Merge all together
+# Merge all together and simplify columns
 
 
 ```{r merge with abstract and id metadata}
@@ -286,42 +297,21 @@ all_db <- dbConnect(RSQLite::SQLite(),
 
 src_dbi(all_db) # look at all the tables in the database
 
-# unique reference metadata
-dedups <- tbl(all_db, "uniquerefs")
-dedup_sub <- dedups %>% 
-  select(duplicate_id, title, abstract, keywords)
+# coding results from initial round
+initialCoding <- tbl(all_db, "initial_coding")
+initialCoding <- initialCoding %>% collect()
 
-# lookup table of the sysrev_id to duplicate_id
-sysrev_id <- tbl(all_db, "sysrevid_2_analysisid_lookup")
-sysrev_id_sub <- sysrev_id %>% select(duplicate_id, sysrev_id)
+# coding results from supplemental round
+supplementaryCoding <- tbl(all_db, "supplementary_coding")
+supplementaryCoding <- supplementaryCoding %>% collect()
+supplementaryCoding$sysrev_id <- rep(NA, nrow(supplementaryCoding)) # add a black sysrev_id
 
+# check what columns they have in common and if any important ones are missing
+cols <- intersect(colnames(initialCoding), colnames(supplementaryCoding))
+colnames(initialCoding)[which(!(colnames(initialCoding) %in% colnames(supplementaryCoding)))]
+colnames(supplementaryCoding)[which(!(colnames(supplementaryCoding) %in% colnames(initialCoding)))]
 
-# join 
-
-
-
-# predicted relevance for each article off of initial calculations
-predRel <- tbl(all_db, "predRel")
-relRefs <- predRel %>%
-  select(analysis_id, relevance_mean) %>%
-  filter(0.5 <= relevance_mean) 
-
-# the lookup table of sysrev_ids so I can filter out those articles which have already been screened
-sysrev_id <- tbl(all_db, "sysrevid_2_analysisid_lookup")
-
-# merge together to get metadata of references with predicted relevance > 0.5
-my_text <- left_join(relRefs, dedup_sub,by = "analysis_id") 
-my_text <- my_text %>%
-  left_join(sysrev_id %>% select(duplicate_id, sysrev_id), by="duplicate_id")
-
-# filter to exclude articles that already have a sysrev_id (i.e. have already been screened)
-my_text <- my_text %>%
-  filter(is.na(sysrev_id))
-
-my_text <- my_text %>% collect() # collect all entries
-
-nrow(my_text)
-
+  
 ## Disconnect databases
 dbDisconnect(all_db)
 
@@ -329,20 +319,37 @@ dbDisconnect(all_db)
 ```
 
 
+```{r simplify coding variables}
+idCols <- c("sysrev_id","analysis_id","duplicate_id","title","abstract","keywords","year","coder_1","coder_2")
 
+source(here::here("R","simplifyCodebook.R"))
+
+codebookCombined <- simplifyCodebook(supplementaryCoding, idCols)
+
+
+# write for Vicky & save
+write.table(
+  codebookCombined,
+  file = here::here("data","derived-data","coding", "all-coding-format-distilBERT.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
+
+save(codebookCombined, here::here("data","derived-data","coding", "all-coding-format-distilBERT.RData"))
+
+```
 
 
 
 # Compare these with all the articles that were screened to come up with updated screening decisions data
 
 
-```{r read in all articles screened}
+```{r compile final screening decisions from both initial and supplementary coding rounds}
 
 ## From initial round 
 codingScreen0 <- read.csv(
-  here::here("data","derived-data","coding","manual-coding","set-0_check", "coding-screening_combined-formatted_set-0.csv"))
+  here::here("data","derived-data","screening","screened-records","coding-screening_set-0.csv"))
 codingScreen <- read.csv(
-  here::here("data","derived-data","coding","manual-coding","coding-screening_combined-formatted_sets.csv"))
+  here::here("data","derived-data","screening","screened-records","coding-screening_initialSets.csv"))
 codingScreen <- rbind(codingScreen, codingScreen0)
 rm(codingScreen0)
 
@@ -429,12 +436,37 @@ supplementalScreen2 <- cbind(
   supplementalScreen[,c("reviewer","include_screen","sample_screen")]
 )
 
+# make empty column for reviewer 2 
+supplementalScreen2$reviewer_2 <- rep(NA, nrow(supplementalScreen2))
 
 
 
 ## Join both data frames together
+cols <- intersect(colnames(supplementalScreen2), colnames(codingScreen))
+cols <- cols[c(1,2,8,3,4,5,6,7,10,9)] # re-order so its more sensible
+allCodingJoin <- rbind(
+  supplementalScreen2[,cols], codingScreen[,cols]
+)
 
+# format
+allCodingJoin$reviewer <- as.factor(allCodingJoin$reviewer)
+allCodingJoin$reviewer_2 <- as.factor(allCodingJoin$reviewer_2)
+allCodingJoin$sample_screen <- as.factor(allCodingJoin$sample_screen)
+summary(allCodingJoin)
+
+
+
+## Save
+write.table(
+  allCodingJoin,
+  file = here::here("data","derived-data","screening","screened-records","all-screen-results_afterSupplementalCoding.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
+
+save(allCodingJoin, here::here("data","derived-data","screening","screened-records",
+                                  "all-screen-results_afterSupplementalCoding.RData"))
 ```
+
 
 
 
