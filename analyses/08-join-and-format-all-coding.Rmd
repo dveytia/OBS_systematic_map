@@ -21,7 +21,136 @@ library(RSQLite)
 
 # Read in all coding results and format
 
-## Initial sets
+
+```{r Source formatting function}
+
+source(here::here("R","formatCoding2distilBert.R"))
+
+# note that this function does not combine rows -- each row of output = each row of input
+
+```
+
+
+## Set-0 finalised
+
+
+```{r combine set-0 into most common answer}
+
+## Read in files
+set0Dir <- here::here("data","derived-data","coding","manual-coding","set-0")
+set0Files <- dir(set0Dir)
+set0Files <- set0Files[grepl(".csv", set0Files)] # only include csvs because macro files don't read in all the multiple options
+set0Files <- set0Files[!grepl("metadata", set0Files)] # remove metadata file
+set0Files <- set0Files[!grepl("combined", set0Files)] # remove file if already formatted
+
+
+## Using metadata, format the dataframe to fill
+metadataTemplate <- readr::read_csv(file.path(set0Dir, "set-0-screening-metadata.csv"), show_col_types = FALSE)
+metadataTemplate <- subset(metadataTemplate, select = c(sysrev_id, title, year))
+metadataTemplate$sysrev_id <- as.character(metadataTemplate$sysrev_id)
+
+## Format into binary responses for each variable x value combination
+# bind into an array where each slice is a reviewer's response
+for(f in 1:length(set0Files)){
+  
+  # determine whether to also produce a string of variable names 
+  # only do this for the first loop
+  if(f==1){
+    returnVariableString = TRUE
+  }else{
+    returnVariableString = FALSE
+  }
+  
+  # read in codebook and format
+  df <- formatCoding2distilBert(
+    codebookFp=file.path(set0Dir, set0Files[f]),
+    skipLines=3,returnVariableString = returnVariableString,
+    exclusions = TRUE)
+  
+  
+  # for now, just condense everything so it is 1 row x publication
+  # columns 1:5 and last column are ID columns, and 6 onwards have data
+  # condense data columns
+  condensedDat <- apply(df$data[,7:ncol(df$data)-1], 2, FUN=function(x) tapply(X=x, INDEX=df$data$sysrev_id, FUN=sum, na.rm=T))
+  condensedDat[condensedDat>1] <- 1 # reduce all sums to just p/a
+  condensedDat <- as.data.frame(condensedDat, row.names = rownames(condensedDat))
+  condensedDat <- tibble::rownames_to_column(condensedDat, "sysrev_id")
+  
+  # join back with corresponding id columns
+  # I don't know why, but even with left_join duplciates in y cause duplication in x so need to rm duplicates first
+  idCols <- df$data[,c("sysrev_id","coder_1","coder_2")]
+  idCols <- idCols[!duplicated(idCols),]
+  condensedDat <- condensedDat %>% left_join(idCols, by="sysrev_id")
+  # get column names in right order
+  colOrder <- colnames(df$data)
+  colOrder <- colOrder[-which(colOrder %in% c("title","year","notes"))]
+  condensedDat <- condensedDat[,colOrder]
+  df$data <- condensedDat; rm(condensedDat)
+  # merge with template so formatting is the same
+  df$data <- merge.data.frame(metadataTemplate, df$data, by="sysrev_id")
+  
+ 
+  # save
+  if(f==1){
+    variables <- df$variables
+    responseArray <- df$data
+  }else{
+    responseArray <- abind::abind(responseArray, df$data, along=3)
+  }
+  
+}
+
+
+
+# # save
+save(responseArray, file=file.path(set0Dir, "responseArray.RData"))
+```
+
+```{r calculate kappa statistic}
+load(file.path(set0Dir, "responseArray.RData"))
+
+# calculate
+kappaStat <- apply(responseArray[,-c(1:5),], 2, irr::kappam.fleiss)
+
+# summarise
+kappaStatSummary <- unlist(lapply(kappaStat, function(x) x$value))
+hist(kappaStatSummary)
+```
+
+
+```{r combine set 0 into the most common answer}
+load(file.path(set0Dir, "responseArray.RData"))
+
+# function to find most frequently appearing value
+fun <- function(x){
+  as.numeric(names(which.max(table(x))))
+}
+
+
+responseDf <- apply(responseArray[,-c(1:5),], 1:2, FUN=fun) # condense to most frequently appearing value
+responseDf <- cbind(responseArray[,c(1:5),1], responseDf) # bind back in ID columns
+
+
+# change name of coder
+responseDf[,"coder_1"] <- rep("all_combined", nrow(responseDf))
+
+
+# # save
+
+# screenin decisions
+write.csv(responseDf[,1:6], 
+          here::here("data","derived-data","screening","screened-records","coding-screening_set-0.csv"),row.names = FALSE)
+
+
+write.csv(
+  responseDf[,which(colnames(responseDf) != "include_code")],
+  file.path(set0Dir,"codebook_combined-formatted_set-0.csv"),row.names = FALSE)
+
+```
+
+
+
+## Initial sets finalised
 
 ** still need to run once the code checking is finalized
 
@@ -106,7 +235,7 @@ responseDf <- responseDf[,which(colnames(responseDf) != "include_code")]
 
 ```{r read in combined answers from set-0 and merge in with responses from other sets}
 set0Responses <- readr::read_csv(
-  here::here("data","derived-data","coding","manual-coding","set-0_check","codebook_combined-formatted_set-0.csv"), 
+  here::here("data","derived-data","coding","manual-coding","set-0","codebook_combined-formatted_set-0.csv"),
   show_col_types = FALSE
   )
 
