@@ -141,14 +141,14 @@ write.csv(responseDf[,which(colnames(responseDf) != "include_code")], file.path(
 ```
 
 
-## Format single coder responses
+## Format Initial coding responses (completed thus far) 
 
 ```{r format into binary columns for predictions in distilBERT}
 
 ## READ IN FILES
 
 # files of coding results
-codingDir <- here::here("data","derived-data","coding","manual-coding","sets")
+codingDir <- here::here("data","derived-data","coding","manual-coding","sets-incomplete")
 codingFiles <- dir(codingDir)
 codingFiles <- codingFiles[grepl(".csv", codingFiles)] # only include csv files
 
