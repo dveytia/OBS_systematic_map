@@ -1,5 +1,5 @@
 ---
-title: "06-organizing_manual_coding_results"
+title: "06-assess-if-sypplemental-code-needed_preliminary-coding-results"
 author: "Devi Veytia"
 date: "2023-03-07"
 output: html_document
@@ -130,7 +130,11 @@ responseDf[,"coder_1"] <- rep("all_combined", nrow(responseDf))
 
 
 # # save
-write.csv(responseDf[,1:6], file.path(set0Dir,"coding-screening_combined-formatted_set-0.csv"),row.names = FALSE)
+
+# screenin decisions
+write.csv(responseDf[,1:6], 
+          here::here("data","derived-data","screening","screened-records","coding-screening_set-0.csv"),row.names = FALSE)
+
 
 write.csv(responseDf[,which(colnames(responseDf) != "include_code")], file.path(set0Dir,"codebook_combined-formatted_set-0.csv"),row.names = FALSE)
 
