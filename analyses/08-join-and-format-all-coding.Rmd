@@ -135,15 +135,17 @@ responseDf <- cbind(responseArray[,c(1:5),1], responseDf) # bind back in ID colu
 responseDf[,"coder_1"] <- rep("all_combined", nrow(responseDf))
 
 
+
+
 # # save
 
-# screenin decisions
+# screening decisions
 write.csv(responseDf[,1:6], 
           here::here("data","derived-data","screening","screened-records","coding-screening_set-0.csv"),row.names = FALSE)
 
-
-write.csv(
-  responseDf[,which(colnames(responseDf) != "include_code")],
+# coding decisions
+responseDf <- as.data.frame(responseDf)
+write.csv(responseDf %>% filter(include_code == 1) %>% select(-c(include_code)),
   file.path(set0Dir,"codebook_combined-formatted_set-0.csv"),row.names = FALSE)
 
 ```
@@ -228,7 +230,14 @@ write.csv(responseDf[,1:6],
           here::here("data","derived-data","screening","screened-records","coding-screening_initialSets.csv"),
           row.names = FALSE)
 
-responseDf <- responseDf[,which(colnames(responseDf) != "include_code")]
+# only keep inclusions
+responseDf <- responseDf %>%
+  as.data.frame() %>%
+  filter(include_code == 1) %>%
+  select(-c(include_code))
+
+# responseDf <- subset(responseDf, include_code == 1)
+# responseDf <- responseDf[,which(colnames(responseDf) != "include_code")]
 ```
 
 
@@ -266,6 +275,7 @@ sysrev_id <- sysrev_id %>% select(duplicate_id, sysrev_id)
 relevantData <- sysrev_id %>%
   left_join(dedup_sub, by = "duplicate_id") %>%
   collect()
+relevantData$sysrev_id <- as.character(relevantData$sysrev_id)
 
 # disconnect
 RSQLite::dbDisconnect(all_db)
@@ -295,8 +305,6 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                                  create=FALSE)
 
 RSQLite::dbWriteTable(all_db, "initial_coding", responseDf, overwrite=TRUE)
-
-src_dbi(all_db)
 
 RSQLite::dbDisconnect(all_db)
 
@@ -445,6 +453,47 @@ colnames(supplementaryCoding)[which(!(colnames(supplementaryCoding) %in% colname
 dbDisconnect(all_db)
 
 
+## append the data frames for initial and supplementary coding
+codebookCombined <- rbind(initialCoding[,cols], supplementaryCoding[,cols])
+```
+
+
+```{r tabulate all coding results}
+
+# index of which columns belong to which variables
+variableInd <- unlist(lapply(strsplit(colnames(codebookCombined), "[.]"), function(x) x[[1]]))
+
+# identify variables to tabulate (i.e. not identification columns)
+variables_to_tab <- unique(variableInd)
+idCols <- c("sysrev_id","analysis_id","duplicate_id","title","abstract","keywords","year","coder_1","coder_2")
+variables_to_tab <- variables_to_tab[which(!(variables_to_tab %in% idCols))]
+  
+# empty list to fill with tabulated tables (one item for each variable)
+tabulated_variables <- list()
+
+for(v in 1:length(variables_to_tab)){
+  colsInd <- grep(variables_to_tab[v], variableInd, ignore.case = TRUE)
+  
+  if(is.character(codebookCombined[,colsInd])){next} # can't tabulate character vectors
+  
+  if(!is.null(dim(codebookCombined[,colsInd]))){
+    tab <- colSums(codebookCombined[,colsInd], na.rm=TRUE)
+    # if there are multiple values for each variable, get the variable name
+    if(sum(grepl("[.]", colnames(codebookCombined)[colsInd])) > 0){
+      names(tab) <- unlist(lapply(strsplit(colnames(codebookCombined)[colsInd], "[.]"), function(x) x[[2]]))
+    }
+  }else{
+    tab <- tabulate(codebookCombined[,colsInd])
+  }
+  tabulated_variables[[v]] <- tab
+  names(tabulated_variables)[v] <- variables_to_tab[v]
+}
+
+
+sink(here::here("outputs","coding","tabulated_coding_round1And2.txt"))
+print(tabulated_variables)
+sink()
+
 ```
 
 
@@ -455,7 +504,13 @@ source(here::here("R","simplifyCodebook.R"))
 
 codebookCombined <- simplifyCodebook(supplementaryCoding, idCols)
 
+# check column names
+colnames(codebookCombined)
 
+
+
+
+## Save 
 # write for Vicky & save
 write.table(
   codebookCombined,
@@ -463,7 +518,16 @@ write.table(
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
 
-save(codebookCombined, here::here("data","derived-data","coding", "all-coding-format-distilBERT.RData"))
+
+
+# save to database as well
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+src_dbi(all_db)
+RSQLite::dbWriteTable(all_db, "allCodingSimplifiedVariables", allCodingJoin, overwrite=TRUE)
+
+RSQLite::dbDisconnect(all_db)
 
 ```
 
@@ -474,18 +538,43 @@ save(codebookCombined, here::here("data","derived-data","coding", "all-coding-fo
 
 ```{r compile final screening decisions from both initial and supplementary coding rounds}
 
-## From initial round 
+## Coding from initial round 
 codingScreen0 <- read.csv(
   here::here("data","derived-data","screening","screened-records","coding-screening_set-0.csv"))
 codingScreen <- read.csv(
   here::here("data","derived-data","screening","screened-records","coding-screening_initialSets.csv"))
+
+# join together
 codingScreen <- rbind(codingScreen, codingScreen0)
 rm(codingScreen0)
-
-# rename columns
 codingScreen <- codingScreen %>%
   rename(reviewer = coder_1, reviewer_2 = coder_2, include_screen = include_code) %>%
   select(sysrev_id, reviewer, reviewer_2, include_screen)
+
+
+## Screening results from initial round
+# now in screen results merged, remove articles that were in the coding screen, 
+# so that it is just composed of entries that were excluded from the screening round 
+# and never made it to coding
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData")) # screen_results_merged
+initialScreen <- subset(screen_results_merged, !(sysrev_id %in% c(codingScreen$sysrev_id)))
+initialScreen <- screen_results_merged %>%
+  filter(!(sysrev_id %in% codingScreen$sysrev_id)) %>%
+  rename(reviewer = screener) %>%
+  mutate(reviewer_2 = as.character(Double_Blind)) %>%
+  select(sysrev_id, reviewer, reviewer_2, include_screen, sample_screen) %>%
+  mutate(sample_screen = as.character(sample_screen))
+
+# need to get sample_screen from initial screening results
+codingScreen <- codingScreen %>%
+  left_join(screen_results_merged %>% select(sysrev_id, sample_screen), by = "sysrev_id") %>%
+  mutate(sample_screen = as.character(sample_screen))
+
+
+
+## join inital coding results with initial screening and get metadata
+cols <- intersect(colnames(codingScreen), colnames(initialScreen))
+codingScreen <- rbind(initialScreen[,cols], codingScreen[,cols])
 
 # use the lookup table to join sysrev_id to analysis_id and duplicate_id
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
@@ -497,27 +586,15 @@ sysrevIDLookup <- tbl(all_db, "sysrevid_2_analysisid_lookup")
 dedups <- tbl(all_db,"uniquerefs")
 
 codingScreen <- codingScreen %>%
-  left_join(sysrevIDLookup, by="sysrev_id", copy=TRUE) %>%
-  left_join(dedups %>% select(duplicate_id, abstract, keywords), by = "duplicate_id", copy=TRUE)
+  left_join(sysrevIDLookup %>% select(sysrev_id, analysis_id, duplicate_id), by="sysrev_id", copy=TRUE) %>%
+  left_join(dedups %>% select(duplicate_id, title, abstract, keywords), by = "duplicate_id", copy=TRUE)
 
-if("title.x" %in% colnames(codingScreen)){
-  codingScreen$title.x <- NULL
-  codingScreen <- codingScreen %>% rename(title = title.y)
-}
 
 RSQLite::dbDisconnect(all_db)
 
-# need to get sample_screen from initial screening results
-load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
-
-codingScreen <- codingScreen %>%
-  left_join(screen_results_merged %>% select(sysrev_id, sample_screen))
 
 # format columns
 codingScreen$include_screen <- codingScreen$include_screen == 1
-codingScreen$sample_screen <- as.character(codingScreen$sample_screen)
-
-
 
 
 
@@ -592,8 +669,10 @@ write.table(
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
 
-save(allCodingJoin, here::here("data","derived-data","screening","screened-records",
-                                  "all-screen-results_afterSupplementalCoding.RData"))
+
+
+
+
 ```
 
 

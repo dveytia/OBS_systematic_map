@@ -13,9 +13,9 @@ simplifyCodebook <- function(codebook, idCols){
   idMat <- codebook[,idCols]
   codebook <- codebook[,which(!(colnames(codebook) %in% idCols))]
   
-  # simplify data columns
   
   
+  ## simplify data columns
   
   # add a column for ORO_branch
   codebook$oro_branch.Mitigation <- rowSums(codebook[,c("oro_type.M_Renewables","oro_type.M_Increase_efficiency","oro_type.M_CO2_removal_or_storage")], na.rm = TRUE)
@@ -39,14 +39,14 @@ simplifyCodebook <- function(codebook, idCols){
   # merge undersampled value types
   
   # climate_threat : 
-  # Sea_ice_changes, Deoxygenation, Natural_impacts, Human_impacts --> put into other
-  codebook$climate_threat.Other <- rowSums(codebook[,c("climate_threat.Sea_ice_changes", 
-                                                       "climate_threat.Deoxygenation",
-                                                       "climate_threat.Natural_impacts",
+  # Human_impacts --> put into other
+  codebook$climate_threat.Other <- rowSums(codebook[,c(#"climate_threat.Sea_ice_changes", 
+                                                       #"climate_threat.Deoxygenation",
+                                                       #"climate_threat.Natural_impacts",
                                                        "climate_threat.Human_impacts",
                                                        "climate_threat.Other")], na.rm=T)
   codebook$climate_threat.Other[codebook$climate_threat.Other > 1] <- 1
-  codebook <- codebook[,which(!(colnames(codebook) %in% c("climate_threat.Sea_ice_changes","climate_threat.Deoxygenation","climate_threat.Natural_impacts","climate_threat.Human_impacts")))]
+  codebook <- codebook[,which(!(colnames(codebook) %in% c("climate_threat.Human_impacts")))]
   # merge Temperature and marine heatwave 
   codebook$climate_threat.Temperature <- rowSums(codebook[,c("climate_threat.Temperature","climate_threat.Marine_heatwave")])
   codebook$climate_threat.Temperature[codebook$climate_threat.Temperature > 1] <- 1
@@ -165,19 +165,31 @@ simplifyCodebook <- function(codebook, idCols){
   codebook$oro_any.SA_Socioinstitutional <- rowSums(codebook[,grep("SA_Socioinstitutional", colnames(codebook))], na.rm = TRUE)
   codebook$oro_any.SA_Socioinstitutional[codebook$oro_any.SA_Socioinstitutional > 1] <- 1
   
-  
-  
-  # Column of just P/A is there an impact on NCP
-  codebook$impact_ncp.Any <- rowSums(codebook[,grep("impact_ncp", colnames(codebook))], na.rm=TRUE)
-  codebook$impact_ncp.Any[codebook$impact_ncp.Any > 1] <- 1
-  
-  
   # remove old ORO columns
   rmCols <- c(
     grep("impact_oro", colnames(codebook)),
     grep("oro_type", colnames(codebook))
   )
   codebook <- codebook[,-c(rmCols)]
+  
+  
+  
+  
+  # Column of just P/A is there an impact on NCP
+  codebook$impact_ncp.Any <- rowSums(codebook[,grep("impact_ncp", colnames(codebook))], na.rm=TRUE)
+  codebook$impact_ncp.Any[codebook$impact_ncp.Any > 1] <- 1
+  
+
+  
+  
+  
+  # Merge undersampled economic sectors into "other"
+  codebook$economic_sector.Other <- rowSums(codebook[,c("economic_sector.Pharmaceuticals","economic_sector.Informal")], na.rm=TRUE)
+  codebook$economic_sector.Other[codebook$economic_sector.Other > 1] <- 1
+  rmCols <- c(grep("Pharmaceuticals", colnames(codebook)), grep("Informal", colnames(codebook)))
+  codebook <- codebook[,-c(rmCols)]
+  
+  
   
   
   # order the columns and return new data frame
