@@ -525,7 +525,7 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
 src_dbi(all_db)
-RSQLite::dbWriteTable(all_db, "allCodingSimplifiedVariables", allCodingJoin, overwrite=TRUE)
+RSQLite::dbWriteTable(all_db, "allCodingSimplifiedVariables", codebookCombined, overwrite=TRUE)
 
 RSQLite::dbDisconnect(all_db)
 
@@ -627,53 +627,135 @@ supplementalScreen$sample_screen <- "supplemental coding"
 # text used for supplemental search
 my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
 
-# find title matches
+# find title matches-- takes several minutes to run
 matches <- rep(NA, nrow(supplementalScreen))
 
-for(i in 1:length(matches)){
-  matches[i] <- stringdist::amatch(tolower(supplementalScreen$title[i]), tolower(my_text$title), method = "osa", maxDist = 5, nomatch = NA)
-}
+# for(i in 1:length(matches)){
+#   matches[i] <- stringdist::amatch(tolower(supplementalScreen$title[i]), tolower(my_text$title), method = "osa", maxDist = 5, nomatch = NA)
+# }
 
+# save(supplementalScreen, my_text, matches,
+#      file = here::here("data","derived-data","coding","keyword-matches-supplemental-coding","supplementalScreenMatches.RData"))
+
+# just load from saved file -- it's quicker
+load(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","supplementalScreenMatches.RData"))
 sum(is.na(matches))
 
-# join with matches
+# join with matches 
 supplementalScreen2 <- cbind(
   my_text[matches,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
-  supplementalScreen[,c("reviewer","include_screen","sample_screen")]
+  supplementalScreen[,c("reviewer", "reviewer_2","include_screen","sample_screen")]
 )
 
-# make empty column for reviewer 2 
-supplementalScreen2$reviewer_2 <- rep(NA, nrow(supplementalScreen2))
+supplementalScreen2$sysrev_id <- rep(NA, nrow(supplementalScreen2))
 
 
 
 ## Join both data frames together
 cols <- intersect(colnames(supplementalScreen2), colnames(codingScreen))
-cols <- cols[c(1,2,8,3,4,5,6,7,10,9)] # re-order so its more sensible
-allCodingJoin <- rbind(
+cols <- cols[order(cols)]
+cols <- cols[c(2,3,9,6,7,8,4,10,1,5)] # re-order so its more sensible
+allScreens <- rbind(
   supplementalScreen2[,cols], codingScreen[,cols]
 )
 
 # format
-allCodingJoin$reviewer <- as.factor(allCodingJoin$reviewer)
-allCodingJoin$reviewer_2 <- as.factor(allCodingJoin$reviewer_2)
-allCodingJoin$sample_screen <- as.factor(allCodingJoin$sample_screen)
-summary(allCodingJoin)
+allScreens$reviewer <- as.factor(allScreens$reviewer)
+allScreens$reviewer_2 <- as.factor(allScreens$reviewer_2)
+allScreens$sample_screen <- as.factor(allScreens$sample_screen)
+summary(allScreens)
 
 
 
 ## Save
 write.table(
-  allCodingJoin,
+  allScreens,
   file = here::here("data","derived-data","screening","screened-records","all-screen-results_afterSupplementalCoding.txt"),
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
 
 
+# save to database as well
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+src_dbi(all_db)
+RSQLite::dbWriteTable(all_db, "allScreen_afterCoding", allScreens)
+
+RSQLite::dbDisconnect(all_db)
 
 
 
 ```
+
+
+```{r summarise screening stats}
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+allScreens <- tbl(all_db, "allScreen_afterCoding")
+allScreens <- allScreens %>% collect()
+
+RSQLite::dbDisconnect(all_db)
+
+# how many inclusions vs exclusions
+table(allCodingJoin$include_screen)
+# FALSE  TRUE 
+#  2056   961 
+
+
+# Coding effort
+screen_effort_summary <- allScreens %>%
+  filter(sample_screen != "test list") %>%
+  summarise(
+    DV = sum(grepl("devi", reviewer, ignore.case = TRUE)),
+    JGP = sum(grepl("jean", reviewer, ignore.case = TRUE)),
+    AC = sum(grepl("adrien", reviewer, ignore.case = TRUE)),
+    LB = sum(grepl("bopp", reviewer, ignore.case = TRUE)),
+    YS = sum(grepl("yunne", reviewer, ignore.case = TRUE)),
+    FV = sum(grepl("Fred", reviewer, ignore.case = TRUE))
+  )
+screen_effort_summary
+#     DV JGP  AC  LB  YS FV
+# 1 1522 231 334 411 456 46
+
+screen_effort_summary <- reshape2::melt(screen_effort_summary)
+
+mean(screen_effort_summary$value) # 500
+sd(screen_effort_summary$value) # 521.6079
+median(screen_effort_summary$value) # 372.5
+
+rm(screen_effort_summary)
+
+```
+
+```{r summarise coding stats}
+# because the final screening was done at coding -- the coding effort can be retreived from the screen database
+
+# Coding effort
+code_effort_summary <- allScreens %>%
+  filter(include_screen == TRUE) %>% 
+  summarise(
+    DV = sum(grepl("devi", reviewer, ignore.case = TRUE)),
+    JGP = sum(grepl("jean", reviewer, ignore.case = TRUE)),
+    AC = sum(grepl("AC", reviewer, ignore.case = TRUE)),
+    LB = sum(grepl("Laurent", reviewer, ignore.case = TRUE)),
+    YS = sum(grepl("yunne", reviewer, ignore.case = TRUE)),
+    FV = sum(grepl("Fred", reviewer, ignore.case = TRUE))
+  )
+code_effort_summary
+#    DV JGP AC LB YS FV
+# 1 659  32 93 82 33 43
+
+code_effort_summary <- reshape2::melt(code_effort_summary)
+
+mean(code_effort_summary$value) # 
+sd(code_effort_summary$value) # 
+median(code_effort_summary$value) # 
+
+rm(code_effort_summary)
+```
+
 
 
 

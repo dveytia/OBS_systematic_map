@@ -57,4 +57,5 @@ vignettes/*.pdf
 /*_env/
 *.pickle
 /data/derived-data/coding/keyword-matches-supplemental-coding/*.rds
+/data/derived-data/coding/keyword-matches-supplemental-coding/*.RData
 
