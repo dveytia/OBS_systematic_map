@@ -128,6 +128,7 @@ fun <- function(x){
 
 
 responseDf <- apply(responseArray[,-c(1:5),], 1:2, FUN=fun) # condense to most frequently appearing value
+responseDf <- as.data.frame(responseDf)
 responseDf <- cbind(responseArray[,c(1:5),1], responseDf) # bind back in ID columns
 
 
@@ -135,6 +136,12 @@ responseDf <- cbind(responseArray[,c(1:5),1], responseDf) # bind back in ID colu
 responseDf[,"coder_1"] <- rep("all_combined", nrow(responseDf))
 
 
+# for all inclusions where common decision is to include, but could not agree on ORO, set to unclear
+incl <- which(responseDf[,"include_code"] == 1 & 
+               sum(responseDf[,which(colnames(responseDf) == "oro_type.M_Renewables"):which(colnames(responseDf) == "oro_type.Unclear")] == 0))
+noORO <- which(rowSums(responseDf[,which(colnames(responseDf) == "oro_type.M_Renewables"):which(colnames(responseDf) == "oro_type.Unclear")], na.rm=T) == 0)
+
+responseDf[intersect(incl, noORO), "oro_type.Unclear"] <- 1
 
 
 # # save
@@ -144,7 +151,6 @@ write.csv(responseDf[,1:6],
           here::here("data","derived-data","screening","screened-records","coding-screening_set-0.csv"),row.names = FALSE)
 
 # coding decisions
-responseDf <- as.data.frame(responseDf)
 write.csv(responseDf %>% filter(include_code == 1) %>% select(-c(include_code)),
   file.path(set0Dir,"codebook_combined-formatted_set-0.csv"),row.names = FALSE)
 
@@ -154,7 +160,7 @@ write.csv(responseDf %>% filter(include_code == 1) %>% select(-c(include_code)),
 
 ## Initial sets finalised
 
-** still need to run once the code checking is finalized
+
 
 ```{r format initial sets into binary columns for predictions in distilBERT}
 ## READ IN FILES
@@ -232,7 +238,6 @@ write.csv(responseDf[,1:6],
 
 # only keep inclusions
 responseDf <- responseDf %>%
-  as.data.frame() %>%
   filter(include_code == 1) %>%
   select(-c(include_code))
 
@@ -249,6 +254,7 @@ set0Responses <- readr::read_csv(
   )
 
 responseDf <- rbind(set0Responses, responseDf)
+
 ```
 
 ```{r use the lookup table to join with analysis_id duplicate_id abstract and keywords}
@@ -304,7 +310,7 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
 
-RSQLite::dbWriteTable(all_db, "initial_coding", responseDf, overwrite=TRUE)
+RSQLite::dbWriteTable(all_db, "initial_coding", responseDf, overwrite=TRUE) #
 
 RSQLite::dbDisconnect(all_db)
 
@@ -376,28 +382,65 @@ for(f in 1:length(codingFiles)){
 
 #View(responseDf)
 
-
-
 ```
 
 ```{r check that duplicate id is correct}
 # text used for supplemental search
 my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
 
-
-# find title matches
-matches <- rep(NA, nrow(responseDf))
-
-for(i in 1:length(matches)){
-  matches[i] <- stringdist::amatch(tolower(responseDf$title[i]), tolower(my_text$title), method = "osa", maxDist = 5, nomatch = NA)
+# search for duplicate_id match
+matches2 <- rep(NA, nrow(responseDf))
+for(i in 1:length(matches2)){
+  
+  dupMatch <- which(my_text$duplicate_id == responseDf$duplicate_id[i])
+  
+  if(length(dupMatch)==0){
+    dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"0"))
+  }
+  if(length(dupMatch)==0){
+    dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"00"))
+  }
+  if(length(dupMatch)==0){
+    dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"000"))
+  }
+  
+  matches2[i] <- dupMatch
 }
-
+sum(is.na(matches2))
 
 # join with matches
 responseDf2 <- cbind(
-  my_text[matches,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
+  my_text[matches2,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
   responseDf[,-c(1:3)]
 )
+
+responseDf2 <- responseDf2[!duplicated(responseDf2),]
+
+# # find title matches
+# matches <- rep(NA, nrow(responseDf))
+# 
+# for(i in 1:length(matches)){
+#   year <- unlist(strsplit(responseDf$duplicate_id[i],"[.]"))[1]
+#   my_text_sub <- subset(my_text, year == year)
+#   match <- stringdist::amatch(tolower(responseDf$title[i]), 
+#                                    tolower(my_text_sub$title), method = "osa", maxDist = 5, nomatch = NA)
+#   if(is.na(matches[i])){
+#     match <- stringdist::amatch(responseDf$duplicate_id[i], my_text_sub$duplicate_id, method = "osa", maxDist = 5, nomatch = NA)
+#   }
+#   
+#   matches[i] <- my_text_sub$duplicate_id[match]
+# }
+# 
+# responseDf2 <- cbind(
+#   data.frame(duplicate_id = matches),
+#   responseDf[,-c(1:3)]
+# )
+# responseDf2 <- right_join(
+#   my_text[,c("analysis_id","duplicate_id","title","abstract","keywords","year")], 
+#   responseDf2, by="duplicate_id")
+
+
+#View(responseDf2[which(responseDf2$duplicate_id == "1985.2160"),]) # check this is the right label, should be ENVIRONMENTAL ENHANCEMENT OF THE OCEANS BY INC
 
 
 ```
@@ -412,7 +455,7 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
 
-#RSQLite::dbWriteTable(all_db, "supplementary_coding", responseDf2, overwrite=TRUE)
+RSQLite::dbWriteTable(all_db, "supplementary_coding", responseDf2, overwrite=TRUE)
 
 
 
@@ -432,7 +475,7 @@ all_db <- dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
 
-src_dbi(all_db) # look at all the tables in the database
+#src_dbi(all_db) # look at all the tables in the database
 
 # coding results from initial round
 initialCoding <- tbl(all_db, "initial_coding")
@@ -455,6 +498,7 @@ dbDisconnect(all_db)
 
 ## append the data frames for initial and supplementary coding
 codebookCombined <- rbind(initialCoding[,cols], supplementaryCoding[,cols])
+
 ```
 
 
@@ -502,18 +546,19 @@ idCols <- c("sysrev_id","analysis_id","duplicate_id","title","abstract","keyword
 
 source(here::here("R","simplifyCodebook.R"))
 
-codebookCombined <- simplifyCodebook(supplementaryCoding, idCols)
+codebookCombinedSimplified <- simplifyCodebook(codebookCombined, idCols)
 
 # check column names
-colnames(codebookCombined)
+colnames(codebookCombinedSimplified)
 
+codebookCombinedSimplified <- codebookCombinedSimplified[!duplicated(codebookCombinedSimplified),]
 
 
 
 ## Save 
 # write for Vicky & save
 write.table(
-  codebookCombined,
+  codebookCombinedSimplified,
   file = here::here("data","derived-data","coding", "all-coding-format-distilBERT.txt"),
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
@@ -525,7 +570,7 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
 src_dbi(all_db)
-RSQLite::dbWriteTable(all_db, "allCodingSimplifiedVariables", codebookCombined, overwrite=TRUE)
+RSQLite::dbWriteTable(all_db, "allCodingSimplifiedVariables", codebookCombinedSimplified, overwrite=TRUE) # , overwrite=TRUE
 
 RSQLite::dbDisconnect(all_db)
 
@@ -589,10 +634,6 @@ codingScreen <- codingScreen %>%
   left_join(sysrevIDLookup %>% select(sysrev_id, analysis_id, duplicate_id), by="sysrev_id", copy=TRUE) %>%
   left_join(dedups %>% select(duplicate_id, title, abstract, keywords), by = "duplicate_id", copy=TRUE)
 
-
-RSQLite::dbDisconnect(all_db)
-
-
 # format columns
 codingScreen$include_screen <- codingScreen$include_screen == 1
 
@@ -601,6 +642,8 @@ codingScreen$include_screen <- codingScreen$include_screen == 1
 
 
 ## From the supplementary round
+
+# get all screening results
 supplementalScreenDir <- here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screening")
 supplementalScreenFiles <- dir(supplementalScreenDir)
 
@@ -613,8 +656,11 @@ for(f in 1:length(supplementalScreenFiles)){
     supplementalScreen <- rbind(supplementalScreen, temp)
   }
 }
-# remove skipped articles
-supplementalScreen <- subset(supplementalScreen, !is.na(screened_abstracts))
+# clean
+supplementalScreen <- subset(supplementalScreen, !is.na(screened_abstracts)) 
+supplementalScreen <- supplementalScreen %>% 
+  filter(!is.na(screened_abstracts)) # remove skipped articles
+  
 
 # add columns to be consistent with above
 supplementalScreen$reviewer <- rep("Devi", nrow(supplementalScreen))
@@ -623,32 +669,44 @@ supplementalScreen$include_screen <- supplementalScreen$screened_abstracts == "s
 supplementalScreen$sample_screen <- "supplemental coding"
 
 
-# join with metadata id information
-# text used for supplemental search
+## join with metadata id information
 my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
 
-# find title matches-- takes several minutes to run
 matches <- rep(NA, nrow(supplementalScreen))
-
-# for(i in 1:length(matches)){
-#   matches[i] <- stringdist::amatch(tolower(supplementalScreen$title[i]), tolower(my_text$title), method = "osa", maxDist = 5, nomatch = NA)
-# }
-
-# save(supplementalScreen, my_text, matches,
-#      file = here::here("data","derived-data","coding","keyword-matches-supplemental-coding","supplementalScreenMatches.RData"))
-
-# just load from saved file -- it's quicker
-load(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","supplementalScreenMatches.RData"))
+for(i in 1:length(matches)){
+  
+  dupMatch <- which(my_text$duplicate_id == supplementalScreen$label[i])
+  
+  if(length(dupMatch)==0){
+    dupMatch <- which(my_text$duplicate_id == paste0(supplementalScreen$label[i],"0"))
+  }
+  if(length(dupMatch)==0){
+    dupMatch <- which(my_text$duplicate_id == paste0(supplementalScreen$label[i],"00"))
+  }
+  if(length(dupMatch)==0){
+    dupMatch <- which(my_text$duplicate_id == paste0(supplementalScreen$label[i],"000"))
+  }
+  if(length(dupMatch)==0){
+    dupMatch <- which(my_text$duplicate_id == paste0(supplementalScreen$label[i],"0000"))
+  }
+  
+  matches[i] <- dupMatch
+}
 sum(is.na(matches))
+
 
 # join with matches 
 supplementalScreen2 <- cbind(
-  my_text[matches,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
-  supplementalScreen[,c("reviewer", "reviewer_2","include_screen","sample_screen")]
+  my_text[matches, c("analysis_id","duplicate_id","title","abstract","keywords","year")],
+  supplementalScreen[,c("reviewer","reviewer_2","include_screen","sample_screen")]
 )
+# remove a couple articles that were accidentially marked as include
+supplementalScreen2 <- supplementalScreen2 %>%
+  filter(!(duplicate_id %in% c("NA.217","2017.14740","2014.14080"))) 
 
+#supplementalScreen2[which(supplementalScreen2$label == "1985.216"),]
 supplementalScreen2$sysrev_id <- rep(NA, nrow(supplementalScreen2))
-
+sum(is.na(supplementalScreen2$sample_screen))
 
 
 ## Join both data frames together
@@ -667,20 +725,12 @@ summary(allScreens)
 
 
 
-## Save
-write.table(
-  allScreens,
-  file = here::here("data","derived-data","screening","screened-records","all-screen-results_afterSupplementalCoding.txt"),
-  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
-)
-
-
-# save to database as well
+## Save to database
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
-src_dbi(all_db)
-RSQLite::dbWriteTable(all_db, "allScreen_afterCoding", allScreens)
+#src_dbi(all_db)
+RSQLite::dbWriteTable(all_db, "allScreen_afterCoding", allScreens, overwrite=TRUE)
 
 RSQLite::dbDisconnect(all_db)
 
@@ -745,13 +795,13 @@ code_effort_summary <- allScreens %>%
   )
 code_effort_summary
 #    DV JGP AC LB YS FV
-# 1 659  32 93 82 33 43
+# 1 655  31 93 81 33 42
 
 code_effort_summary <- reshape2::melt(code_effort_summary)
 
-mean(code_effort_summary$value) # 
-sd(code_effort_summary$value) # 
-median(code_effort_summary$value) # 
+mean(code_effort_summary$value) # 155.8333
+sd(code_effort_summary$value) # 245.9044
+median(code_effort_summary$value) # 61.5
 
 rm(code_effort_summary)
 ```
@@ -760,6 +810,64 @@ rm(code_effort_summary)
 
 
 
+
+
+
+# Make another screening dataframe that is by ORO_branch rather than inclusion vs exclusion
+
+```{r}
+## read in 
+
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+#src_dbi(all_db)
+
+# combined screening table
+allScreens <- tbl(all_db, "allScreen_afterCoding")
+allScreens <- allScreens %>% collect()
+
+# coding decisions
+codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables")
+codebookCombinedSimplified <- codebookCombinedSimplified %>% collect()
+
+RSQLite::dbDisconnect(all_db)
+
+
+## for the inclusions, indicate which ORO branch it is
+allScreens2 <- allScreens %>%
+  select(sysrev_id, analysis_id, duplicate_id, reviewer, reviewer_2, title, abstract, keywords, 
+         sample_screen, include_screen) %>%
+  left_join(codebookCombinedSimplified %>% 
+              select(duplicate_id, year, oro_branch.Mitigation,oro_branch.Nature, 
+                     oro_branch.Societal, oro_branch.Unclear),
+            by = "duplicate_id") %>%
+  mutate(oro_present = rowSums(
+    cbind(oro_branch.Mitigation,oro_branch.Nature,oro_branch.Societal, oro_branch.Unclear), 
+    na.rm = TRUE)) 
+
+
+
+
+
+# make sure there are no mis-matches -- there is a coding result for every inclusion
+length(which(allScreens2$include_screen == FALSE & allScreens2$oro_present == 1))  
+length(which(allScreens2$include_screen == TRUE & allScreens2$oro_present == 0))
+#View(allScreens2[which(allScreens2$include_screen == TRUE & allScreens2$oro_present == 0),])
+allScreens2$oro_present <- NULL
+
+
+
+
+
+## Write for Vicky
+write.table(
+  allScreens,
+  file = here::here("data","derived-data","screening","screened-records","all-screen-results_afterSupplementalCoding.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
+
+```
 
 
 # Junk
@@ -799,4 +907,54 @@ RSQLite::dbDisconnect(all_db)
 
 
 
+```{r Using title to match supplemental screens metadata -- doesn't work well}
 
+# Using title to match supplemental screens metadata -- doesn't work well
+# supplemental coding
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"),
+                                 create=FALSE)
+codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables")
+codebookCombinedSimplified <- codebookCombinedSimplified %>% collect()
+RSQLite::dbDisconnect(all_db)
+
+supplementalScreen_inclusions <- subset(supplementalScreen, include_screen == TRUE)
+  
+matchesInc <- rep(NA, nrow(supplementalScreen_inclusions))
+
+for(i in 1:length(matchesInc)){
+  matchesInc[i] <- stringdist::amatch(tolower(supplementalScreen_inclusions$title[i]), 
+                                   tolower(codebookCombinedSimplified$title), method = "osa", maxDist = 5, nomatch = NA)
+}
+sum(is.na(matchesInc))
+
+supplementalScreen_inclusions <- cbind(
+  codebookCombinedSimplified[matchesInc, c("analysis_id","duplicate_id","title","abstract","keywords","year")],
+  supplementalScreen_inclusions[,c("reviewer", "reviewer_2","include_screen","sample_screen")]
+)
+
+
+# text used for supplemental search
+supplementalScreen_exclusions <- subset(supplementalScreen, include_screen == FALSE)
+my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
+
+# find title matches-- takes several minutes to run
+matchesExc <- rep(NA, nrow(supplementalScreen_exclusions))
+
+for(i in 1:length(matchesExc)){
+  #yearInd <- which(my_text$year == supplementalScreen_exclusions$year[i])
+  matchesExc[i] <- stringdist::amatch(tolower(supplementalScreen_exclusions$title[i]), tolower(my_text$title), method = "osa", maxDist = 5, nomatch = NA)
+}
+sum(is.na(matchesExc))
+
+supplementalScreen_exclusions <- cbind(
+  my_text[matches,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
+  supplementalScreen_exclusions[,c("reviewer", "reviewer_2","include_screen","sample_screen")]
+)
+
+
+supplementalScreen <- rbind(supplementalScreen_exclusions, supplementalScreen_inclusions)
+
+save(supplementalScreen, matchesExc, matchesInc,
+      file = here::here("data","derived-data","coding","keyword-matches-supplemental-coding","supplementalScreenMatches.RData"))
+```
