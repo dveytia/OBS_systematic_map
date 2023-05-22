@@ -595,6 +595,8 @@ colnames(codebookCombinedSimplified)
 
 codebookCombinedSimplified <- codebookCombinedSimplified[!duplicated(codebookCombinedSimplified),]
 
+# check for duplicates
+anyDuplicated(codebookCombinedSimplified)
 
 
 ## Save 
