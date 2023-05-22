@@ -405,6 +405,12 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 
 src_dbi(all_db) # look at all the tables in the database
 
+# check for duplicates and filter out
+responseDf %>%
+  filter(duplicate_id == responseDf$duplicate_id[duplicated(responseDf$duplicate_id)]) %>%
+  View
+responseDf <- responseDf[!duplicated(responseDf$duplicate_id),]
+
 # unique reference metadata
 dedups <- tbl(all_db, "uniquerefs")
 dedup_sub <- dedups %>% 
@@ -443,12 +449,12 @@ sum(is.na(matches2))
 
 # join with matches
 responseDf2 <- cbind(
-  my_text[matches2,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
+  dedup_sub[matches2,c("analysis_id","duplicate_id","title","abstract","keywords","year")],
   responseDf[,-c(1:3)]
 )
 
-responseDf2 <- responseDf2[!duplicated(responseDf2),]
-
+# check no additional duplicates were created
+anyDuplicated(responseDf2)
 
 
 # # text used for supplemental search
@@ -606,7 +612,7 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
 src_dbi(all_db)
-RSQLite::dbWriteTable(all_db, "allCodingSimplifiedVariables", codebookCombinedSimplified, overwrite=TRUE) # , overwrite=TRUE
+RSQLite::dbWriteTable(all_db, "allCodingSimplifiedVariables", codebookCombinedSimplified, overwrite=TRUE) 
 
 RSQLite::dbDisconnect(all_db)
 
@@ -673,9 +679,10 @@ codingScreen <- codingScreen %>%
 # format columns
 codingScreen$include_screen <- codingScreen$include_screen == 1
 
+```
 
 
-
+```{r From the supplementary round}
 
 ## From the supplementary round
 
@@ -706,45 +713,70 @@ supplementalScreen$sample_screen <- "supplemental coding"
 
 
 ## join with metadata id information
-my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
 
-matches <- rep(NA, nrow(supplementalScreen))
-for(i in 1:length(matches)){
+# unique reference metadata
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+dedups <- tbl(all_db, "uniquerefs")
+dedup_sub <- dedups %>% 
+  select(analysis_id, duplicate_id, title, year, abstract, keywords) %>%
+  collect()
+
+RSQLite::dbDisconnect(all_db)
+
+# check for any duplicates
+anyDuplicated(supplementalScreen$label)
+
+# look for title match when the dupid is matched
+matches2 <- rep(NA, nrow(supplementalScreen))
+
+for(i in 1:length(matches2)){
   
-  dupMatch <- which(my_text$duplicate_id == supplementalScreen$label[i])
+  # what are all the possible matches?
+  possibleMatches <- grep(supplementalScreen$label[i], dedup_sub$duplicate_id)
   
-  if(length(dupMatch)==0){
-    dupMatch <- which(my_text$duplicate_id == paste0(supplementalScreen$label[i],"0"))
-  }
-  if(length(dupMatch)==0){
-    dupMatch <- which(my_text$duplicate_id == paste0(supplementalScreen$label[i],"00"))
-  }
-  if(length(dupMatch)==0){
-    dupMatch <- which(my_text$duplicate_id == paste0(supplementalScreen$label[i],"000"))
-  }
-  if(length(dupMatch)==0){
-    dupMatch <- which(my_text$duplicate_id == paste0(supplementalScreen$label[i],"0000"))
+  # if only one, then simple, that's the match
+  if(length(possibleMatches) == 1){
+    matches2[i] <- possibleMatches
   }
   
-  matches[i] <- dupMatch
+  # if more than one possible match, look at the titles and match
+  if(length(possibleMatches) > 1){
+    titlematch <- stringdist::amatch(tolower(supplementalScreen$title[i]), tolower(dedup_sub$title[possibleMatches]), 
+                                     method = "osa", maxDist = 5, nomatch = NA)
+    titlematch <- titlematch[!is.na(titlematch)]
+    possibleMatches <- possibleMatches[titlematch[1]]
+  }
+  
+  # assign the match id
+  matches2[i] <- possibleMatches
 }
-sum(is.na(matches))
+
+# check for no NAs
+sum(is.na(matches2))
 
 
 # join with matches 
 supplementalScreen2 <- cbind(
-  my_text[matches, c("analysis_id","duplicate_id","title","abstract","keywords","year")],
+  dedup_sub[matches2, c("analysis_id","duplicate_id","title","abstract","keywords","year")],
   supplementalScreen[,c("reviewer","reviewer_2","include_screen","sample_screen")]
 )
-# remove a couple articles that were accidentially marked as include
-supplementalScreen2 <- supplementalScreen2 %>%
-  filter(!(duplicate_id %in% c("NA.217","2017.14740","2014.14080"))) 
+
+# # remove a couple articles that were accidentially marked as include
+# supplementalScreen2 <- supplementalScreen2 %>%
+#   filter(!(duplicate_id %in% c("NA.217","2017.14740","2014.14080"))) 
 
 #supplementalScreen2[which(supplementalScreen2$label == "1985.216"),]
+
+# check that there are no nas/duplicates
 supplementalScreen2$sysrev_id <- rep(NA, nrow(supplementalScreen2))
 sum(is.na(supplementalScreen2$sample_screen))
+length(unique(supplementalScreen2$duplicate_id)) == length(supplementalScreen2$duplicate_id)
+```
 
-
+```{r join intitial and supplemental screens together into allScreens}
 ## Join both data frames together
 cols <- intersect(colnames(supplementalScreen2), colnames(codingScreen))
 cols <- cols[order(cols)]
@@ -760,7 +792,71 @@ allScreens$sample_screen <- as.factor(allScreens$sample_screen)
 summary(allScreens)
 
 
+```
 
+
+```{r compare screening to coding results to make sure no articles were included by accident}
+# if an article is screened as include but not coded, likely an accident -- just remove to be safe ratehr than set to exclude
+
+# load in all coding results
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables")
+codebookCombinedSimplified <- codebookCombinedSimplified %>% collect()
+
+RSQLite::dbDisconnect(all_db)
+
+
+# compare screening decisions to coding
+
+# are there any exclusions in the coding book?
+which(allScreens$duplicate_id[which(allScreens$include_screen == FALSE)] 
+             %in% codebookCombinedSimplified$duplicate_id)
+
+
+# are there any inclusions NOT coded?
+ind <- which(!(allScreens$duplicate_id[which(allScreens$include_screen == TRUE)] 
+               %in% codebookCombinedSimplified$duplicate_id))
+
+# if so, filter out
+if(length(ind) > 0){
+  allScreens <- subset(allScreens, duplicate_id != allScreens$duplicate_id[which(allScreens$include_screen == TRUE)][ind])
+}
+
+
+
+## Do they match up by the different ids?
+testMerge <- merge(allScreens, codebookCombinedSimplified, by = "duplicate_id", all.x = FALSE, all.y = TRUE)
+sum(is.na(testMerge$include_screen))
+
+testMerge2 <- merge(allScreens, codebookCombinedSimplified, by = "analysis_id", all.x = FALSE, all.y = TRUE)
+sum(is.na(testMerge2$include_screen))
+
+dupids <- testMerge2$duplicate_id.y[which(is.na(testMerge2$include_screen))]
+
+View(testMerge2[which(is.na(testMerge2$include_screen)),c(1,10:13)])
+View(testMerge[which(testMerge$duplicate_id %in% dupids),c(1:15)])
+
+# reassign so that they match 
+testMerge <- allScreens
+matches <- match(allScreens$duplicate_id, codebookCombinedSimplified$duplicate_id)
+matches <- matches[!is.na(matches)]
+testMerge$analysis_id[matches] <- codebookCombinedSimplified$analysis_id[matches]
+# check first -- yes
+testMerge3 <- merge(testMerge, codebookCombinedSimplified, by = "analysis_id", all.x = FALSE, all.y = TRUE)
+sum(is.na(testMerge3$include_screen))
+
+
+# re-assign
+allScreens <- testMerge
+
+rm(testMerge, testMerge2, testMerge3)
+```
+
+
+
+```{r save all compiled screening results to database}
 ## Save to database
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
@@ -769,8 +865,6 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 RSQLite::dbWriteTable(all_db, "allScreen_afterCoding", allScreens, overwrite=TRUE)
 
 RSQLite::dbDisconnect(all_db)
-
-
 
 ```
 
