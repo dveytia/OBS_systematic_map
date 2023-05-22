@@ -290,15 +290,25 @@ dim(responseDf)
 
 # merge metadata in by sysrev_id and order columns
 responseDf <- responseDf %>%
-  select(-c(title,year)) %>%
+  select(-c(year)) %>%
   left_join(relevantData, by = "sysrev_id")
 
+# compare titles to makes sure the articles are the same
+print(cbind(responseDf$title.x[1:5], responseDf$title.y[1:5]))
+
+# remove duplicate title
+responseDf <- responseDf %>%
+  rename(title = title.x) %>%
+  select(-c(title.y))
+
+# order columns
 idCols <- c("sysrev_id","analysis_id", "duplicate_id","title","abstract","keywords","year","coder_1","coder_2")
 responseDf <- responseDf[,c(idCols, colnames(responseDf)[which(!(colnames(responseDf) %in% idCols))])]
 
 # check there are now NAs for analysis_id or duplicate_id
 sum(is.na(responseDf$analysis_id))
 sum(is.na(responseDf$duplicate_id))
+length(unique(responseDf$duplicate_id)) == length(responseDf$duplicate_id) # check all unique ids are unique
 ```
 
 ```{r add responses as a table to the sqlite database}
@@ -384,28 +394,51 @@ for(f in 1:length(codingFiles)){
 
 ```
 
-```{r check that duplicate id is correct}
-# text used for supplemental search
-my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
+```{r check that ids are correct}
+require(dbplyr)
+require(R.utils)
+require(RSQLite)
 
-# search for duplicate_id match
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+src_dbi(all_db) # look at all the tables in the database
+
+# unique reference metadata
+dedups <- tbl(all_db, "uniquerefs")
+dedup_sub <- dedups %>% 
+  select(analysis_id, duplicate_id, title, year, abstract, keywords) %>%
+  collect()
+
+RSQLite::dbDisconnect(all_db)
+
+# look for title match when the dupid is matched
 matches2 <- rep(NA, nrow(responseDf))
+
 for(i in 1:length(matches2)){
   
-  dupMatch <- which(my_text$duplicate_id == responseDf$duplicate_id[i])
+  # what are all the possible matches?
+  possibleMatches <- grep(responseDf$duplicate_id[i], dedup_sub$duplicate_id)
   
-  if(length(dupMatch)==0){
-    dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"0"))
-  }
-  if(length(dupMatch)==0){
-    dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"00"))
-  }
-  if(length(dupMatch)==0){
-    dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"000"))
+  # if only one, then simple, that's the match
+  if(length(possibleMatches) == 1){
+    matches2[i] <- possibleMatches
   }
   
-  matches2[i] <- dupMatch
+  # if more than one possible match, look at the titles and match
+  if(length(possibleMatches) > 1){
+    titlematch <- stringdist::amatch(tolower(responseDf$title[i]), tolower(dedup_sub$title[possibleMatches]), 
+                                     method = "osa", maxDist = 5, nomatch = NA)
+    titlematch <- titlematch[!is.na(titlematch)]
+    possibleMatches <- possibleMatches[titlematch[1]]
+  }
+  
+  # assign the match id
+  matches2[i] <- possibleMatches
 }
+
+# check for no NAs
 sum(is.na(matches2))
 
 # join with matches
@@ -416,34 +449,34 @@ responseDf2 <- cbind(
 
 responseDf2 <- responseDf2[!duplicated(responseDf2),]
 
-# # find title matches
-# matches <- rep(NA, nrow(responseDf))
+
+
+# # text used for supplemental search
+# my_text <- readRDS(here::here("data","derived-data","coding","keyword-matches-supplemental-coding","screeningText.rds"))
 # 
-# for(i in 1:length(matches)){
-#   year <- unlist(strsplit(responseDf$duplicate_id[i],"[.]"))[1]
-#   my_text_sub <- subset(my_text, year == year)
-#   match <- stringdist::amatch(tolower(responseDf$title[i]), 
-#                                    tolower(my_text_sub$title), method = "osa", maxDist = 5, nomatch = NA)
-#   if(is.na(matches[i])){
-#     match <- stringdist::amatch(responseDf$duplicate_id[i], my_text_sub$duplicate_id, method = "osa", maxDist = 5, nomatch = NA)
+# # search for duplicate_id match
+# matches2 <- rep(NA, nrow(responseDf))
+# for(i in 1:length(matches2)){
+#   
+#   dupMatch <- which(my_text$duplicate_id == responseDf$duplicate_id[i])
+#   
+#   if(length(dupMatch)==0){
+#     dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"0"))
+#   }
+#   if(length(dupMatch)==0){
+#     dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"00"))
+#   }
+#   if(length(dupMatch)==0){
+#     dupMatch <- which(my_text$duplicate_id == paste0(responseDf$duplicate_id[i],"000"))
 #   }
 #   
-#   matches[i] <- my_text_sub$duplicate_id[match]
+#   matches2[i] <- dupMatch
 # }
-# 
-# responseDf2 <- cbind(
-#   data.frame(duplicate_id = matches),
-#   responseDf[,-c(1:3)]
-# )
-# responseDf2 <- right_join(
-#   my_text[,c("analysis_id","duplicate_id","title","abstract","keywords","year")], 
-#   responseDf2, by="duplicate_id")
-
-
-#View(responseDf2[which(responseDf2$duplicate_id == "1985.2160"),]) # check this is the right label, should be ENVIRONMENTAL ENHANCEMENT OF THE OCEANS BY INC
+# sum(is.na(matches2))
 
 
 ```
+
 
 
 ```{r add supplementary responses as a table to the sqlite database}
@@ -499,6 +532,9 @@ dbDisconnect(all_db)
 ## append the data frames for initial and supplementary coding
 codebookCombined <- rbind(initialCoding[,cols], supplementaryCoding[,cols])
 
+# check IDs to make sure they are unique
+length(unique(codebookCombined$duplicate_id))
+length(codebookCombined$duplicate_id)
 ```
 
 
