@@ -986,13 +986,13 @@ length(which(allScreens2$include_screen == TRUE & allScreens2$oro_present == 0))
 #View(allScreens2[which(allScreens2$include_screen == TRUE & allScreens2$oro_present == 0),])
 allScreens2$oro_present <- NULL
 
-
-
+# make sure all unique values
+anyDuplicated(allScreens2$duplicate_id)
 
 
 ## Write for Vicky
 write.table(
-  allScreens,
+  allScreens2,
   file = here::here("data","derived-data","screening","screened-records","all-screen-results_afterSupplementalCoding.txt"),
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
