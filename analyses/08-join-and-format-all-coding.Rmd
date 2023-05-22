@@ -34,7 +34,7 @@ source(here::here("R","formatCoding2distilBert.R"))
 ## Set-0 finalised
 
 
-```{r combine set-0 into most common answer}
+```{r combine set-0 into most common answer, eval=FALSE}
 
 ## Read in files
 set0Dir <- here::here("data","derived-data","coding","manual-coding","set-0")
@@ -118,7 +118,7 @@ hist(kappaStatSummary)
 ```
 
 
-```{r combine set 0 into the most common answer}
+```{r combine set 0 into the most common answer, eval=FALSE}
 load(file.path(set0Dir, "responseArray.RData"))
 
 # function to find most frequently appearing value
@@ -231,7 +231,7 @@ colnames(responseDf)
 ```
 
 
-```{r save screening decisions seperately}
+```{r save screening decisions seperately, eval=FALSE}
 write.csv(responseDf[,1:6], 
           here::here("data","derived-data","screening","screened-records","coding-screening_initialSets.csv"),
           row.names = FALSE)
@@ -541,7 +541,7 @@ sink()
 ```
 
 
-```{r simplify coding variables}
+```{r simplify coding variables and save as all-coding-format-distilBERT.txt}
 idCols <- c("sysrev_id","analysis_id","duplicate_id","title","abstract","keywords","year","coder_1","coder_2")
 
 source(here::here("R","simplifyCodebook.R"))
