@@ -1003,8 +1003,9 @@ testMerge <- allScreens %>%
               select(analysis_id, duplicate_id, title),
             by = "analysis_id")
 summary(testMerge)
-View(testMerge)
+testMerge %>% arrange(analysis_id) %>% View()
 nrow(testMerge) == nrow(codebookCombinedSimplified)
+
 
 
 ## for the inclusions, indicate which ORO branch it is
