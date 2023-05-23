@@ -115,6 +115,41 @@ kappaStat <- apply(responseArray[,-c(1:5),], 2, irr::kappam.fleiss)
 # summarise
 kappaStatSummary <- unlist(lapply(kappaStat, function(x) x$value))
 hist(kappaStatSummary)
+
+kappaStatDF <- data.frame(VarVal = dimnames(responseArray)[[2]][-c(1:5)], Kappa = kappaStatSummary)
+kappaStatDF$Variable <- unlist(lapply(strsplit(kappaStatDF$VarVal, "[.]"), function(x) x[1]))
+kappaStatDF$Value <- unlist(lapply(strsplit(kappaStatDF$VarVal, "[.]"), function(x) x[2]))
+kappaStatDF <- kappaStatDF %>% filter(!is.na(Kappa))
+kappaStatDF <- kappaStatDF %>%
+  group_by(Variable) %>%
+  mutate(ValueNumber = as.integer(factor(Value))) %>%
+  mutate(ValueNumber = ifelse(is.na(ValueNumber), 1, ValueNumber))
+kappaStatDF
+
+
+# plot
+require(ggplot2)
+
+ggplot(kappaStatDF, aes(x = ValueNumber, y = Variable, fill = Kappa, label = Variable))+
+  geom_tile()+
+  geom_text()
+
+kappaStatDF <- kappaStatDF %>% arrange(Kappa) 
+kappaStatDF$KappaOrder <- seq(1:nrow(kappaStatDF))
+
+
+require(ggrepel)
+kappaStatDF %>% filter(Kappa > 0.5) %>% mutate(Variable = factor(Variable)) %>% summary()
+
+ggplot(kappaStatDF %>% filter(Kappa > 0.5) %>% mutate(Variable = factor(Variable)), 
+       aes(x=KappaOrder, y=Kappa, fill=Variable))+
+  geom_point()+
+  geom_hline(yintercept = 0.7, col="red")+
+  geom_label_repel(aes(x=KappaOrder, y=Kappa, label = VarVal), max.overlaps = 15, size=3)+
+  scale_x_continuous(name = "Variable x value")+
+  theme(legend.position = "none")
+
+
 ```
 
 
