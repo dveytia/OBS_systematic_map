@@ -796,13 +796,18 @@ supplementalScreen2 <- cbind(
 supplementalScreen2$sysrev_id <- rep(NA, nrow(supplementalScreen2))
 sum(is.na(supplementalScreen2$sample_screen))
 length(unique(supplementalScreen2$duplicate_id)) == length(supplementalScreen2$duplicate_id)
+
+# check titles match
+left_join(supplementalScreen2, dedup_sub, by= "analysis_id") %>% 
+  select(analysis_id, duplicate_id.x, duplicate_id.y, title.x, title.y) %>% View()
 ```
 
 ```{r join intitial and supplemental screens together into allScreens}
 ## Join both data frames together
-cols <- intersect(colnames(supplementalScreen2), colnames(codingScreen))
-cols <- cols[order(cols)]
-cols <- cols[c(2,3,9,6,7,8,4,10,1,5)] # re-order so its more sensible
+# cols <- intersect(colnames(supplementalScreen2), colnames(codingScreen))
+# cols <- cols[order(cols)]
+# cols <- cols[c(2,3,9,6,7,8,4,10,1,5)] # re-order so its more sensible
+cols <- c("analysis_id","duplicate_id","sysrev_id","reviewer","reviewer_2","sample_screen","include_screen","title","abstract","keywords")
 allScreens <- rbind(
   supplementalScreen2[,cols], codingScreen[,cols]
 )
@@ -813,7 +818,8 @@ allScreens$reviewer_2 <- as.factor(allScreens$reviewer_2)
 allScreens$sample_screen <- as.factor(allScreens$sample_screen)
 summary(allScreens)
 
-
+# check for duplicates
+anyDuplicated(allScreens$duplicate_id)
 ```
 
 
@@ -824,8 +830,7 @@ summary(allScreens)
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                       here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                  create=FALSE)
-codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables")
-codebookCombinedSimplified <- codebookCombinedSimplified %>% collect()
+codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables")  %>% collect()
 
 RSQLite::dbDisconnect(all_db)
 
@@ -840,7 +845,7 @@ which(allScreens$duplicate_id[which(allScreens$include_screen == FALSE)]
 # are there any inclusions NOT coded?
 ind <- which(!(allScreens$duplicate_id[which(allScreens$include_screen == TRUE)] 
                %in% codebookCombinedSimplified$duplicate_id))
-
+length(ind) 
 # if so, filter out
 if(length(ind) > 0){
   allScreens <- subset(allScreens, duplicate_id != allScreens$duplicate_id[which(allScreens$include_screen == TRUE)][ind])
@@ -851,29 +856,35 @@ if(length(ind) > 0){
 ## Do they match up by the different ids?
 testMerge <- merge(allScreens, codebookCombinedSimplified, by = "duplicate_id", all.x = FALSE, all.y = TRUE)
 sum(is.na(testMerge$include_screen))
+nrow(testMerge) == nrow(codebookCombinedSimplified) # make sure they all have a match
 
 testMerge2 <- merge(allScreens, codebookCombinedSimplified, by = "analysis_id", all.x = FALSE, all.y = TRUE)
 sum(is.na(testMerge2$include_screen))
+nrow(testMerge2) == nrow(codebookCombinedSimplified) # make sure they all have a match
 
 dupids <- testMerge2$duplicate_id.y[which(is.na(testMerge2$include_screen))]
 
-View(testMerge2[which(is.na(testMerge2$include_screen)),c(1,10:13)])
-View(testMerge[which(testMerge$duplicate_id %in% dupids),c(1:15)])
+# View to check the titles correspond
+testMerge2 %>% select(analysis_id, duplicate_id.x, duplicate_id.y, title.x, title.y) %>% View
 
-# reassign so that they match 
-testMerge <- allScreens
-matches <- match(allScreens$duplicate_id, codebookCombinedSimplified$duplicate_id)
-matches <- matches[!is.na(matches)]
-testMerge$analysis_id[matches] <- codebookCombinedSimplified$analysis_id[matches]
-# check first -- yes
-testMerge3 <- merge(testMerge, codebookCombinedSimplified, by = "analysis_id", all.x = FALSE, all.y = TRUE)
-sum(is.na(testMerge3$include_screen))
+# if there are some id's that don't have a match, investigate...
+if(length(dupids)>0){
+  View(testMerge2[which(is.na(testMerge2$include_screen)),c(1,10:13)])
+  View(testMerge[which(testMerge$duplicate_id %in% dupids),c(1:15)])
+}
 
 
-# re-assign
-allScreens <- testMerge
+# # reassign so that they match 
+# testMerge <- allScreens
+# matches <- match(allScreens$duplicate_id, codebookCombinedSimplified$duplicate_id)
+# matches <- matches[!is.na(matches)]
+# testMerge$analysis_id[matches] <- codebookCombinedSimplified$analysis_id[matches]
+# # check first -- yes
+# testMerge3 <- merge(testMerge, codebookCombinedSimplified, by = "analysis_id", all.x = FALSE, all.y = TRUE)
+# sum(is.na(testMerge3$include_screen))
+# allScreens <- testMerge
 
-rm(testMerge, testMerge2, testMerge3)
+rm(testMerge, testMerge2)
 ```
 
 
@@ -919,12 +930,12 @@ screen_effort_summary <- allScreens %>%
   )
 screen_effort_summary
 #     DV JGP  AC  LB  YS FV
-# 1 1522 231 334 411 456 46
+# 1 1521 231 334 411 456 46
 
 screen_effort_summary <- reshape2::melt(screen_effort_summary)
 
-mean(screen_effort_summary$value) # 500
-sd(screen_effort_summary$value) # 521.6079
+mean(screen_effort_summary$value) # 499.8333
+sd(screen_effort_summary$value) # 521.216
 median(screen_effort_summary$value) # 372.5
 
 rm(screen_effort_summary)
@@ -947,12 +958,12 @@ code_effort_summary <- allScreens %>%
   )
 code_effort_summary
 #    DV JGP AC LB YS FV
-# 1 655  31 93 81 33 42
+# 1 657  31 93 81 33 42
 
 code_effort_summary <- reshape2::melt(code_effort_summary)
 
-mean(code_effort_summary$value) # 155.8333
-sd(code_effort_summary$value) # 245.9044
+mean(code_effort_summary$value) # 156.1667
+sd(code_effort_summary$value) # 246.7164
 median(code_effort_summary$value) # 61.5
 
 rm(code_effort_summary)
@@ -976,12 +987,10 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 #src_dbi(all_db)
 
 # combined screening table
-allScreens <- tbl(all_db, "allScreen_afterCoding")
-allScreens <- allScreens %>% collect()
+allScreens <- tbl(all_db, "allScreen_afterCoding") %>% collect()
 
 # coding decisions
-codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables")
-codebookCombinedSimplified <- codebookCombinedSimplified %>% collect()
+codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables") %>% collect()
 
 RSQLite::dbDisconnect(all_db)
 
@@ -995,7 +1004,7 @@ testMerge <- allScreens %>%
             by = "analysis_id")
 summary(testMerge)
 View(testMerge)
-
+nrow(testMerge) == nrow(codebookCombinedSimplified)
 
 
 ## for the inclusions, indicate which ORO branch it is
