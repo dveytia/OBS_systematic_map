@@ -638,27 +638,36 @@ codingScreen <- rbind(codingScreen, codingScreen0)
 rm(codingScreen0)
 codingScreen <- codingScreen %>%
   rename(reviewer = coder_1, reviewer_2 = coder_2, include_screen = include_code) %>%
-  select(sysrev_id, reviewer, reviewer_2, include_screen)
+  select(sysrev_id, reviewer, reviewer_2, include_screen, title)
 
 
-## Screening results from initial round
+## Add with exclusions from initial screening round
 # now in screen results merged, remove articles that were in the coding screen, 
 # so that it is just composed of entries that were excluded from the screening round 
 # and never made it to coding
-load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData")) # screen_results_merged
+
+# load screen_results_merged
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData")) 
+# subset to those that weren't evaluated during coding (exclusions)
 initialScreen <- subset(screen_results_merged, !(sysrev_id %in% c(codingScreen$sysrev_id)))
+# format column names
 initialScreen <- screen_results_merged %>%
   filter(!(sysrev_id %in% codingScreen$sysrev_id)) %>%
   rename(reviewer = screener) %>%
   mutate(reviewer_2 = as.character(Double_Blind)) %>%
-  select(sysrev_id, reviewer, reviewer_2, include_screen, sample_screen) %>%
+  select(sysrev_id, reviewer, reviewer_2, include_screen, sample_screen, title) %>%
   mutate(sample_screen = as.character(sample_screen))
 
 # need to get sample_screen from initial screening results
 codingScreen <- codingScreen %>%
-  left_join(screen_results_merged %>% select(sysrev_id, sample_screen), by = "sysrev_id") %>%
+  left_join(screen_results_merged %>% select(sysrev_id, sample_screen, title), by = "sysrev_id") %>%
   mutate(sample_screen = as.character(sample_screen))
 
+# check title.x and title.y match before re-assigning title
+# View(codingScreen)
+codingScreen <- codingScreen %>%
+  rename(title = title.x) %>%
+  select(-c(title.y))
 
 
 ## join inital coding results with initial screening and get metadata
@@ -674,9 +683,20 @@ sysrevIDLookup <- tbl(all_db, "sysrevid_2_analysisid_lookup")
 
 dedups <- tbl(all_db,"uniquerefs")
 
+RSQLite::dbDisconnect(all_db)
+
+codingScreen.test <- codingScreen %>%
+  left_join(sysrevIDLookup %>% select(sysrev_id, duplicate_id, title.x), by="sysrev_id", copy=TRUE) %>%
+  left_join(dedups %>% select(duplicate_id, analysis_id, title, abstract, keywords), by = "duplicate_id", copy=TRUE)
+
+# Check all titles match
+View(codingScreen.test)
+codingScreen <- codingScreen.test
+# delete redundant titles
 codingScreen <- codingScreen %>%
-  left_join(sysrevIDLookup %>% select(sysrev_id, analysis_id, duplicate_id), by="sysrev_id", copy=TRUE) %>%
-  left_join(dedups %>% select(duplicate_id, title, abstract, keywords), by = "duplicate_id", copy=TRUE)
+  rename(title = title.y) %>% 
+  select(-c(title.x, title.x.x))
+
 
 # format columns
 codingScreen$include_screen <- codingScreen$include_screen == 1
@@ -966,6 +986,18 @@ codebookCombinedSimplified <- codebookCombinedSimplified %>% collect()
 RSQLite::dbDisconnect(all_db)
 
 
+# check that the two datasets line up
+testMerge <- allScreens %>%
+  select(analysis_id, duplicate_id, title, 
+         sample_screen, include_screen) %>%
+  right_join(codebookCombinedSimplified %>% 
+              select(analysis_id, duplicate_id, title),
+            by = "analysis_id")
+summary(testMerge)
+View(testMerge)
+
+
+
 ## for the inclusions, indicate which ORO branch it is
 allScreens2 <- allScreens %>%
   select(sysrev_id, analysis_id, duplicate_id, reviewer, reviewer_2, title, abstract, keywords, 
@@ -1000,6 +1032,18 @@ write.table(
 )
 
 ```
+
+# Checks
+
+```{r check that the dataframes match up}
+
+
+
+
+
+```
+
+
 
 
 # Junk
