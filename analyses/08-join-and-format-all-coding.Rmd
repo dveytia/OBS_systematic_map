@@ -124,7 +124,7 @@ kappaStatDF <- kappaStatDF %>%
   group_by(Variable) %>%
   mutate(ValueNumber = as.integer(factor(Value))) %>%
   mutate(ValueNumber = ifelse(is.na(ValueNumber), 1, ValueNumber))
-kappaStatDF
+
 
 
 # plot
@@ -134,20 +134,29 @@ ggplot(kappaStatDF, aes(x = ValueNumber, y = Variable, fill = Kappa, label = Var
   geom_tile()+
   geom_text()
 
+
+
+require(dplyr)
+require(ggrepel)
+
 kappaStatDF <- kappaStatDF %>% arrange(Kappa) 
 kappaStatDF$KappaOrder <- seq(1:nrow(kappaStatDF))
-
-
-require(ggrepel)
-kappaStatDF %>% filter(Kappa > 0.5) %>% mutate(Variable = factor(Variable)) %>% summary()
 
 ggplot(kappaStatDF %>% filter(Kappa > 0.5) %>% mutate(Variable = factor(Variable)), 
        aes(x=KappaOrder, y=Kappa, fill=Variable))+
   geom_point()+
-  geom_hline(yintercept = 0.7, col="red")+
+  geom_hline(yintercept = 0.6, col="red")+
   geom_label_repel(aes(x=KappaOrder, y=Kappa, label = VarVal), max.overlaps = 15, size=3)+
   scale_x_continuous(name = "Variable x value")+
   theme(legend.position = "none")
+
+sink(here::here("outputs","coding","coding_FleissKappa.txt"))
+print(kappaStatDF$VarVal[order(kappaStatDF$Kappa, decreasing = TRUE)])
+sink()
+
+kappaStatDF %>%
+  filter(Variable == "oro_type") %>%
+  select(Value, Kappa)
 
 
 ```
