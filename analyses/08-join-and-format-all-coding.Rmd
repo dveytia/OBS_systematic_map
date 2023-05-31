@@ -106,7 +106,7 @@ for(f in 1:length(set0Files)){
 save(responseArray, file=file.path(set0Dir, "responseArray.RData"))
 ```
 
-```{r calculate kappa statistic}
+```{r calculate kappa statistic for each variable x value}
 load(file.path(set0Dir, "responseArray.RData"))
 
 # calculate
@@ -157,6 +157,106 @@ sink()
 kappaStatDF %>%
   filter(Variable == "oro_type") %>%
   select(Value, Kappa)
+
+
+```
+
+However, it is difficult to quantify the kappa for multiple choice variables, so instead look at the each variable, and test how many coders agreed on at least one value. 
+
+```{r kappa for at least one value agreement per variable}
+# load in array of responses
+load(file.path(set0Dir, "responseArray.RData"))
+
+# for the array of responses, find the most common answer for each variable.
+
+# list all the variables
+variableValues <- dimnames(responseArray)[[2]]
+values <- unlist(lapply(strsplit(variableValues, "[.]"), function(x) x[2]))
+values[is.na(values)] <- variableValues[is.na(values)]
+variables <- unlist(lapply(strsplit(variableValues, "[.]"), function(x) x[1]))
+variables <- unique(variables)
+variables <- variables[which(!(variables %in% c("sysrev_id","title","year","coder_1","coder_2","include_code")))]
+
+# change the 1 in the data frame to the name of the value
+temp <- responseArray
+for(j in 1:dim(temp)[2]){
+    for(s in 1:dim(temp)[3])
+      temp[,j,s] <- ifelse(temp[,j,s] == 1, values[j], NA)
+}
+View(temp[,,1])
+
+
+
+
+## functions to calculate agreement to the most common response   
+
+# returns 1 if there is any agreement between a vector and the common response
+agreeFn <- function(y, commonResponse){
+  agreements <- intersect(commonResponse, y)
+  if(1 <= length(agreements)){
+    return(1)
+  }else{
+    0
+  }
+}
+
+# assesses whether each value in a string == its most common match
+mostCommonFn <- function(x){
+  #x2 <- x[!is.na(x)]
+  x2 <- x
+  # if(length(x2) == 0){ # if all NA
+  #   out <- rep(1, ncol(x)) # set to agreement because they all agreed that it was not present
+  # }else{
+    responseTab <- table(data.frame(factor(x2)))
+    maxTab <- responseTab[which.max(responseTab)]
+    nMax <- which(responseTab == maxTab)
+    commonResponse <- names(nMax)
+    out <- apply(x2, 2, agreeFn, commonResponse = commonResponse)
+    
+    
+  #}
+  
+  return(out)
+}
+
+
+
+## for each variable and publication, find the most common response
+# empty data frame to store results
+kappaResults <- data.frame(
+  variable = variables,
+  kappaValue = rep(NA, length(variables)),
+  kappaPValue = rep(NA,length(variables))
+)
+
+# Loop through the variables
+for(v in 1:length(variables)){
+  # which columns hold value responses for a given variable
+  temp2 <- temp[,grep(variables[v],variableValues),]
+  #temp2[is.na(temp2)] <- "0" # NA is still a choice, so change to 0 so that it doesn't get removed
+  dim(temp2)
+  
+  # for each coder, assess whether they agreed with the common response
+  if(length(dim(temp2)) == 2){
+    agreement <- temp2
+    agreement[is.na(agreement)] <- "No"
+    
+  }else{
+    agreement <- t(apply(temp2, c(1), mostCommonFn))
+  }
+  dim(agreement) # should be 20 x 6 (n articles x n coders)
+  View(agreement)
+
+  # calculate the kappa statistic
+  kappa <- irr::kappam.fleiss(agreement)
+  kappaResults$kappaValue[v] <- kappa$value
+  kappaResults$kappaPValue[v] <- kappa$p.value
+
+}
+View(kappaResults)
+
+# see if there is a way to remove an outlier? e.g rev 2 for v = 6
+
 
 
 ```
