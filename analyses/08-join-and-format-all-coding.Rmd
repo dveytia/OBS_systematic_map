@@ -164,6 +164,12 @@ kappaStatDF %>%
 However, it is difficult to quantify the kappa for multiple choice variables, so instead look at the each variable, and test how many coders agreed on at least one value. 
 
 ```{r kappa for at least one value agreement per variable}
+# required packages
+require(dplyr)
+require(ggplot2)
+require(ggrepel)
+
+
 # load in array of responses
 load(file.path(set0Dir, "responseArray.RData"))
 
@@ -177,13 +183,12 @@ variables <- unlist(lapply(strsplit(variableValues, "[.]"), function(x) x[1]))
 variables <- unique(variables)
 variables <- variables[which(!(variables %in% c("sysrev_id","title","year","coder_1","coder_2","include_code")))]
 
-# change the 1 in the data frame to the name of the value
+# change the "1" in the data frame to the name of the value
 temp <- responseArray
 for(j in 1:dim(temp)[2]){
     for(s in 1:dim(temp)[3])
       temp[,j,s] <- ifelse(temp[,j,s] == 1, values[j], NA)
 }
-View(temp[,,1])
 
 
 
@@ -226,7 +231,10 @@ mostCommonFn <- function(x){
 kappaResults <- data.frame(
   variable = variables,
   kappaValue = rep(NA, length(variables)),
-  kappaPValue = rep(NA,length(variables))
+  kappaPValue = rep(NA,length(variables)),
+  kappaOutlierRmValue = rep(NA,length(variables)),
+  kappaOutlierRmPValue = rep(NA,length(variables)),
+  OutlierID = rep(NA,length(variables))
 )
 
 # Loop through the variables
@@ -239,24 +247,102 @@ for(v in 1:length(variables)){
   # for each coder, assess whether they agreed with the common response
   if(length(dim(temp2)) == 2){
     agreement <- temp2
-    agreement[is.na(agreement)] <- "No"
-    
+    agreement[!is.na(agreement)] <- 1
+    agreement[is.na(agreement)] <- 0
   }else{
     agreement <- t(apply(temp2, c(1), mostCommonFn))
   }
   dim(agreement) # should be 20 x 6 (n articles x n coders)
-  View(agreement)
 
   # calculate the kappa statistic
   kappa <- irr::kappam.fleiss(agreement)
   kappaResults$kappaValue[v] <- kappa$value
   kappaResults$kappaPValue[v] <- kappa$p.value
+  
+  if(sum(is.na(agreement)) == length(agreement) |
+     length(unique(c(agreement))) == 1){next}
+  
+  # also remove outliers using clustering
+  # fit two clusters, and determine if there is an outlier if one cluster only has one member
+  x <-kmeans(dist(t(agreement)), 2)
+  x$cluster
+  
+  if(min(table(x$cluster)) == 1){ # if there is one reviewer in a cluster (outlier)
+    clust <- names(which.min(table(x$cluster)))
+    outlier <- which(x$cluster == names(which.min(table(x$cluster))))
+    kappa <- irr::kappam.fleiss(agreement[,-outlier])
+    kappaResults$kappaOutlierRmValue[v] <- kappa$value
+    kappaResults$kappaOutlierRmPValue[v] <- kappa$p.value
+    kappaResults$OutlierID[v] <- outlier
+  }
+  
 
 }
-View(kappaResults)
 
-# see if there is a way to remove an outlier? e.g rev 2 for v = 6
 
+reviewIDs <- c(AC = 1, FV = 2, LB = 3, DV = 4, JP = 5, YS=6)
+kappaResults$OutlierID <- names(reviewIDs)[match(kappaResults$OutlierID, reviewIDs)]
+
+
+
+
+## PLOTS
+
+
+# plot the change in removing the outlier
+kappaResults %>%
+  filter(!is.na(kappaOutlierRmValue)) %>%
+  select(variable, kappaValue, kappaOutlierRmValue, OutlierID) %>% 
+  ggplot() + # aes(variable, Fleiss_Kappa, col = Method)
+  geom_segment(aes(x=variable, y=kappaValue, xend = variable, yend = kappaOutlierRmValue),
+               arrow = arrow(length = unit(0.25, "cm"))) +
+  geom_text_repel(aes(x=variable, y= kappaValue, label = OutlierID))+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust=1)
+  )
+
+
+# Plot the kappa values for each variable
+kappaResults$variableGroup <- c(
+  rep("Intervention", 5),
+  rep("Method", 7),
+  rep("Outcome", 7),
+  rep("Outcome Dimension", 8),
+  rep("Additional", 5)
+)
+kappaResults$variableGroup <- factor(kappaResults$variableGroup,
+                                     levels = rev(c(
+                                       "Intervention","Method",
+                                       "Outcome","Outcome Dimension", "Additional"
+                                     )))
+kappaResults <- kappaResults %>%
+  group_by(variableGroup)%>%
+  mutate(groupNumber = row_number())
+
+kappaResults$variableNames <- lapply(strsplit(kappaResults$variable,"_"), paste, collapse = " ")
+
+
+
+ggplot(kappaResults, 
+       aes(groupNumber, variableGroup, 
+           label = stringr::str_wrap(variableNames, width=5), 
+           fill = kappaValue))+
+  geom_tile()+
+  geom_text()+
+  scale_fill_distiller(palette = "RdBu", limits = c(-1, 1.6))
+
+
+# plot as a cumulative graph
+kappaResults <- kappaResults %>% arrange(kappaValue) 
+kappaResults$KappaOrder <- seq(1:nrow(kappaResults))
+
+kappaResults %>% 
+  ggplot(aes(x=KappaOrder, y=kappaValue, fill=variableGroup, label = variable))+
+  geom_point()+
+  geom_hline(yintercept = 0.6, col="red")+
+  geom_label_repel(max.overlaps = 15, size=3)+
+  scale_x_continuous(name = "Variable x value")+
+  theme(legend.position = "none")
 
 
 ```
