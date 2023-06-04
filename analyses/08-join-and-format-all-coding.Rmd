@@ -426,29 +426,8 @@ kappaResults %>%
 
 ```{r try Kramer 1980 kappa designed for multiple choice responses}
 
-# choose simple variable which should have good level of agreement -- oro_branch
-temp2 <- temp[,grep("oro_branch", dimnames(temp)[[2]]),]
-dim(temp2)
-temp2[is.na(temp2)] <- "No"
-
-
-  
-# which rows (articles) have an exclusion? set to NA
-excl <- which(responseArray[,"include_code",] == "0", arr.ind = TRUE)
-# coders who excluded an article -- set all other responses to NA
-for(i in 1:nrow(excl)){
-  temp2[excl[i,1],,excl[i,2]] <- NA # all the variables coded for that article x coder
-}
-
-temp2[1,,]
-
-# subset further into only inclusions (no NA)?
-
-
-
-
-
-## Calculate kappa statistic for all the variables
+## Calculate kappa statistic for all the variables 
+# kappa calculation method changes depending on whether the variable is multiple choice
 
 # Function to calculate multiple choice version of kappa statistic
 source(here::here("R/kramerKappa.R"))
@@ -459,11 +438,14 @@ source(here::here("R/kramerKappa.R"))
 kappaResults <- data.frame(
   variable = variables,
   kappaValue = rep(NA, length(variables)),
-  kappaPValue = rep(NA,length(variables)),
+  kappaExclusionRmValue = rep(NA, length(variables)),
   kappaOutlierRmValue = rep(NA,length(variables)),
-  kappaOutlierRmPValue = rep(NA,length(variables)),
+  kappaMethod = rep(NA,length(variables)),
   OutlierID = rep(NA,length(variables))
 )
+
+# which rows (articles) have an exclusion at the screening stage?
+excl <- which(responseArray[,"include_code",] == "0", arr.ind = TRUE)
 
 
 # Loop through all the variables
@@ -471,60 +453,150 @@ for(v in 1:length(variables)){
   # which columns hold value responses for a given variable
   temp2 <- temp[,variableValues[grep(variables[v],variableValues)],]
   temp2[is.na(temp2)] <- "No" # NA is still a choice, so change from an NA so it doesn't get removed
-  dim(temp2)
   
-  
-  # which rows (articles) have an exclusion? set to NA
-  #excl <- which(responseArray[,"include_code",] == "0", arr.ind = TRUE)
   
   # If the variable is only one option (y/n), then a regular kappa test applies
   if(length(dim(temp2)) == 2){
     
-    # # coders who excluded an article -- set all other responses to NA
-    # for(i in 1:nrow(excl)){
-    #   temp2[excl[i,1],excl[i,2]] <- NA # all the variables coded for that article x coder
-    # }
+    kappaResults$kappaMethod[v] <- "Fleiss' Kappa"
     
+    # first calculate regular kappa
     kappa <- irr::kappam.fleiss(temp2)
     kappaResults$kappaValue[v] <- kappa$value
-    kappaResults$kappaMethod[v] <- "Fleiss' Kappa"
+    
+    # then calculate kappa without exclusions
+    # because the kappa statistic runs with an na.omit, 
+    # equivalent to removing all rows with an NA
+    # coders who excluded an article -- set all other responses to NA
+    for(i in 1:nrow(excl)){
+      temp2[excl[i,1],excl[i,2]] <- NA # all the variables coded for that article x coder
+    }
+    
+    kappa <- irr::kappam.fleiss(temp2)
+    kappaResults$kappaExclusionRmValue[v] <- kappa$value
+    
+    # then calculate kappa without outlier reviewers (if present)
+    temp2Mat <- ifelse(temp2 == "No" | is.na(temp2), 0, 1) #change to numeric so dist can be calc
+    if(1 < length(unique(c(temp2Mat)))){
+       x <- kmeans(dist(t(temp2Mat)),2)
+       # if there is one reviewer in a cluster (outlier)
+       if(min(table(x$cluster)) == 1){ 
+         clust <- names(which.min(table(x$cluster)))
+         outlier <- which(x$cluster == names(which.min(table(x$cluster))))
+         kappa <- irr::kappam.fleiss(temp2[,-outlier])
+         kappaResults$kappaOutlierRmValue[v] <- kappa$value
+         kappaResults$OutlierID[v] <- outlier
+      }
+    } # end calculating kappa for outliers
+   
     
   }else{
     
-    # # coders who excluded an article -- set all other responses to NA
-    # for(i in 1:nrow(excl)){
-    #   temp2[excl[i,1],,excl[i,2]] <- NA # all the variables coded for that article x coder
-    # }
+    # If the variable has multiple choice, then use the Kramer (1980) method
+    kappaResults$kappaMethod[v] <- "Kramer (1980)"
     
+    # first calculate with all articles, just setting individual responses to NA
+    # # coders who excluded an article -- set all other responses to NA
+    for(i in 1:nrow(excl)){
+      temp2[excl[i,1],,excl[i,2]] <- NA # all the variables coded for that article x coder
+    }
     kappa <- kramerKappa(temp2)  
-   kappaResults$kappaValue[v] <- kappa
-   kappaResults$kappaMethod[v] <- "Kramer (1980)"
-  }
-  
-  
-  # if(sum(is.na(agreement)) == length(agreement) |
-  #    length(unique(c(agreement))) == 1){next}
-  
-  # # also remove outliers using clustering
-  # # fit two clusters, and determine if there is an outlier if one cluster only has one member
-  # agreement[is.na(agreement)] <- 0
-  # x <-kmeans(dist(t(agreement)), 2)
-  # x$cluster
-  # 
-  # if(min(table(x$cluster)) == 1){ # if there is one reviewer in a cluster (outlier)
-  #   clust <- names(which.min(table(x$cluster)))
-  #   outlier <- which(x$cluster == names(which.min(table(x$cluster))))
-  #   kappa <- irr::kappam.fleiss(agreement[,-outlier])
-  #   kappaResults$kappaOutlierRmValue[v] <- kappa$value
-  #   kappaResults$kappaOutlierRmPValue[v] <- kappa$p.value
-  #   kappaResults$OutlierID[v] <- outlier
-  # }
-  # 
+    kappaResults$kappaValue[v] <- kappa
+   
+   
+    # remove articles with disagreement in screening entirely
+   kappa <- kramerKappa(temp2[-unique(excl[,1]),,]) 
+   kappaResults$kappaExclusionRmValue[v] <- kappa
+   
+   
+   # then calculate kappa without outlier reviewers (if present)
+   temp2melt <- reshape2::melt(temp2, varnames = c("article","variable","reviewer"))
+   temp2melt$value[temp2melt$value == "No"] <- NA
+   temp2melt$value <- ifelse(is.na(temp2melt$value), 0,1)
+   temp2Mat <- reshape2::acast(temp2melt, reviewer~variable, sum)
+   x <- kmeans(dist(temp2Mat),2)
+   
+   
+    if(min(table(x$cluster)) == 1){ # if there is one reviewer in a cluster (outlier)
+       clust <- names(which.min(table(x$cluster)))
+       outlier <- which(x$cluster == names(which.min(table(x$cluster))))
+       kappa <- kramerKappa(temp2[,,-outlier])
+       kappaResults$kappaOutlierRmValue[v] <- kappa
+       kappaResults$OutlierID[v] <- outlier
+    }
+   
+  } # end of multiple choice variables
 
-}
+} # end of loop
 
+reviewIDs <- c(AC = 1, FV = 2, LB = 3, DV = 4, JP = 5, YS=6)
+kappaResults$OutlierID <- names(reviewIDs)[match(kappaResults$OutlierID, reviewIDs)]
+
+
+
+
+
+## PLOTS ------------------
+
+# get a quick idea of what the kappa values are like
 hist(kappaResults$kappaValue, breaks = seq(-0.2,1, by=0.1))
 
+
+# plot the change in removing the outlier
+kappaResults %>%
+  filter(!is.na(kappaOutlierRmValue)) %>%
+  select(variable, kappaValue, kappaOutlierRmValue, OutlierID) %>% 
+  ggplot() + # aes(variable, Fleiss_Kappa, col = Method)
+  geom_segment(aes(x=variable, y=kappaValue, xend = variable, yend = kappaOutlierRmValue),
+               arrow = arrow(length = unit(0.25, "cm"))) +
+  geom_text_repel(aes(x=variable, y= kappaValue, label = OutlierID))+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust=1)
+  )
+
+
+# Plot the kappa values for each variable
+kappaResults$variableGroup <- c(
+  rep("Intervention", 5),
+  rep("Method", 7),
+  rep("Outcome", 7),
+  rep("Outcome Dimension", 8),
+  rep("Additional", 5),
+  "Intervention" # add at the end for oro_branch
+)
+kappaResults$variableGroup <- factor(kappaResults$variableGroup,
+                                     levels = rev(c(
+                                       "Intervention","Method",
+                                       "Outcome","Outcome Dimension", "Additional"
+                                     )))
+kappaResults <- kappaResults %>%
+  group_by(variableGroup)%>%
+  mutate(groupNumber = row_number())
+
+kappaResults$variableNames <- lapply(strsplit(kappaResults$variable,"_"), paste, collapse = " ")
+
+lims <- c(min(kappaResults$kappaValue, na.rm=T), (2*0.6)-min(kappaResults$kappaValue, na.rm=T))
+
+ggplot(kappaResults, 
+       aes(groupNumber, variableGroup, 
+           label = stringr::str_wrap(variableNames, width=5), 
+           fill = kappaValue))+
+  geom_tile()+
+  geom_text()+
+  scale_fill_distiller(palette = "RdBu", limits = lims)
+
+
+# plot as a cumulative graph
+kappaResults <- kappaResults %>% arrange(kappaValue) 
+kappaResults$KappaOrder <- seq(1:nrow(kappaResults))
+
+kappaResults %>% 
+  ggplot(aes(x=KappaOrder, y=kappaValue, fill=variableGroup, label = variable))+
+  geom_point()+
+  geom_hline(yintercept = 0.6, col="red")+
+  geom_label_repel(max.overlaps = 25, size=3)+
+  scale_x_continuous(name = "Variable x value")+
+  theme(legend.position = "none")
 
 
 ```

@@ -53,9 +53,19 @@ kramerKappa <- function (ratings){
     # }
     # Si <- sum(Si)
     
+    # but when all answers are the same there is no variance, so numerator -> 0
+    # to solve this, if the variance is zero, set to very small
+    if(Si ==0){
+      Si <- 1e-5
+    }
     
     # coefficient of concordance for the mi rankings of subject i
     Wi[i] <- 12*(nc-1)*Si/((nc^3)-nc-Ti[i]) 
+    
+    # if an infinite value returned, set to the max of 1
+    if(is.infinite(Wi[i])){
+      Wi[i] <- 1
+    }
     
     
     # source(here::here("R/kendallModified.R"))
@@ -71,30 +81,26 @@ kramerKappa <- function (ratings){
   } # end of looping through all the subjects
   
   
-  # now calculate overall metrics
   
+  ## now calculate overall metrics
+
   # Overall average rank of category j
   Rj <- apply(Rij, 2, mean)
-  
   # Weighted average of the Ti
   weightedTi <- Ti
   for(i in 1:length(Ti)){
     weightedTi[i] <- mi[i]*Ti[i]/sum(mi) 
   }
   weightedTi <- sum(weightedTi)
-  
-  
   # Sample variane of Rj
   St <- var(Rj)
-  
   # overall coefficient of concordance
   WT <- 12*(nc-1)*St/((nc^3)-nc-weightedTj)
-  
   # overall rT
   rT <- ((sum(mi)*WT)-1)/(sum(mi)-1)
-  
   # K0
-  k0 <- (mean(ri)-rT)/(1-rT)
+  k0 <- (mean(ri, na.rm=T)-rT)/(1-rT)
+    
   
   return(k0)
   
