@@ -388,32 +388,37 @@ kappaResults %>%
 
 
 ```{r explore why Fleiss kappa is returning negative results}
-irr::kappam.fleiss(agreement)
-  irr::kappam.fleiss(na.omit(agreement)) # same
-  
-  # test the kappa fleiss calculations
-  data("diagnoses", package = "irr")
-  irr::kappam.fleiss(diagnoses[1:3,1:3])
-  test <- diagnoses[1:3,1:3]
-  test[3,2] <- "2. Personality Disorder"
-  test[3,3] <- test[1,1]
-  test[1,] <- test[2,]
-  irr::kappam.fleiss(test)
-  irr::kappam.fleiss(test, detail=T)
-  
-  irr::kappa2(diagnoses[,2:3])
-  
-  
-  
+
+  # create dummy dataframe with lots of agreement of one outcome
   test <- matrix(sample(as.character(c(rep("Yes", 83), rep("No", 1)))),
                  nrow=14, ncol=6)
   colnames(test) <- paste0("rater", 1:6)
+  rownames(test) <- paste0("article", 1:14)
   test <- as.data.frame(test)
   for(c in 1:ncol(test)){
     test[,c]<- factor(test[,c], levels = c("Yes","No"))
   }
   
-  print(test)
+  View(test)
+  irr::kappam.fleiss(test)
+  
+  
+  
+  # create dummy dataframe with agreement but more balanced examples of the two outcomes
+  test <- rbind(
+    matrix(sample(as.character(c(rep("Yes", 41), rep("No", 1)))),
+                 nrow=7, ncol=6),
+    matrix(sample(as.character(c(rep("No", 41), rep("Yes", 1)))),
+                 nrow=7, ncol=6)
+  )
+  colnames(test) <- paste0("rater", 1:6)
+  rownames(test) <- paste0("article", 1:14)
+  test <- as.data.frame(test)
+  for(c in 1:ncol(test)){
+    test[,c]<- factor(test[,c], levels = c("Yes","No"))
+  }
+  
+  View(test)
   irr::kappam.fleiss(test)
 
 ```
