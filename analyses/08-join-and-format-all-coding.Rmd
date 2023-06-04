@@ -163,7 +163,7 @@ kappaStatDF %>%
 
 However, it is difficult to quantify the kappa for multiple choice variables, so instead look at the each variable, and test how many coders agreed on at least one value. 
 
-```{r kappa for at least one value agreement per variable}
+```{r format response Array for calculating kappa on multiple choice}
 # required packages
 require(dplyr)
 require(ggplot2)
@@ -175,67 +175,9 @@ load(file.path(set0Dir, "responseArray.RData"))
 
 
 # create new variable: oro_branch
-
-oroBranchArray <- array(dim=c(dim(responseArray)[1], 3, dim(responseArray)[3]),
-                        dimnames = list(publication=NULL, 
-                                        variableValues = paste("oro_branch", 
-                                                         c("Mitigation", "Nature","Societal"),
-                                                         sep="."),
-                                        coder = NULL))
-# x is a matrix with n pubs x n variables
-oroBranchFn <- function(x){
-  
-  x2 <- as.numeric(x)
-  x2 <- matrix(x2, nrow=nrow(x), ncol=ncol(x),
-               dimnames = dimnames(x))
-  x <- x2; rm(x2)
-  
-  out <- array(dim=c(dim(x)[1], 4),
-                     dimnames = list(publication=NULL,
-                                     variableValues = paste("oro_branch", 
-                                                         c("Mitigation", "Nature",
-                                                           "Societal","Unclear"),
-                                                         sep=".")))
-  
-  x2 <- x[,c("oro_type.M_Renewables","oro_type.M_Increase_efficiency",
-                "oro_type.M_CO2_removal_or_storage")]
-  if(sum(is.na(x2)) == length(c(x2))){
-    out[,"oro_branch.Mitigation"] <- rep(0, nrow(x2))
-  }else{
-    out[,"oro_branch.Mitigation"] <- rowSums(x2, na.rm = TRUE)
-  }
-  
-  
-  x2 <- x[,c("oro_type.N_Human_assisted_evolution","oro_type.N_Protection",
-                "oro_type.N_Restoration")]
-  if(sum(is.na(x2)) == length(c(x2))){
-    out[,"oro_branch.Nature"] <- rep(0, nrow(x2))
-  }else{
-    out[,"oro_branch.Nature"] <- rowSums(x2, na.rm = TRUE)
-  }
-  
-  
-  x2 <- x[,c("oro_type.SA_Built_infrastructure_and_technology","oro_type.SA_Socioinstitutional")]
-  if(sum(is.na(x2)) == length(c(x2))){
-    out[,"oro_branch.Societal"] <- rep(0, nrow(x2))
-  }else{
-    out[,"oro_branch.Societal"] <- rowSums(x2, na.rm = TRUE)
-  }
-  
-  
-  out[,"oro_branch.Unclear"] <- x[,c("oro_type.Unclear")]
-  
-
-  out[1<out] <- 1
-  out2 <- as.character(out)
-  out2 <- matrix(out2, nrow=nrow(out), ncol=ncol(out),
-               dimnames = dimnames(out))
-  out <- out2; rm(out2)
-  return(out)
-  
-}
-
-
+# function to calculate oro_branch from oro_type
+source(here::here("R","oroBranchFn.R"))
+# calculate oro_branch for each coder's response and then bind along 3rd dimension
 oroBranchArray <- do.call(abind::abind,
                           list(
                             plyr::alply(
@@ -254,47 +196,32 @@ variables <- unique(variables)
 variables <- variables[which(!(variables %in% c("sysrev_id","title","year","coder_1","coder_2","include_code")))]
 
 
-
-
-
 # change the "1" in the data frame to the name of the value so that responses can be easily tallied by name 
 temp <- abind::abind(responseArray, oroBranchArray, along = 2)
 for(j in 1:dim(temp)[2]){
     for(s in 1:dim(temp)[3])
       temp[,j,s] <- ifelse(temp[,j,s] == 1, values[j], NA)
 }
-#temp[1,6:15,] # check
+
+# check
+temp[1,6:15,] 
+
+```
 
 
-
+```{r kappa for at least one value agreement per variable}
 ## functions to calculate agreement to the most common response   
 
-# assesses whether each value in a string == its most common match
+# return the most common response(s)
 commonResponseFn <- function(x){
-  #x2 <- x[!is.na(x)]
-  # if(length(x2) == 0){ # if all NA
-  #   out <- rep(1, ncol(x)) # set to agreement because they all agreed that it was not present
-  # }else{
     responseTab <- table(data.frame(factor(x)))
     maxTab <- responseTab[which.max(responseTab)]
     nMax <- which(responseTab == maxTab)
     commonResponse <- names(nMax)
     return(commonResponse)
-    #out <- apply(x, 2, agreeFn, commonResponse = commonResponse)
-  #}
 }
 
-
 # returns 1 if there is any agreement between a vector (representing all multiple choices of one coder for a variable) and the common response (the answer(s) for that variable)
-# agreeFn <- function(x, commonResponse){
-#   agreements <- intersect(commonResponse, x)
-#   if(1 <= length(agreements)){ # if > 1 agreement/match
-#     return(1)
-#   }else{
-#     0
-#   }
-# }
-
 agreeFn <- function(x, commonResponse){
   if(dim(x)[1] != length(commonResponse)){
     stop("number of articles in x does not match number of list items")
@@ -311,7 +238,9 @@ agreeFn <- function(x, commonResponse){
 } # end function
 
 
+
 ## for each variable and publication, find the most common response
+
 # empty data frame to store results
 kappaResults <- data.frame(
   variable = variables,
@@ -322,43 +251,21 @@ kappaResults <- data.frame(
   OutlierID = rep(NA,length(variables))
 )
 
-
-
-
 # Loop through the variables
 for(v in 1:length(variables)){
   # which columns hold value responses for a given variable
   temp2 <- temp[,variableValues[grep(variables[v],variableValues)],]
   #temp2[is.na(temp2)] <- "0" # NA is still a choice, so change to 0 so that it doesn't get removed
-  dim(temp2)
-  
-  # subset to only articles where there is complete agreement that there is inclusion, 
-  # therwise disagreement on the include_code would cause disagreement on all others
-  
-  # which rows (articles) have an exclusion?
-  excl <- which(responseArray[,"include_code",] == "0", arr.ind = TRUE)
-  # coders who excluded an article -- set to NA
-  for(i in 1:nrow(excl)){
-    temp2[excl[i,1],,excl[i,2]] <- NA
-  }
-  
-  
+  #dim(temp2)
+
   # If the variable is only one option (y/n), then a regular kappa test applies
   if(length(dim(temp2)) == 2){
-    
     agreement <- temp2
     agreement[!is.na(agreement)] <- 1
     agreement[is.na(agreement)] <- 0
-    
   }else{
     # If the variable is a multiple choice, 
     # for each coder, assess whether they agreed with the common response
-    
-    # for each publication, what are the most common responses?
-    # do I need to add a value for NA?
-    # there should be at least one non NA value for each coder what's going on?
-    # only include if include code == YES
-
     # returns list containing vectors of the most common responses where length == n articles
     commonResponse <- plyr::alply(temp2, 1, commonResponseFn) 
     
@@ -367,15 +274,121 @@ for(v in 1:length(variables)){
     # ncol = n coders, indicating whether the coder had any response for the variable
     # that agreed with the most common choice
     agreement <- apply(temp2, 3, agreeFn, commonResponse=commonResponse)
-    dim(agreement)
-    for(i in 1:nrow(excl)){
-      agreement[excl[i,1],excl[i,2]] <- NA
-    }
-
-    #agreement <- t(apply(temp2, c(1), mostCommonFn))
+    
   }
   
-  irr::kappam.fleiss(agreement)
+  # subset to only articles where there is complete agreement that there is inclusion, 
+  # otherwise disagreement on the include_code would cause disagreement on all others
+  # which rows (articles) have an exclusion?
+  excl <- which(responseArray[,"include_code",] == "0", arr.ind = TRUE)
+  # set NAs for exclusions
+  for(i in 1:nrow(excl)){
+    agreement[excl[i,1],excl[i,2]] <- NA
+  }
+  
+  # calculate the kappa statistic
+  kappa <- irr::kappam.fleiss(agreement) # automatically omits NA rows
+  kappaResults$kappaValue[v] <- kappa$value
+  kappaResults$kappaPValue[v] <- kappa$p.value
+  
+  
+  # also remove outliers using clustering
+  # fit two clusters, and determine if there is an outlier if one cluster only has one member
+  
+  # before clustering, set NAs back to 0
+  agreement[is.na(agreement)] <- "0"
+  
+  # only do clustering if enough unique values 
+  if(length(unique(c(agreement))) < 2){
+    next
+  }else{
+    x <-kmeans(dist(t(agreement)), 2)
+    
+    # if there is one reviewer in a cluster (outlier)
+    if(min(table(x$cluster)) == 1){ 
+      clust <- names(which.min(table(x$cluster)))
+      outlier <- which(x$cluster == names(which.min(table(x$cluster))))
+      kappa <- irr::kappam.fleiss(agreement[,-outlier])
+      kappaResults$kappaOutlierRmValue[v] <- kappa$value
+      kappaResults$kappaOutlierRmPValue[v] <- kappa$p.value
+      kappaResults$OutlierID[v] <- outlier
+    }
+  } # end of clustering
+  
+} # end of loop
+
+
+reviewIDs <- c(AC = 1, FV = 2, LB = 3, DV = 4, JP = 5, YS=6)
+kappaResults$OutlierID <- names(reviewIDs)[match(kappaResults$OutlierID, reviewIDs)]
+
+
+
+
+## PLOTS
+
+# plot the change in removing the outlier
+kappaResults %>%
+  filter(!is.na(kappaOutlierRmValue)) %>%
+  select(variable, kappaValue, kappaOutlierRmValue, OutlierID) %>% 
+  ggplot() + # aes(variable, Fleiss_Kappa, col = Method)
+  geom_segment(aes(x=variable, y=kappaValue, xend = variable, yend = kappaOutlierRmValue),
+               arrow = arrow(length = unit(0.25, "cm"))) +
+  geom_text_repel(aes(x=variable, y= kappaValue, label = OutlierID))+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust=1)
+  )
+
+
+# Plot the kappa values for each variable
+kappaResults$variableGroup <- c(
+  rep("Intervention", 5),
+  rep("Method", 7),
+  rep("Outcome", 7),
+  rep("Outcome Dimension", 8),
+  rep("Additional", 5),
+  "Intervention" # add at the end for oro_branch
+)
+kappaResults$variableGroup <- factor(kappaResults$variableGroup,
+                                     levels = rev(c(
+                                       "Intervention","Method",
+                                       "Outcome","Outcome Dimension", "Additional"
+                                     )))
+kappaResults <- kappaResults %>%
+  group_by(variableGroup)%>%
+  mutate(groupNumber = row_number())
+
+kappaResults$variableNames <- lapply(strsplit(kappaResults$variable,"_"), paste, collapse = " ")
+
+lims <- c(min(kappaResults$kappaValue, na.rm=T), (2*0.6)-min(kappaResults$kappaValue, na.rm=T))
+
+ggplot(kappaResults, 
+       aes(groupNumber, variableGroup, 
+           label = stringr::str_wrap(variableNames, width=5), 
+           fill = kappaValue))+
+  geom_tile()+
+  geom_text()+
+  scale_fill_distiller(palette = "RdBu", limits = lims)
+
+
+# plot as a cumulative graph
+kappaResults <- kappaResults %>% arrange(kappaValue) 
+kappaResults$KappaOrder <- seq(1:nrow(kappaResults))
+
+kappaResults %>% 
+  ggplot(aes(x=KappaOrder, y=kappaValue, fill=variableGroup, label = variable))+
+  geom_point()+
+  geom_hline(yintercept = 0.6, col="red")+
+  geom_label_repel(max.overlaps = 15, size=3)+
+  scale_x_continuous(name = "Variable x value")+
+  theme(legend.position = "none")
+
+
+```
+
+
+
+```{r explore why Fleiss kappa is returning negative results}
+irr::kappam.fleiss(agreement)
   irr::kappam.fleiss(na.omit(agreement)) # same
   
   # test the kappa fleiss calculations
@@ -403,105 +416,10 @@ for(v in 1:length(variables)){
   print(test)
   irr::kappam.fleiss(test)
 
-  # calculate the kappa statistic
-  kappa <- irr::kappam.fleiss(agreement) # automatically omits NA rows
-  kappaResults$kappaValue[v] <- kappa$value
-  kappaResults$kappaPValue[v] <- kappa$p.value
-  
-  if(sum(is.na(agreement)) == length(agreement) |
-     length(unique(c(agreement))) == 1){next}
-  
-  # also remove outliers using clustering
-  # fit two clusters, and determine if there is an outlier if one cluster only has one member
-  agreement[is.na(agreement)] <- 0
-  x <-kmeans(dist(t(agreement)), 2)
-  x$cluster
-  
-  if(min(table(x$cluster)) == 1){ # if there is one reviewer in a cluster (outlier)
-    clust <- names(which.min(table(x$cluster)))
-    outlier <- which(x$cluster == names(which.min(table(x$cluster))))
-    kappa <- irr::kappam.fleiss(agreement[,-outlier])
-    kappaResults$kappaOutlierRmValue[v] <- kappa$value
-    kappaResults$kappaOutlierRmPValue[v] <- kappa$p.value
-    kappaResults$OutlierID[v] <- outlier
-  }
-  
-
-}
-
-
-reviewIDs <- c(AC = 1, FV = 2, LB = 3, DV = 4, JP = 5, YS=6)
-kappaResults$OutlierID <- names(reviewIDs)[match(kappaResults$OutlierID, reviewIDs)]
-
-
-
-
-## PLOTS
-
-
-# plot the change in removing the outlier
-kappaResults %>%
-  filter(!is.na(kappaOutlierRmValue)) %>%
-  select(variable, kappaValue, kappaOutlierRmValue, OutlierID) %>% 
-  ggplot() + # aes(variable, Fleiss_Kappa, col = Method)
-  geom_segment(aes(x=variable, y=kappaValue, xend = variable, yend = kappaOutlierRmValue),
-               arrow = arrow(length = unit(0.25, "cm"))) +
-  geom_text_repel(aes(x=variable, y= kappaValue, label = OutlierID))+
-  theme(
-    axis.text.x = element_text(angle = 45, hjust=1)
-  )
-
-
-# Plot the kappa values for each variable
-kappaResults$variableGroup <- c(
-  rep("Intervention", 5),
-  rep("Method", 7),
-  rep("Outcome", 7),
-  rep("Outcome Dimension", 8),
-  rep("Additional", 5)
-)
-kappaResults$variableGroup <- factor(kappaResults$variableGroup,
-                                     levels = rev(c(
-                                       "Intervention","Method",
-                                       "Outcome","Outcome Dimension", "Additional"
-                                     )))
-kappaResults <- kappaResults %>%
-  group_by(variableGroup)%>%
-  mutate(groupNumber = row_number())
-
-kappaResults$variableNames <- lapply(strsplit(kappaResults$variable,"_"), paste, collapse = " ")
-
-
-
-ggplot(kappaResults, 
-       aes(groupNumber, variableGroup, 
-           label = stringr::str_wrap(variableNames, width=5), 
-           fill = kappaValue))+
-  geom_tile()+
-  geom_text()+
-  scale_fill_distiller(palette = "RdBu", limits = c(-1, 1.6))
-
-
-# plot as a cumulative graph
-kappaResults <- kappaResults %>% arrange(kappaValue) 
-kappaResults$KappaOrder <- seq(1:nrow(kappaResults))
-
-kappaResults %>% 
-  ggplot(aes(x=KappaOrder, y=kappaValue, fill=variableGroup, label = variable))+
-  geom_point()+
-  geom_hline(yintercept = 0.6, col="red")+
-  geom_label_repel(max.overlaps = 15, size=3)+
-  scale_x_continuous(name = "Variable x value")+
-  theme(legend.position = "none")
-
-
 ```
 
 
-```{r try Kramer 1980 kappa}
-
-
-## Test data set that should have a high agreement
+```{r try Kramer 1980 kappa designed for multiple choice responses}
 
 # choose simple variable which should have good level of agreement -- oro_branch
 temp2 <- temp[,grep("oro_branch", dimnames(temp)[[2]]),]
