@@ -626,6 +626,8 @@ kappaResults %>%
     axis.text.x = element_text(angle = 45, hjust=1)
   )
 
+ggsave(here::here("figures","supplementary","codingKappaOutlierChange.pdf"), width = 12, height = 12, units="cm")
+
 
 # Plot the kappa values for each variable
 kappaResults$variableGroup <- c(
