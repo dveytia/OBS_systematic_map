@@ -106,9 +106,7 @@ kramerKappa <- function (ratings){
   } # end of looping through all the subjects
   
   
-  
-  ## now calculate overall metrics
-
+  ## Overall kappa
   # Overall average rank of category j
   Rj <- apply(Rij, 2, mean)
   # Weighted average of the Ti
@@ -127,11 +125,49 @@ kramerKappa <- function (ratings){
   k0 <- (mean(ri, na.rm=T)-rT)/(1-rT)
   
   
-  ## P value?
-  Xvalue <- nr * (ns - 1) * WT
-  df1 <- ns - 1
-  p.value <- pchisq(Xvalue, df1, lower.tail = FALSE)
   
-  return(list(k0 = k0, pValue = p.value))
+  ## now calculate overall metrics
+  jackknifeKappa <- vector("numeric", ns)
+  pseudovalue <- vector("numeric", ns)
+  for(s in 1:ns){
+    subjects <- 1:ns
+    subjects <- subjects[-s]
+    
+    # Overall average rank of category j
+    Rj <- apply(Rij[subjects,], 2, mean)
+    # Weighted average of the Ti
+    weightedTi <- Ti[subjects]
+    for(i in subjects){
+      weightedTi[i] <- mi[i]*Ti[i]/sum(mi[subjects]) 
+    }
+    weightedTi <- sum(weightedTi)
+    # Sample variane of Rj
+    St <- var(Rj)
+    # overall coefficient of concordance
+    WT <- 12*(nc-1)*St/((nc^3)-nc-weightedTi)
+    
+    if(is.infinite(WT)){
+      WT <- 1
+    }
+    # overall rT
+    rT <- ((sum(mi[subjects])*WT)-1)/(sum(mi[subjects])-1)
+    # K0
+    jackknifeKappa[s] <- (mean(ri[subjects], na.rm=T)-rT)/(1-rT)
+    if(is.infinite(jackknifeKappa[s])){
+      jackknifeKappa[s] <- sign(jackknifeKappa[s])
+    }
+    pseudovalue[s] <- k0-jackknifeKappa[s]
+  }
+  
+  mean(pseudovalue)
+  
+  dt()
+  
+  # ## Calculate the p value
+  # Xvalue <- nr * (ns - 1) * coeff
+  # df1 <- ns - 1
+  # p.value <- pchisq(Xvalue, df1, lower.tail = FALSE)
+  
+  return(k0)
   
 }

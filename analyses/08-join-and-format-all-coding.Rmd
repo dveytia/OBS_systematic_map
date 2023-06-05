@@ -460,6 +460,7 @@ variableValues <- dimnames(temp)[[2]]
 values <- unlist(lapply(strsplit(variableValues, "[.]"), function(x) x[2]))
 values[is.na(values)] <- variableValues[is.na(values)]
 variables <- unlist(lapply(strsplit(variableValues, "[.]"), function(x) x[1]))
+variablesAll <- variables
 variables <- unique(variables)
 variables <- variables[which(!(variables %in% c("sysrev_id","title","year","coder_1","coder_2")))]
 
@@ -481,6 +482,7 @@ source(here::here("R/kramerKappa.R"))
 kappaResults <- data.frame(
   variable = variables,
   kappaValue = rep(NA, length(variables)),
+  kappaPValue = rep(NA, length(variables)),
   kappaExclusionRmValue = rep(NA, length(variables)),
   kappaOutlierRmValue = rep(NA,length(variables)),
   kappaMethod = rep(NA,length(variables)),
@@ -494,7 +496,7 @@ excl <- which(responseArray[,"include_code",] == "0", arr.ind = TRUE)
 # Loop through all the variables
 for(v in 1:length(variables)){
   # which columns hold value responses for a given variable
-  temp2 <- temp[,variableValues[grep(variables[v],variableValues)],]
+  temp2 <- temp[,variableValues[which(variablesAll == variables[v])],]
   temp2[is.na(temp2)] <- "No" # NA is still a choice, so change from an NA so it doesn't get removed
   
   
@@ -504,7 +506,8 @@ for(v in 1:length(variables)){
   if(variables[v] == "include_code"){
     kappaResults$kappaMethod[v] <- "Kendall's coeff of concordance"
     coeff <- irr::kendall(temp2)
-    kappaResults$kappaValue <- coeff$value
+    kappaResults$kappaValue[v] <- coeff$value
+    kappaResults$kappaPValue[v] <- coeff$p.value
     # look for outliers
     temp2Mat <- ifelse(temp2 == "No" | is.na(temp2), 0, 1) #change to numeric so dist can be calc
     if(1 < length(unique(c(temp2Mat)))){
@@ -530,7 +533,7 @@ for(v in 1:length(variables)){
     # first calculate regular kappa
     kappa <- irr::kappam.fleiss(temp2)
     kappaResults$kappaValue[v] <- kappa$value
-    
+    kappaResults$kappaPValue[v] <- kappa$p.value
     # then calculate kappa without exclusions
     # because the kappa statistic runs with an na.omit, 
     # equivalent to removing all rows with an NA
@@ -568,12 +571,13 @@ for(v in 1:length(variables)){
       temp2[excl[i,1],,excl[i,2]] <- NA # all the variables coded for that article x coder
     }
     kappa <- kramerKappa(temp2)  
-    kappaResults$kappaValue[v] <- kappa
+    kappaResults$kappaValue[v] <- kappa$k0
+    kappaResults$kappaPValue[v] <- kappa$pValue
    
    
     # remove articles with disagreement in screening entirely
    kappa <- kramerKappa(temp2[-unique(excl[,1]),,]) 
-   kappaResults$kappaExclusionRmValue[v] <- kappa
+   kappaResults$kappaExclusionRmValue[v] <- kappa$k0
    
    
    # then calculate kappa without outlier reviewers (if present)
@@ -588,7 +592,7 @@ for(v in 1:length(variables)){
        clust <- names(which.min(table(x$cluster)))
        outlier <- which(x$cluster == names(which.min(table(x$cluster))))
        kappa <- kramerKappa(temp2[,,-outlier])
-       kappaResults$kappaOutlierRmValue[v] <- kappa
+       kappaResults$kappaOutlierRmValue[v] <- kappa$k0
        kappaResults$OutlierID[v] <- outlier
     }
    
@@ -600,7 +604,8 @@ reviewIDs <- c(AC = 1, FV = 2, LB = 3, DV = 4, JP = 5, YS=6)
 kappaResults$OutlierID <- names(reviewIDs)[match(kappaResults$OutlierID, reviewIDs)]
 
 
-
+## Write table of kappa results ---------------------
+writexl::write_xlsx(kappaResults,here::here("outputs","coding","codingKappa.xlsx"))
 
 
 ## PLOTS ------------------
@@ -670,7 +675,7 @@ kappaResults %>%
   scale_x_continuous(name = "Variable x value")+
   theme(legend.position = "none")
 
-
+ggsave(here::here("figures","supplementary","codingKappa.pdf"), width = 20, height = 10, units="cm")
 ```
 
 

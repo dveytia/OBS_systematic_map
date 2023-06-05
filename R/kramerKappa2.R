@@ -105,7 +105,8 @@ kramerKappa <- function (ratings){
     
   } # end of looping through all the subjects
   
-  
+  chanceP <- sum(apply(ttab, 2, sum)^2)/(ns * nr)^2 - 
+    sum(apply(rtab, 2, var) * (nr - 1)/nr)/(nr - 1)
   
   ## now calculate overall metrics
 
@@ -127,11 +128,6 @@ kramerKappa <- function (ratings){
   k0 <- (mean(ri, na.rm=T)-rT)/(1-rT)
   
   
-  ## P value?
-  Xvalue <- nr * (ns - 1) * WT
-  df1 <- ns - 1
-  p.value <- pchisq(Xvalue, df1, lower.tail = FALSE)
-  
-  return(list(k0 = k0, pValue = p.value))
+  return(k0)
   
 }
