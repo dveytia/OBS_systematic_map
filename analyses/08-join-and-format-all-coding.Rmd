@@ -386,7 +386,6 @@ kappaResults %>%
 ```
 
 
-
 ```{r explore why Fleiss kappa is returning negative results}
 
   # create dummy dataframe with lots of agreement of one outcome
@@ -424,6 +423,50 @@ kappaResults %>%
 ```
 
 
+```{r add in a different type of oro_type to combine protection and restoration into conservation}
+
+x <- temp[,variableValues[grep("oro_type",variableValues)],]
+x <- x[,,1]
+
+## Function to create new variable
+oroType2Fn <- function(x){ # x is a matrix with n pubs x n variables
+  x2 <- x[,-which(colnames(x) == "oro_type.N_Restoration")]
+  colnames(x2)[which(colnames(x2) == "oro_type.N_Protection")] <- "oro_type.N_Conservation"
+  colnames(x2) <- gsub("oro_type","oro_type2", colnames(x2))
+  x2 <- gsub("oro_type","oro_type2", x2)
+  
+  x2[,"oro_type2.N_Conservation"] <- ifelse(
+    !is.na(x[,"oro_type.N_Protection"]) | !is.na(x[,"oro_type.N_Restoration"]),
+    "oro_type2.N_Conservation", NA
+  )
+  return(x2)
+}
+
+
+oroType2Array <- do.call(abind::abind,
+                          list(
+                            plyr::alply(
+                              temp[,variableValues[grep("oro_type",variableValues)],],
+                                3, oroType2Fn),
+                            along = 3
+                          ))
+
+temp <- abind::abind(temp, oroType2Array, along = 2)
+
+
+
+# list all the variables and values
+variableValues <- dimnames(temp)[[2]]
+values <- unlist(lapply(strsplit(variableValues, "[.]"), function(x) x[2]))
+values[is.na(values)] <- variableValues[is.na(values)]
+variables <- unlist(lapply(strsplit(variableValues, "[.]"), function(x) x[1]))
+variables <- unique(variables)
+variables <- variables[which(!(variables %in% c("sysrev_id","title","year","coder_1","coder_2")))]
+
+
+```
+
+
 ```{r try Kramer 1980 kappa designed for multiple choice responses}
 
 ## Calculate kappa statistic for all the variables 
@@ -453,6 +496,30 @@ for(v in 1:length(variables)){
   # which columns hold value responses for a given variable
   temp2 <- temp[,variableValues[grep(variables[v],variableValues)],]
   temp2[is.na(temp2)] <- "No" # NA is still a choice, so change from an NA so it doesn't get removed
+  
+  
+  # for inclusion, then most will be include so kappa test won't work
+  # instead use the Kendall coefficient of concordance
+  # still difficult as mostly one value
+  if(variables[v] == "include_code"){
+    kappaResults$kappaMethod[v] <- "Kendall's coeff of concordance"
+    coeff <- irr::kendall(temp2)
+    kappaResults$kappaValue <- coeff$value
+    # look for outliers
+    temp2Mat <- ifelse(temp2 == "No" | is.na(temp2), 0, 1) #change to numeric so dist can be calc
+    if(1 < length(unique(c(temp2Mat)))){
+       x <- kmeans(dist(t(temp2Mat)),2)
+       # if there is one reviewer in a cluster (outlier)
+       if(min(table(x$cluster)) == 1){ 
+         clust <- names(which.min(table(x$cluster)))
+         outlier <- which(x$cluster == names(which.min(table(x$cluster))))
+         coeff <- irr::kendall(temp2[,-outlier])
+         kappaResults$kappaOutlierRmValue[v] <- coeff$value
+         kappaResults$OutlierID[v] <- outlier
+       }
+    }
+    next
+  }
   
   
   # If the variable is only one option (y/n), then a regular kappa test applies
@@ -539,7 +606,7 @@ kappaResults$OutlierID <- names(reviewIDs)[match(kappaResults$OutlierID, reviewI
 ## PLOTS ------------------
 
 # get a quick idea of what the kappa values are like
-hist(kappaResults$kappaValue, breaks = seq(-0.2,1, by=0.1))
+hist(kappaResults$kappaValue, breaks = seq(-0.1,1, by=0.1))
 
 
 # plot the change in removing the outlier
@@ -557,19 +624,23 @@ kappaResults %>%
 
 # Plot the kappa values for each variable
 kappaResults$variableGroup <- c(
+  "Screen",
   rep("Intervention", 5),
   rep("Method", 7),
   rep("Outcome", 7),
   rep("Outcome Dimension", 8),
   rep("Additional", 5),
-  "Intervention" # add at the end for oro_branch
+  rep("Intervention", 2) # add at the end for oro_branch and oro_type2
 )
-kappaResults$variableGroup <- factor(kappaResults$variableGroup,
-                                     levels = rev(c(
-                                       "Intervention","Method",
-                                       "Outcome","Outcome Dimension", "Additional"
-                                     )))
+
+varGroupLevels <- rev(c("Intervention","Method",
+                        "Outcome","Outcome Dimension", "Additional"))
+
+# kappaResults$variableGroup <- factor(kappaResults$variableGroup,
+#                                      levels = varGroupLevels)
 kappaResults <- kappaResults %>%
+  filter(variable != "include_code") %>%
+  mutate(variableGroup = factor(variableGroup, levels = varGroupLevels)) %>%
   group_by(variableGroup)%>%
   mutate(groupNumber = row_number())
 
@@ -591,6 +662,7 @@ kappaResults <- kappaResults %>% arrange(kappaValue)
 kappaResults$KappaOrder <- seq(1:nrow(kappaResults))
 
 kappaResults %>% 
+  filter(!is.na(kappaValue)) %>% # lead time removed
   ggplot(aes(x=KappaOrder, y=kappaValue, fill=variableGroup, label = variable))+
   geom_point()+
   geom_hline(yintercept = 0.6, col="red")+
