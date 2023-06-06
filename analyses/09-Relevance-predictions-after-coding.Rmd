@@ -1,0 +1,1223 @@
+---
+title: "09-Relevance-predictions-after-coding"
+author: "Devi Veytia"
+date: "2023-02-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+```{r load libraries}
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+library(reticulate)
+library(ggplot2)
+```
+
+
+This code explores relevance predictions after coding 
+
+# Load relevance predictions and metadata
+
+```{r load in predicted relevance and convert to sqlite, eval=FALSE}
+
+## Open sqlite database
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+
+src_dbi(all_db)
+
+
+## Write relevance predictions to a sqlite database for easy joining
+predRel <- read.csv(here::here("data","raw-data","relevance-predictions","1_document_relevance_06062023.csv"))
+
+# rename columns
+colnames(predRel) <- c("analysis_id","relevance_mean","relevance_std","relevance_lower","relevance_upper")
+
+# check for duplicates
+sum(duplicated(predRel$analysis_id))
+dupsIds <- predRel$analysis_id[duplicated(predRel$analysis_id)]
+View(predRel[which(predRel$analysis_id %in% dupsIds),])
+
+dbWriteTable(all_db, "predRel2", predRel)
+
+dbDisconnect(all_db)
+```
+
+
+
+
+# Summarise relevance predictions
+
+```{r Get tables of unique references and relevance predictions}
+
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+src_dbi(all_db)
+
+predRel <- tbl(all_db, "predRel2") 
+dedups <- tbl(all_db, "uniquerefs") %>% 
+  select(analysis_id, duplicate_id, title, abstract, keywords, doi)
+screens <- tbl(all_db, "allScreen_afterCoding") %>% 
+  select(duplicate_id, sample_screen, include_screen)
+
+predRelMeta <- dedups %>%
+  inner_join(predRel, by = "analysis_id") %>%
+  full_join(screens, by = "duplicate_id") %>%
+  collect()
+
+nrow(predRelMeta) # check number of rows is correct -- 268452
+
+dbDisconnect(all_db)
+```
+
+Perhaps 0.5 is too conservative a threshold for inclusion -- where do our manually included articles rank on the predicted relevance?
+
+```{r compare to our manual screen results}
+
+require(ggplot2)
+
+# tabulate the number of included and excluded screens fall on either side of the 0.5 threshold
+predRelMeta %>%
+  filter(!is.na(include_screen)) %>%
+  mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
+  group_by(include_screen) %>%
+  summarise(nGreater0.5 = sum(0.5 <= relevance_mean), nLess0.5 = sum(relevance_mean < 0.5)) 
+
+
+
+# violin plot
+predRelMeta %>%
+  filter(!is.na(include_screen)) %>%
+  mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
+  ggplot(aes(x= sample_screen, y=relevance_mean, fill = sample_screen)) +
+  facet_wrap(vars(factor(include_screen)))+
+  geom_violin(trim=TRUE)+
+  scale_y_continuous(limits = c(0,1))+
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+
+# Histogram so I can see the actual counts
+relTable <- predRelMeta %>%
+  filter(include_screen==1) %>%
+  summarise(nGreater0.5 = sum(0.5 <= relevance_mean), nLess0.5 = sum(relevance_mean < 0.5)) %>%
+  reshape2::melt(value.name = "sum") %>%
+  mutate(relevance_mean = c(0.75, 0.25), count = 1250)
+
+ggplot(predRelMeta %>% filter(include_screen==1), 
+       aes(x= relevance_mean, fill = sample_screen, col = sample_screen)) +
+  stat_density(alpha = 0.25, position = "identity", aes(y=after_stat(count)))+
+  #geom_histogram(position = "stack")+
+  scale_x_continuous(limits = c(0,1))+
+  geom_vline(xintercept = 0.5, col="red")+
+  geom_text(data=relTable, aes(x= relevance_mean, y=count, label = sum), inherit.aes = FALSE, col="red")+
+  ggtitle("relevance of included articles")+
+  theme_bw()
+
+
+# predicted relevance by ordered article number 
+predRelMeta %>% 
+  filter(!is.na(include_screen))%>%
+  mutate(include_screen = factor(include_screen, levels = c(1,0), 
+                                 labels = c("include","exclude"))) %>%
+  arrange(relevance_mean) %>% 
+  mutate(id = row_number()) %>%
+  ggplot(aes(id, relevance_mean))+ 
+  geom_ribbon(aes(ymin = relevance_lower, ymax = relevance_upper), alpha = 0.5, fill="pink")+
+  geom_point(size=1, alpha = 0.3)+
+  geom_hline(yintercept = 0.5, col="darkgrey")+
+  facet_wrap(vars(include_screen))+
+  ggtitle("relevance predictions for screened abstracts")+
+  theme_bw()
+
+```
+
+
+```{r explore which articles that should have been included are excluded}
+
+# get vector of stopwords
+all_stopwords <- unique(c(litsearchr::get_stopwords("English"), revtools::revwords())) 
+
+
+## for articles that are include but low predicted relevance
+lowRel <- predRelMeta %>% 
+  filter(include_screen == 1 & relevance_mean < 0.5) %>%
+  as.data.frame()
+# fit topic model to title, and keep all other defaults. Then on data tab click "exit app" to save
+lowRelTopic <- revtools::screen_topics(lowRel,remove_words = all_stopwords)
+
+# plot
+lowRelPlot <- plotly::plot_ly(lowRelTopic$plot_ready$x, x=~Axis1, y=~Axis2, z=~Axis3, color = ~factor(topic), type="scatter3d", text =~caption, hoverinfo="text", size=15) 
+lowRelPlot 
+
+lowRelTopic$plot_ready$topic %>% 
+  mutate(caption = factor(
+    caption, 
+    levels = lowRelTopic$plot_ready$topic$caption[order(lowRelTopic$plot_ready$topic$topic)])) %>%
+  ggplot(aes(x=caption, y=n, fill=caption))+
+  geom_col()+
+  ggtitle("Relevance < 0.5")+
+  theme(axis.text.x = element_blank())
+
+
+## for articles that are include but high predicted relevance
+highRel <- predRelMeta %>% 
+  filter(include_screen == 1 & 0.5 <= relevance_mean) %>%
+  as.data.frame()
+# fit topic model to title, and keep all other defaults. Then on data tab click "exit app" to save
+highRelTopic <- revtools::screen_topics(highRel,remove_words = all_stopwords)
+
+# plot
+highRelTopic$plot_ready$x$caption <- highRelTopic$grouped$text
+
+highRelPlot <- plotly::plot_ly(highRelTopic$plot_ready$x, x=~Axis1, y=~Axis2, z=~Axis3, color = ~factor(topic), type="scatter3d", text =~caption, hoverinfo="text", size=15) 
+highRelPlot 
+
+highRelTopic$plot_ready$topic %>% 
+  mutate(caption = factor(
+    caption, 
+    levels = highRelTopic$plot_ready$topic$caption[order(highRelTopic$plot_ready$topic$topic)])) %>%
+  ggplot(aes(x=caption, y=n, fill=caption))+
+  geom_col()+
+  ggtitle("Relevance >= 0.5")+
+  theme(axis.text.x = element_blank())
+```
+
+
+```{r summaries of numbers of articles}
+
+## Summaries
+
+# the number of pred relevance > 0.5
+predRelMeta %>%
+  summarise(
+    mean = sum(0.5 <= relevance_mean),
+    lower = sum(0.5 <= relevance_lower),
+    upper = sum(0.5 <= relevance_upper)
+  )
+
+
+# the distribution of relevance predictions -- if I change the threshold how will this change the number of inclusions?
+# perhaps since all test list articles are > 0.8, maybe I want to use a threshold of 0.7 because 0.5 might still include a lot of crap?
+counts <- predRelMeta %>% 
+  summarise(
+    GreaterThan_0.5 = sum(0.5 <= relevance_mean),
+    GreaterThan_0.7 = sum(0.7 <= relevance_mean),
+    GreaterThan_0.8 = sum(0.8 <= relevance_mean),
+    GreaterThan_0.9 = sum(0.9 <= relevance_mean),
+  )
+
+counts <- as.data.frame(t(counts))
+colnames(counts) <- "count"
+counts$relevance_mean <- c(0.5,0.7,0.8,0.9)
+
+predRelMeta %>%
+  ggplot(aes(x=relevance_mean))+
+  geom_histogram()+
+  geom_vline(data=counts, aes(xintercept =relevance_mean))+
+  geom_text(data=counts, aes(x = relevance_mean, label= count), y=50000, angle=60, hjust=0)+
+  scale_x_continuous(breaks=c(0,0.5,0.7,0.8,0.9,1))
+
+
+```
+
+
+
+# Extracting occurrence of key terms from articles
+
+## Process text
+
+```{r source functions}
+functionsToSource <- c("clean_string.R", "screen.R","tokenization.R","utils.R")
+for(i in 1:length(functionsToSource)){
+  source(here::here("R", functionsToSource[i]))
+}
+
+```
+
+
+```{r get corresponding title and abstract info for predicted relevance greater than 0.5}
+require(dbplyr)
+
+## Get tables from databases
+dedup_db <- dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite"), 
+                                 create=FALSE)
+src_dbi(dedup_db)
+dedups <- tbl(dedup_db, "uniquerefs")
+
+predRel_db <- dbConnect(SQLite(), dbname = here::here("data","raw-data","sql-databases","relevance-predictions.sqlite"),create = FALSE)
+predRel <- tbl(predRel_db, "predRel")
+
+
+
+## Filter and join
+
+# subset to the records I want to join (pred rel => 0.5)
+relRefs <- predRel %>%
+  select(analysis_id, relevance_mean) %>%
+  filter(0.5 <= relevance_mean) 
+
+# use join to retreive metadata for those records
+my_text <- left_join(relRefs, dedups %>% select(analysis_id,title, abstract), by = "analysis_id", copy=TRUE)
+my_text <- my_text %>%
+  collect()
+
+
+## Disconnect databases
+dbDisconnect(dedup_db)
+dbDisconnect(predRel_db)
+
+
+## Write to file
+#save(my_text, file = here::here("data","raw-data","relevance-predictions","include_text.RData"))
+
+```
+
+
+I assembled a list of keywords grouped by different descriptive factors we would like to extract information about. We then scanned the article title, abstract and keywords and counted the occurrences of matches to these terms (boolean response of "yes" for at least one match/article).
+
+```{r clean text}
+
+## Load spreadsheet of keywords to extract and clean the text
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+
+# separate out into single terms and expressions
+single_words <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "single")]
+expressions <- nlp_search_terms$Term[which(nlp_search_terms[,4] == "expression")]
+# name them by their corresponding group
+names(single_words) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "single")]
+names(expressions) <- nlp_search_terms$`Group name`[which(nlp_search_terms[,4] == "expression")]
+
+
+
+## Process the text to screen
+
+# group title, abstract together
+nlptxt <- my_text %>%
+  mutate(text = paste(title, abstract))%>%
+  select(duplicate_id, text)
+
+# Lemmitization and clean string to remove extra spaces, numbers and punctuation
+nlptxt$text <- clean_string(nlptxt$text)
+nlptxt$text <- textstem::lemmatize_strings(nlptxt$text)
+
+```
+
+
+## Screen for keywords
+
+These keyword occurrences are extracted using the code ross_keyword_extract.R. 
+
+
+## Visualizing keyword search results
+
+identify numbers of papers relevant to each topic. The tokens to search for are stored in /data/derived-data/coding/keyword-matches/keyword-search-tokens.csv. 
+
+```{r lookup table of groups for different keywords}
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+
+
+## Process terms so that they match the column names in the sqlite database
+colnames(nlp_search_terms) <- c("Group","Group name", "Term","Term type")
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+nlp_search_terms$Term <- gsub(" ","_", nlp_search_terms$Term)
+
+
+## Change names of some groupings
+
+# change groupings of mitigation keywords
+nlp_search_terms$`Group name`[
+  which(nlp_search_terms$`Group name` %in% c("removal","CO2 removal from seawater",
+                                   "OIF","blue carbon","bioenergy"))
+] <- "carbon removal or storage"
+
+
+## Names for each of the papers
+topicNames <- c(
+  "R&D vs implementation of mitigation OROs",
+  "Biodiv & NCP outcomes",
+  "Restoration practices",
+  "Coastal community adaptation portfolio"
+)
+
+```
+
+```{r connect to database with the keyword matches}
+## Connect to database
+keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
+                                 dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
+src_dbi(keywordCon)
+
+keywordMatches <- tbl(keywordCon, "keywordMatches")
+
+```
+
+Now visualize these results 
+```{r create an object to store all the plots}
+ggp_list <- list()
+```
+
+
+For paper 1, I just want a barchart, and then the total number with any occurrence
+```{r paper 1}
+## Identify which paper
+PaperNumber=1
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper 1
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  #head() %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+nrow(paper_df)  
+
+# by keyword group (Group name) tabulate how many hits there were
+paper_tab <- paper_df %>%
+  group_by(`Group name`) %>%
+  summarise(n=n_distinct(analysis_id))
+
+# how many articles retreived any hit
+paper_total1 <- length(unique(paper_df$analysis_id))
+
+
+## Display 
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- paper_tab %>%
+  mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(y = ymax+yoffset, label = paste("total papers = ", paper_total1)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+
+```
+
+
+For paper 2, they want to know papers that have biodiv, ES, or both
+```{r paper 2}
+## Identify which paper
+PaperNumber=2
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+  
+
+# # how man articles have either or both biodiv or ncp
+counts = with(paper_df, table(tapply(`Group name`, analysis_id, function(x) paste(as.character(sort(unique(x))), collapse=' & '))))
+counts = as.data.frame(t(counts))
+colnames(counts) <- c("Topic", "Group name","n")
+counts$Topic <- paste("Paper", PaperNumber)
+
+
+# # by keyword group (Group name) tabulate how many hits there were
+# paper_tab <- paper_df %>%
+#   group_by(`Group name`) %>%
+#   summarise(n=n_distinct(analysis_id))
+
+
+# how many articles retreived any hit
+paper_total <- length(unique(paper_df$analysis_id))
+
+
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- counts %>%
+  #mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(y = n, label=paste(n),group = `Group name`), position = position_stack(vjust=0.5))+
+    #geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    #ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+```
+
+
+For paper 3, do the same as for paper 2
+```{r paper 3}
+## Identify which paper
+PaperNumber=3
+Paper = paste0("Paper", PaperNumber)
+tempTitle <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+  
+  
+
+# # how man articles have either or both biodiv or ncp
+counts = with(paper_df, table(tapply(`Group name`, analysis_id, function(x) paste(as.character(sort(unique(x))), collapse=' & '))))
+counts = as.data.frame(t(counts))
+colnames(counts) <- c("Topic", "Group name","n")
+counts$Topic <- paste("Paper", PaperNumber)
+
+
+# # by keyword group (Group name) tabulate how many hits there were
+# paper_tab <- paper_df %>%
+#   group_by(`Group name`) %>%
+#   summarise(n=n_distinct(analysis_id))
+
+
+# how many articles retreived any hit
+paper_total <- length(unique(paper_df$analysis_id))
+
+
+
+# plot parameters
+yaxis_title <- "N matches"
+ymax = sum(paper_tab$n, na.rm=T)   
+yoffset = 5000
+
+# plot
+require(ggplot2)
+
+ggp_list[[PaperNumber]] <- counts %>%
+  #mutate(Topic = paste("Paper", PaperNumber)) %>% 
+  ggplot(aes(x=Topic, y=n, fill = `Group name`)) + 
+    geom_col()+
+    geom_text(aes(y = n, label=paste(n),group = `Group name`), position = position_stack(vjust=0.5))+
+    #geom_text(aes(x=paste("Paper", PaperNumber), y = ymax+yoffset, label = paste("total papers = ", paper_total)))+
+    labs(
+      title = paste(strwrap(tempTitle, width = 40), collapse="\n"),
+      y=yaxis_title
+    )+
+    #ylim(0, ymax+yoffset)+
+    scale_fill_brewer(type="qual", palette = PaperNumber)+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+  
+ggp_list[[PaperNumber]]
+
+```
+
+
+```{r paper 4}
+
+## Identify which paper
+PaperNumber=4
+Paper = paste0("Paper", PaperNumber)
+tempTitle1 <- paste0(letters[PaperNumber],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+tempTitle2 <- paste0(letters[PaperNumber+1],". Paper ", PaperNumber, ": ",topicNames[PaperNumber], collapse="")
+
+
+
+## Calculate tabulation summaries
+
+paper_df <- keywordMatches %>%
+  # select only columns pertaining to paper 
+  select(analysis_id, nlp_search_terms$Term[which(nlp_search_terms$Group == Paper)]) %>%
+  #head() %>%
+  collect() %>%
+  # format into long form with columns for id, Term and value (y/n)
+  reshape2::melt(id.vars = "analysis_id", variable.name = "Term") %>%
+  filter(value > 0) %>%
+  # merge with grouping information for each term
+  merge(nlp_search_terms, by="Term", all = FALSE)
+
+# how many articles retreived any hit
+paper_total4 <- length(unique(paper_df$analysis_id))
+
+
+nrow(paper_df)
+
+
+## Format to visualize as a heatmap
+library(reshape2)
+paper_tab <- paper_df[!duplicated(paper_df[,c("analysis_id","Group name")]),]
+
+
+paper_tab_Intervention <- paper_tab[grep("Intervention",paper_tab$`Group name`),c("analysis_id","Group name")]
+colnames(paper_tab_Intervention)[2] <- c("Intervention")
+paper_tab_Intervention$Intervention <- gsub("Intervention: ","",paper_tab_Intervention$Intervention)
+
+paper_tab_Population <- paper_tab[grep("Population",paper_tab$`Group name`),c("analysis_id","Group name")]
+colnames(paper_tab_Population)[2] <- c("Population")
+paper_tab_Population$Population <- gsub("Population: ","",paper_tab_Population$Population)
+
+paper_tab_Threat <- paper_tab[grep("threat",paper_tab$`Group name`),c("analysis_id","Term")]
+colnames(paper_tab_Threat)[2] <- c("Threat")
+
+
+paperMerge <- merge(paper_tab_Intervention, paper_tab_Population, by="analysis_id")
+paperMerge <- merge(paperMerge, paper_tab_Threat, by="analysis_id")
+
+
+## Display
+library(stringr)
+
+# Visualize Population by intervention
+ggp_list[[PaperNumber]] <- paperMerge %>%
+  group_by(Intervention, Population) %>%
+  summarise(n=n()) %>%
+  ggplot(aes(Population, Intervention, fill=n)) +
+  geom_tile() +
+  scale_fill_viridis_c()+
+  scale_y_discrete(labels = function(x) str_wrap(x, width=10))+
+  geom_text(aes(label = n), col="red")+
+  labs(title = paste(strwrap(tempTitle1, width = 40), collapse="\n"),
+       caption = paste("total articles = ", paper_total4))+
+  theme(
+      legend.position = "na",
+      legend.title = element_blank(),
+      #axis.text.x = element_blank(),
+      #axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+
+
+# Visualise threat by intervention
+ggp_list[[PaperNumber+1]] <- paperMerge %>%
+  group_by(Intervention, Threat) %>%
+  summarise(n=n()) %>%
+  ggplot(aes(Threat, Intervention, fill=n)) +
+  geom_tile() +
+  scale_fill_viridis_c()+
+  scale_y_discrete(labels = function(x) str_wrap(x, width=10))+
+  geom_text(aes(label = n), col="red")+
+  labs(title = paste(strwrap(tempTitle2, width = 40), collapse="\n"),
+       caption = paste("total articles = ", paper_total4))+
+  theme(
+      legend.position = "na",
+      legend.title = element_blank(),
+      axis.text.x = element_text(angle=45,hjust=1),
+      #axis.title.x = element_blank(),
+      panel.background = element_rect(fill = "transparent"),
+      panel.grid.major = element_line(colour = "grey"),
+      panel.border = element_rect(colour = "black", fill="transparent")
+    )
+ggp_list[[PaperNumber+1]]
+```
+
+```{r create all plots together}
+
+pdf(file = here::here("data","derived-data","coding","keyword-matches","keyword-matches-plots.pdf"),
+    width = 10, height=15)
+egg::ggarrange(
+  plots = ggp_list,
+  nrow=3,
+  newpage=FALSE
+)
+dev.off()
+
+```
+
+
+```{r close databset connection}
+## Close connection
+RSQLite::dbDisconnect(keywordCon)
+
+```
+
+
+
+```{r clean environment}
+rm(list=ls())
+```
+
+
+## Export metadata for review by teams
+
+```{r source functions}
+functionsToSource <- c("clean_string.R", "screen.R","tokenization.R","utils.R")
+for(i in 1:length(functionsToSource)){
+  source(here::here("R", functionsToSource[i]))
+}
+
+```
+
+
+```{r lookup table of groups for different keywords}
+nlp_search_terms <- read.csv(here::here("data","derived-data","coding","keyword-matches","keyword-search-tokens.csv"))
+
+
+## Process terms so that they match the column names in the sqlite database
+colnames(nlp_search_terms) <- c("Group","Group name", "Term","Term type")
+nlp_search_terms <- na.omit(nlp_search_terms,nlp_search_terms) # remove empty spaces
+nlp_search_terms$Term <- textstem::lemmatize_strings(nlp_search_terms$Term) # lemmitize
+nlp_search_terms$Term <- clean_string(nlp_search_terms$Term) # remove punctuation and extra spaces
+nlp_search_terms <- nlp_search_terms[!duplicated(nlp_search_terms$Term),] # remove any resulting duplicates
+nlp_search_terms$Term <- uk2us::convert_uk2us(nlp_search_terms$Term) # transform everything to American spelling
+nlp_search_terms$Term <- gsub(" ","_", nlp_search_terms$Term)
+
+
+## Change names of some groupings
+
+# change groupings of mitigation keywords
+nlp_search_terms$`Group name`[
+  which(nlp_search_terms$`Group name` %in% c("carbon","removal","CO2 removal from seawater",
+                                   "OIF","blue carbon","bioenergy"))
+] <- "carbon removal or storage"
+
+
+## Names for each of the papers
+topicNames <- c(
+  "R&D vs implementation of mitigation OROs",
+  "Biodiv & NCP outcomes",
+  "Restoration practices",
+  "Coastal community adaptation portfolio"
+)
+
+```
+
+```{r connect to database with the keyword matches}
+## Connect to database
+keywordCon <- RSQLite::dbConnect(RSQLite::SQLite(), 
+                                 dbname = here::here("data","derived-data","coding","keyword-matches","keyword-matches.sqlite"))
+src_dbi(keywordCon)
+
+keywordMatches <- tbl(keywordCon, "keywordMatches")
+keywordMatches <- keywordMatches %>% collect
+
+dbDisconnect(keywordCon)
+```
+
+```{r get associated metadata for the matches}
+
+## Get tables from databases
+dedup_db <- dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite"), 
+                                 create=FALSE)
+src_dbi(dedup_db)
+dedups <- tbl(dedup_db, "uniquerefs")
+
+
+
+metadata <- dedups %>% 
+  select(analysis_id, author, title, source_title, year, abstract, doi) %>%
+  collect()
+
+dbDisconnect(dedup_db)
+```
+
+```{r join metadata to keyword matches}
+
+keywordMatchesMerge <- merge(keywordMatches, metadata, by="analysis_id", all.x = TRUE, all.y=FALSE)
+
+# reorder columns so keyword matches come last
+cols <- colnames(keywordMatchesMerge)
+cols <- cols[-which(cols %in% c("analysis_id", "author","title","source_title","year","abstract","doi"))]
+keywordMatchesMerge <- keywordMatchesMerge[,c("analysis_id", "author","title","source_title","year","abstract","doi", cols)]
+  
+```
+
+
+
+```{r For each paper filter to relevant articles and export as a csv}
+## Inputs
+out_dir <- here::here("data","derived-data","coding","keyword-matches","keyword-matches-and-metadata-csv")
+
+
+papers <- unique(nlp_search_terms$Group)
+
+# columns that contain the metadata variables -- the keep
+metadata_cols <- c("analysis_id", "author","title","source_title","year","abstract","doi")
+
+
+
+
+for(p in 1:length(papers)){
+  
+  # columns that contain the keywords relevant to that paper
+  paper_cols <- nlp_search_terms$Term[which(nlp_search_terms$Group == papers[p])]
+  
+  # subset the dataframe to only the metadata columns and the keywords relevant to the paper
+  tempDf <- keywordMatchesMerge[,c(metadata_cols, paper_cols)]
+  
+  
+  # compress all keyword columns into one column containing all the matches in one string
+  
+  # replace binary indicator with keyword name
+  for(j in 1:length(paper_cols)){
+    tempDf[,paper_cols[j]] <- ifelse(tempDf[,paper_cols[j]] > 0, paper_cols[j], NA)
+  }
+  
+  # make one column that joins all the keywords in that row
+  matches <- apply(tempDf[,paper_cols], 1, function(x){
+    x <- x[!is.na(x)]
+    if(length(x)==0){
+      x <- NA
+    }else{
+      x <- paste(x, collapse = ", ")
+    }
+    return(x)
+  })
+  
+  tempDf <- cbind(tempDf[,metadata_cols], data.frame(keyword_matches = matches))
+  tempDf <- tempDf %>%
+    filter(!is.na(abstract), !is.na(keyword_matches))
+  
+  
+  ## If it is paper 2, make another column if there is a doi match to Galparoso et al
+  if(papers[p] == "Paper2"){
+    # read in
+    galRef <- revtools::read_bibliography(here::here("data","raw-data","citation-chasing","Galparsoro_etal_2002_references.ris"))
+    galRef <- subset(galRef, !is.na(doi))
+    galmatch <- tempDf$doi %in% galRef$doi 
+    ngalmatch <- sum(galmatch)
+    
+    tempDf <- cbind(tempDf, galmatch)
+    
+    colnames(tempDf)[ncol(tempDf)] <- paste0("Galparsoro_match_total_",ngalmatch)
+  }
+
+  
+  ## Write to csv
+  write.csv(tempDf, file = file.path(out_dir, paste(papers[p],"keyword-matches.csv", sep="-")))
+}
+
+```
+
+
+
+
+
+# Geoparsing text
+
+
+Repeat the set up chunk from the beginning of the doc to load files
+```{r set up dataset}
+## inputs (need to change)
+sqlite.fp <- here::here("data","raw-data","sql-databases", "unique-refs_v2.sqlite")
+tbl.name <- "uniquerefs"
+
+
+## Get records from database
+dbcon <- dbConnect(RSQLite::SQLite(), sqlite.fp, create = FALSE)
+recs <- tbl(dbcon, tbl.name)
+
+
+## perhaps just to on a subsample
+my_text <- recs %>%
+  select(analysis_id, duplicate_id, title, abstract) %>%
+  slice_sample(n=100) %>%
+  collect()
+
+dim(my_text)
+head(my_text)
+
+## save
+write.csv(my_text,here::here("data","derived-data","coding","nlp-extracted","geocode-text.csv"))
+
+## Clost database connection
+DBI::dbDisconnect(dbcon)
+```
+
+```{r combine text for geoparsing}
+my_text <- read.csv(here::here("data","derived-data","coding","nlp-extracted","geocode-text.csv"))
+
+vec2geocode <- paste(my_text$title, my_text$abstract)
+vec2geocode_duplicate_id <- my_text$duplicate_id
+
+rm(my_text)
+
+```
+
+
+
+```{r clean text and remove stopwords}
+#vec2geocode <- c('I went to Ottawa and then London.','Pacific northwest')
+
+
+# # clean 
+# vec2geocode <- clean_string(vec2geocode[1:2])
+# 
+# # remove stopwords
+# 
+# # identify stopwords
+# my_stopwords <- unique(c(quanteda::stopwords(),revtools::revwords(), litsearchr::get_stopwords(), "sea", "ocean", "marine", "coast", "south", "part"))
+# 
+# # remove
+# for(i in 1:length(vec2geocode)){
+#   vec2geocode[i] <- paste(quanteda::tokens_remove(quanteda::tokens(vec2geocode[i]),
+#                                                   my_stopwords),collapse = " ")
+# }
+
+
+```
+
+
+
+```{r}
+use_virtualenv(here::here("spaCy_env"))
+#use_virtualenv(here::here("localGeocode_env"))
+#use_python("C:\\Users\\deviv\\AppData\\Local\\Programs\\Python\\PYTHON~1\\python.exe")
+```
+
+Use spacy to extract components of sentences that contain locations.
+
+Types of entity labels available:
+PERSON:      People, including fictional.
+NORP:        Nationalities or religious or political groups.
+FAC:         Buildings, airports, highways, bridges, etc.
+ORG:         Companies, agencies, institutions, etc.
+GPE:         Countries, cities, states.
+LOC:         Non-GPE locations, mountain ranges, bodies of water.
+PRODUCT:     Objects, vehicles, foods, etc. (Not services.)
+EVENT:       Named hurricanes, battles, wars, sports events, etc.
+WORK_OF_ART: Titles of books, songs, etc.
+LAW:         Named documents made into laws.
+LANGUAGE:    Any named language.
+DATE:        Absolute or relative dates or periods.
+TIME:        Times smaller than a day.
+PERCENT:     Percentage, including ”%“.
+MONEY:       Monetary values, including unit.
+QUANTITY:    Measurements, as of weight or distance.
+ORDINAL:     “first”, “second”, etc.
+CARDINAL:    Numerals that do not fall under another type.
+
+attributes can be displayed using dir(doc)
+
+First extract the entities from the text. If GPE or LOC, store seperatelyfrom dates
+```{python}
+
+import spacy
+nlp = spacy.load("en_core_web_sm")
+
+
+Entarr = [] ;
+Datearr = [] ;
+
+
+for i in range(len(r.vec2geocode)):
+  doc = nlp(r.vec2geocode[i])
+  
+  for entity in doc.ents:
+    
+    if entity.label_ in ('GPE' 'LOC'):
+      ents = [r.vec2geocode_duplicate_id[i], entity.label_, entity.text]
+      Entarr.append(ents)
+      
+    if entity.label_ == 'DATE':
+      ents = [r.vec2geocode_duplicate_id[i], entity.label_, entity.text]
+      Datearr.append(ents)
+
+
+print(Entarr[0])
+print(Datearr[0])
+
+
+
+import pickle
+import os
+
+pickle.dump(Entarr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "wb"))
+pickle.dump(Datearr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Dates.pickle"]), "wb"))
+
+del Datearr
+del Entarr
+
+
+```
+
+note there will likely be duplicates in place names within a duplicate_id, so make sure to clean afterwards. Columns are: duplicate_id, entity_label, entity_text
+
+
+call the output from location tagging in spacy directly to retreive metadata about the location
+```{python}
+from geocode.geocode import Geocode
+gc = Geocode()
+gc.load()
+
+import numpy as np
+
+
+Entarr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "rb"))
+Entarr_numpy = np.array(Entarr)
+
+Geocodearr = [] ;
+
+for i in range(len(Entarr)):
+  location = gc.decode(Entarr_numpy[i,2])
+  Geocodearr.append(location)
+  
+
+pickle.dump(Geocodearr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Geocode-Metadata.pickle"]), "wb"))
+
+
+
+del Geocodearr
+del Entarr
+
+
+```
+
+Note also the option of gc.decode_parallel in https://github.com/mar-muel/local-geocode
+
+
+
+Map the distribution of locations mentioned
+
+```{python}
+import pickle
+import os
+
+Entarr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "rb"))
+Geocodearr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"geocode-metadata.pickle"]), "rb"))
+
+quit
+```
+
+Use r to format data frame
+```{r}
+require(tidyverse)
+
+# add the duplicate id to each entry
+geoarr <- list()
+
+for(i in 1:length(py$Entarr)){
+  # append each element of the list with the corresponding duplicate id -- sometimes multiple entries for each entity because returns
+  # multiple matches
+  tmp <- lapply(py$Geocodearr[[i]], function(x) append(x, py$Entarr[[i]]))
+  # Add names to these new columns
+  tmp <- lapply(tmp, function(x) {names(x)[9:11] <- c("duplicate_id","entity_label","entity_text"); x})
+  geoarr[[i]] <- tmp
+}
+
+locationsDf <- flatten(geoarr)
+rm(geoarr)
+
+locationsDf <- lapply(locationsDf, function(x) as.data.frame(x))
+
+locationsDf <- do.call(rbind.data.frame, locationsDf)
+
+
+# remove any duplicated identifications within each article
+# sometimes there will also be multiple values for an entity label -- in this case take the first? ****
+locationsDf <- locationsDf %>%
+  distinct(geoname_id, duplicate_id, entity_text, .keep_all=TRUE) 
+
+
+## Format the data frame
+locationsDf <- locationsDf %>%
+  mutate(
+    entity_label = factor(entity_label, levels=c("LOC","GPE"))
+  )
+
+## BUT geolocating only really works on GPE, not LOC types, so maybe seperate as several columns in the metadata
+```
+
+
+Work on coding the location types
+```{r}
+library(mregions)
+
+
+# get records
+types <- mr_place_types()
+
+mrec <- mr_records_by_type(type = types$type[1])
+
+
+
+# identify which records correspond to each entry
+mreg_text <- locationsDf %>%
+  filter(entity_label == "LOC")
+
+mreg_code <- mregions::mr_geo_code(mreg_text$entity_text[2], fuzzy=TRUE)
+mreg_code <- mreg_code[1,]
+
+
+# get the area of the bounding box
+
+library(geosphere)
+
+xlim <- c(mreg_code$minLongitude, mreg_code$maxLongitude)
+ylim <- c(mreg_code$minLatitude, mreg_code$maxLatitude)
+l.out = 50
+
+bb = rbind(cbind(xlim[1], seq(ylim[1],ylim[2],length.out = l.out)),
+            cbind(seq(xlim[1],xlim[2],length.out = l.out),ylim[2]),
+            cbind(xlim[2],seq(ylim[2],ylim[1],length.out = l.out)),
+            cbind(seq(xlim[2],xlim[1],length.out = l.out),ylim[1]))
+
+
+area <- geosphere::areaPolygon(bb)
+
+area # in m2
+
+
+# extract shp file?
+
+
+
+
+
+save(locationsDf, file = here::here("data","derived-data","coding","nlp-extracted","geocode-metadata.RData"))
+```
+
+```{r}
+library(maps)
+
+load(here::here("data","derived-data","coding","nlp-extracted","geocode-metadata.RData"))
+
+world_map <- map_data("world")
+
+# # add the sizes of the different location_types
+# location_size_lookup <- data.frame(
+#   location_type = c('city', 'place', 'country', 'admin1', 'admin2', 'admin3', 'admin4', 'admin5', 'admin6', 'admin_other', 'continent', 'region'),
+#   area  = c()
+# )
+
+ggplot()+
+  geom_polygon(data = world_map, aes(x=long, y=lat, group=group), fill="grey")+
+
+  geom_point(data=locationsDf %>% filter(entity_label == "GPE") %>% arrange(population), 
+             aes(longitude, latitude, size = log(population), color = log(population)), alpha=0.3)+
+  
+  coord_sf()+
+  scale_size_continuous()+
+  scale_color_viridis_c(option = "magma")+
+  theme_void()+
+  guides(color = guide_legend())+
+  theme(
+    legend.position = c(0.1, 0.5),
+      plot.background = element_rect(fill = "#f5f5f2", color = NA), 
+      panel.background = element_rect(fill = "#f5f5f2", color = NA), 
+      legend.background = element_rect(fill = "#f5f5f2", color = NA)
+  )
+  
+
+  
+```
+
+
+# Junk code
+
+Unfortunately couldn't get spacyr to work -- got stuck on spcay_install()
+
+using: https://spacyr.quanteda.io/index.html
+```{r install spaCy, eval=FALSE}
+devtools::install_github("quanteda/spacyr", build_vignettes = FALSE)
+
+library("spacyr")
+spacy_install()
+
+```
+
+
+```{r use spacy to parse text and identify nouns}
+
+library("spacyr")
+spacy_initialize(model = "en_core_web_sm")
+
+entities <- spacy_extract_entity(vec2geocode, output = "data.frame", type = "GPE")
+
+entities
+
+# finish spacy session
+spacy_finalize()
+```
+
