@@ -41,16 +41,150 @@ predRel <- read.csv(here::here("data","raw-data","relevance-predictions","1_docu
 # rename columns
 colnames(predRel) <- c("analysis_id","relevance_mean","relevance_std","relevance_lower","relevance_upper")
 
+
+
 # check for duplicates
 sum(duplicated(predRel$analysis_id))
 dupsIds <- predRel$analysis_id[duplicated(predRel$analysis_id)]
 View(predRel[which(predRel$analysis_id %in% dupsIds),])
 
+# are the dupliate ids articles that have been "seen"? Yes
+screens <- tbl(all_db, "allScreen_afterCoding") %>% 
+  select(analysis_id, sample_screen, include_screen) %>%
+  collect()
+sum(dupsIds %in% screens$analysis_id)
+sum(screens$analysis_id %in% dupsIds)
+test <- predRel[which(predRel$analysis_id %in% dupsIds),] %>%
+  inner_join(screens, by="analysis_id")
+summary(test)
+
+summary(predRelMeta[which(predRel$analysis_id %in% dupsIds),])
+nrow(predRelMeta[which(predRel$analysis_id %in% dupsIds),])
+
+
+
+## Write to sql database
 dbWriteTable(all_db, "predRel2", predRel)
 
 dbDisconnect(all_db)
 ```
 
+
+```{r compare to old relevance predictions}
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+predRelOld <- tbl(all_db, "predRel") %>% collect()
+dbDisconnect(all_db)
+
+
+test <- screens %>%
+  left_join(predRel %>% 
+              select(analysis_id, relevance_mean) %>%
+              filter(!(relevance_mean %in% c(1,0))), by="analysis_id") %>%
+  rename(relevance_mean2 = relevance_mean) %>%
+  left_join(predRelOld %>% select(analysis_id, relevance_mean), by="analysis_id") %>%
+  rename(relevance_mean1 = relevance_mean) %>%
+  mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude")))
+summary(test)
+
+ggplot(test, aes(relevance_mean1, relevance_mean2))+
+  geom_point()+
+  facet_wrap(vars(include_screen))
+
+
+ggplot(test, aes(relevance_mean1, relevance_mean2))+
+   geom_point()+
+   facet_wrap(vars(include_screen))
+
+
+test %>%
+  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2")) %>% 
+  ggplot()+
+  geom_violin(aes(x=variable, y=value, fill = variable))+
+  labs(y="predicted relevance", x="iteration")+
+  facet_wrap(vars(include_screen))+
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+
+# what does the old relevance predictions say for the new additions?
+test %>%
+  filter(sample_screen == "supplemental coding") %>%
+  ggplot(aes(x=relevance_mean1)) +
+  ggtitle("supplemental coding articles")+
+  geom_histogram()
+
+
+
+## Explore the changes in inclusions/exclusions between the datasets
+
+# data load
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+# get screen results after coding
+screens <- tbl(all_db, "allScreen_afterCoding") %>% collect()
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+
+# after coding, 2060 exclusions, 956 inclusions
+table(screens$include_screen)
+
+# number of inclusions added from supplemental coding = 254
+screens %>%
+  group_by(include_screen, sample_screen) %>%
+  summarise(n=n())
+
+screens %>%
+  filter(include_screen == 0 & sample_screen == "test list") %>%
+  View()
+
+# load initial screen results
+
+# initally, 886 included, 1796 excluded
+# note that one test list article was excluded
+table(screen_results_merged$include_screen)
+screen_results_merged %>%
+  group_by(include_screen, sample_screen) %>%
+  summarise(n=n())
+
+# combine inclusions with the coding screens to see changes
+changedScreens <- screen_results_merged %>%
+  filter(include_screen == TRUE) %>%
+  select(sysrev_id, title, abstract, screener, sample_screen) %>%
+  left_join(screens %>% 
+              select(sysrev_id, title, reviewer, reviewer_2, include_screen), 
+            by = "sysrev_id") %>%
+  mutate(include_screen = factor(include_screen))
+summary(changedScreens)
+
+# who made the most exclusions at the coding stage?
+changedScreens %>%
+  filter(include_screen == 0) %>%
+  group_by(reviewer) %>%
+  summarise(n=n())
+
+# how were the changed screens sampled?
+changedScreens %>%
+  filter(include_screen == 0) %>%
+  group_by(sample_screen) %>%
+  summarise(n=n())
+
+changedScreens %>%
+  filter(include_screen == 0 & sample_screen == "test list")
+changedScreens %>% filter(sysrev_id == "91813131")  
+screens %>% filter(sysrev_id == "91813131")
+
+# number of articles that were excluded at the coding stage = 184
+changedScreens %>%
+  filter(include_screen == 0) %>%
+  nrow()
+
+
+
+```
 
 
 
