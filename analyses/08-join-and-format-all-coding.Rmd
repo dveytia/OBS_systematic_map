@@ -1607,17 +1607,54 @@ write.table(
 
 ```
 
-# Checks
-
-```{r check that the dataframes match up}
 
 
 
+# Alternate screening dataset - remove coding exclusions entirely
 
+```{r}
+# data load
+# get screen results after coding
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+
+allScreens <- tbl(all_db, "allScreen_afterCoding") %>% collect()
+# get screen results before coding
+load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
+
+
+
+# Remove articles that were originally classed as include then changed
+# to exclude after coding stage completely from the screening dataset
+# essentially, keep exclusions from initial screening, and inclusions from after coding
+screenExclID <- screen_results_merged$sysrev_id[which(screen_results_merged$include_screen == FALSE)]
+codeInclID <- allScreens$sysrev_id[which(allScreens$include_screen == 1)]
+
+
+allScreens2 <- allScreens[which(allScreens$sysrev_id %in% c(screenExclID, codeInclID)),]
+
+exclInd <- which(allScreens2$sample_screen == "supplemental coding" &
+        allScreens2$include_screen == 0)
+allScreens2 <- allScreens2[-exclInd,]
+
+# check that no exclusions are sampled by supplemental coding
+allScreens2 %>%
+  group_by(include_screen, sample_screen)%>%
+  summarise(n=n())
+# check that the number of exclusions == number of exclusions from initial
+sum(allScreens2$include_screen == 0) == sum(!(screen_results_merged$include_screen))
+
+
+
+## Write for Vicky
+write.table(
+  allScreens2,
+  file = here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
 
 ```
-
-
 
 
 # Junk

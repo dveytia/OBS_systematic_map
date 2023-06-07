@@ -113,9 +113,10 @@ test %>%
 # what does the old relevance predictions say for the new additions?
 test %>%
   filter(sample_screen == "supplemental coding") %>%
-  ggplot(aes(x=relevance_mean1)) +
+  ggplot(aes(x=relevance_mean1, fill = include_screen)) +
   ggtitle("supplemental coding articles")+
-  geom_histogram()
+  geom_density(alpha = 0.25)
+
 
 
 
@@ -172,18 +173,13 @@ changedScreens %>%
   group_by(sample_screen) %>%
   summarise(n=n())
 
-changedScreens %>%
-  filter(include_screen == 0 & sample_screen == "test list")
-changedScreens %>% filter(sysrev_id == "91813131")  
-screens %>% filter(sysrev_id == "91813131")
-
 # number of articles that were excluded at the coding stage = 184
 changedScreens %>%
   filter(include_screen == 0) %>%
   nrow()
 
 
-
+dbDisconnect(all_db)
 ```
 
 
