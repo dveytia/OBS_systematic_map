@@ -471,13 +471,13 @@ variables <- variables[which(!(variables %in% c("sysrev_id","title","year","code
 ```
 
 
-```{r try Kramer 1980 kappa designed for multiple choice responses}
+```{r try kraemer 1980 kappa designed for multiple choice responses}
 
 ## Calculate kappa statistic for all the variables 
 # kappa calculation method changes depending on whether the variable is multiple choice
 
 # Function to calculate multiple choice version of kappa statistic
-source(here::here("R/kramerKappa.R"))
+source(here::here("R/kraemerKappa.R"))
 
 
 # for each variable and publication, find the most common response
@@ -565,21 +565,21 @@ for(v in 1:length(variables)){
     
   }else{
     
-    # If the variable has multiple choice, then use the Kramer (1980) method
-    kappaResults$kappaMethod[v] <- "Kramer (1980)"
+    # If the variable has multiple choice, then use the kraemer (1980) method
+    kappaResults$kappaMethod[v] <- "kraemer (1980)"
     
     # first calculate with all articles, just setting individual responses to NA
     # # coders who excluded an article -- set all other responses to NA
     for(i in 1:nrow(excl)){
       temp2[excl[i,1],,excl[i,2]] <- NA # all the variables coded for that article x coder
     }
-    kappa <- kramerKappa(temp2)  
+    kappa <- kraemerKappa(temp2)  
     kappaResults$kappaValue[v] <- kappa$k0
     kappaResults$kappaPValue[v] <- kappa$pValue
    
    
     # remove articles with disagreement in screening entirely
-   kappa <- kramerKappa(temp2[-unique(excl[,1]),,]) 
+   kappa <- kraemerKappa(temp2[-unique(excl[,1]),,]) 
    kappaResults$kappaExclusionRmValue[v] <- kappa$k0
    
    
@@ -594,7 +594,7 @@ for(v in 1:length(variables)){
     if(min(table(x$cluster)) == 1){ # if there is one reviewer in a cluster (outlier)
        clust <- names(which.min(table(x$cluster)))
        outlier <- which(x$cluster == names(which.min(table(x$cluster))))
-       kappa <- kramerKappa(temp2[,,-outlier])
+       kappa <- kraemerKappa(temp2[,,-outlier])
        kappaResults$kappaOutlierRmValue[v] <- kappa$k0
        kappaResults$OutlierID[v] <- outlier
     }

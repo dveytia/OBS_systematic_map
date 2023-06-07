@@ -1,4 +1,12 @@
-kramerKappa <- function (ratings){
+#' kraemerKappa
+#' @description
+#' An implementation of the kappa statistic for multiple choice selections amongst multiple reviewers, 
+#' as presented in Kraemer (1980). 
+#' @param ratings A matrix containing categorical ratings of subjects by raters. 
+#' The matrix should have dimensions of either number of subjects (ns) x number of categories (nc) x 
+#' number of raters (nr) if a multiple choice, or ns*nr if single choice  
+
+kraemerKappa <- function (ratings){
   
   # number of subjects, categories, and raters
   ns <- dim(ratings)[1]
@@ -13,7 +21,6 @@ kramerKappa <- function (ratings){
     nr <- dim(ratings)[2]
   }
   
-  
   # create object to hold calculated variables
   Rij <- matrix(nrow=ns, ncol = nc, 
                 dimnames = list(subject=NULL, category = lev))
@@ -25,9 +32,12 @@ kramerKappa <- function (ratings){
   Si <- vector("numeric", ns)
   
   
+  # loop through each subject (i)
+  
   for (i in 1:ns) {
     
-    # for each reviewer, calculate the ranks
+    # for each reviewer, calculate the rankings of the different categories
+    # keeping NA values as NA (not assigning a rank)
     if(length(dim(ratings)) == 2){
       ratings_i <- matrix(nrow = nc, ncol = nr,
                           dimnames = list(categories = lev, rater = NULL))
