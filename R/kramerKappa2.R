@@ -1,4 +1,4 @@
-kramerKappa <- function (ratings){
+kramerKappa2 <- function (ratings){
   
   # number of subjects, categories, and raters
   ns <- dim(ratings)[1]
@@ -24,8 +24,28 @@ kramerKappa <- function (ratings){
   ri <- vector("numeric", ns)
   Si <- vector("numeric", ns)
   
+  # function to calculate ranks
+  ranksKappa <- function(x){
+    nc <- length(x)
+    nos <- which(x == "No")
+    
+    if(length(nos) == length(x)){
+      return(rep(NA, length(x)))
+    }else{
+      ties <- which(!is.na(x) & x != "No")
+      x[ties] <- 0.5*(length(ties)+1)
+      x[nos] <- 0.5*(nc+3)
+      return(as.numeric(x))
+    }
+    
+  }
+  
+  
   
   for (i in 1:ns) {
+    
+    
+    # calculate the average proportion of concordant pairs
     
     # for each reviewer, calculate the ranks
     if(length(dim(ratings)) == 2){
@@ -37,14 +57,15 @@ kramerKappa <- function (ratings){
         ind <- which(rownames(ratings_i) == ratings[i,r])
         ratings_i[ind, r] <- ratings[i,r]
       }
-      ranks_i <- apply(ratings_i, 2, rank, na.last = "keep")
+      ranks_i <- apply(ratings_i, 2, ranksKappa)
+      dimnames(ranks_i) <- dimnames(ratings_i)
     }else{
       ratings_i <- ratings[i,,]
-      ranks_i <- apply(ratings_i, 2, rank, na.last = "keep")
+      ranks_i <- apply(ratings_i, 2, ranksKappa)
+      dimnames(ranks_i) <- dimnames(ratings_i)
     }
     
-     
-    #ranks_i <- t(na.omit(t(ranks_i))) # consider removing
+    if(sum(!is.na(ranks_i)) == 0){next}
     
     # get the number of raters
     nr <- dim(ranks_i)[2]
@@ -53,9 +74,10 @@ kramerKappa <- function (ratings){
     # Ti is the tie correction for the mi observation of subject i
     #t = apply(ranks_i, 2, function(x) sum(x[x==1], na.rm=T))
     #Ti[i] <- mean((t^3)-t)
+    # what if a tie for last place(ie.not selected) is not considered a tie at all?
     t <- vector("numeric", nr)
     for (r in 1:nr) {
-      rater <- table(ranks_i[, r])
+      rater <- table(ranks_i[which(ratings_i[,r] != "No"), r])
       ties <- rater[rater > 1]
       l <- as.numeric(ties)
       t[r] <- sum(l^3 - l, na.rm=T)
@@ -66,8 +88,8 @@ kramerKappa <- function (ratings){
     Rij[i,] <- apply(ranks_i, 1, mean, na.rm=T)
     
     # the number of observations per subject
-    #mi[i] <- sum(apply(ranks_i, 2, function(x) length(unique(x))))
-    mi[i] <- sum(apply(ranks_i, 2, function(x) length(x)))
+    #mi[i] <- sum(apply(ranks_i, 2, function(x) length(x)))
+    mi[i] <- sum(apply(ranks_i, 2, function(x) length(x[!is.na(x)])))
     
     # sample variance of Rij
     Si <- var(Rij[i,])
@@ -84,7 +106,7 @@ kramerKappa <- function (ratings){
       Si <- 1e-5
     }
     
-    # coefficient of concordance for the mi rankings of subject i
+    # coefficient of concordance for all the rankings (mi) of subject i
     Wi[i] <- 12*(nc-1)*Si/((nc^3)-nc-Ti[i]) 
     
     # if an infinite value returned, set to the max of 1
@@ -105,9 +127,7 @@ kramerKappa <- function (ratings){
     
   } # end of looping through all the subjects
   
-  chanceP <- sum(apply(ttab, 2, sum)^2)/(ns * nr)^2 - 
-    sum(apply(rtab, 2, var) * (nr - 1)/nr)/(nr - 1)
-  
+ 
   ## now calculate overall metrics
 
   # Overall average rank of category j
@@ -128,6 +148,12 @@ kramerKappa <- function (ratings){
   k0 <- (mean(ri, na.rm=T)-rT)/(1-rT)
   
   
-  return(k0)
+  ## P value?
+  Xvalue <- nr * (ns - 1) * WT
+  df1 <- ns - 1
+  p.value <- pchisq(Xvalue, df1, lower.tail = FALSE)
+  
+  
+  return(list(k0 = k0, pValue = p.value))
   
 }
