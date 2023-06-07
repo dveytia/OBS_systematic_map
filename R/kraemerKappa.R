@@ -39,6 +39,9 @@ kraemerKappa <- function (ratings){
     # for each reviewer, calculate the rankings of the different categories
     # keeping NA values as NA (not assigning a rank)
     if(length(dim(ratings)) == 2){
+      # if the ratings dataset is 2D, then the values for a single subject would just be a vector
+      # to be compatible with the rest of the code, reformat into a matrix with dim nc * nr
+      # and a "No" where the category was not selected
       ratings_i <- matrix(nrow = nc, ncol = nr,
                           dimnames = list(categories = lev, rater = NULL))
       ratings_i[] <- "No"
@@ -48,7 +51,10 @@ kraemerKappa <- function (ratings){
         ratings_i[ind, r] <- ratings[i,r]
       }
       ranks_i <- apply(ratings_i, 2, rank, na.last = "keep")
+      
     }else{
+      # If the dataset is 3D (i.e. multiple choice), then no reformatting needed
+      # as the matrix for ns = i will already have the dimensions nc * nr
       ratings_i <- ratings[i,,]
       ranks_i <- apply(ratings_i, 2, rank, na.last = "keep")
     }
@@ -56,6 +62,8 @@ kraemerKappa <- function (ratings){
     # get the number of raters
     nr <- dim(ranks_i)[2]
     
+    
+    ## Calculate statistics for the subject
     
     # Ti is the tie correction for the mi observation of subject i
     t <- vector("numeric", nr)
