@@ -103,8 +103,10 @@ formatCoding2distilBert <- function(codebookFp, skipLines=3,
       
       if(grepl("Select One", values[j], ignore.case = TRUE)){
         vals <- unlist(strsplit(gsub("Select One: ","", values[j]),","))
-      }else{
+      }else if(grepl("Multiple", values[j], ignore.case = TRUE)){
         vals <- unlist(strsplit(gsub("Select Multiple: ","", values[j]),","))
+      }else{
+        vals <- unlist(strsplit(gsub("Select Muliple: ","", values[j]),","))
       }
       
       # remove leading/trailing spaces

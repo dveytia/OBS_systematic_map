@@ -37,6 +37,7 @@ source(here::here("R","formatCoding2distilBert.R"))
 
 
 ```{r combine set-0 into most common answer, eval=FALSE}
+source(here::here("R","formatCoding2distilBert.R"))
 
 ## Read in files
 set0Dir <- here::here("data","derived-data","coding","manual-coding","set-0")
@@ -104,7 +105,9 @@ for(f in 1:length(set0Files)){
 
 
 
-# # save
+```
+
+```{r save responseArray}
 save(responseArray, file=file.path(set0Dir, "responseArray.RData"))
 ```
 
@@ -690,9 +693,14 @@ load(file.path(set0Dir, "responseArray.RData"))
 
 # function to find most frequently appearing value
 fun <- function(x){
-  as.numeric(names(which.max(table(x))))
+  maxes <- which(table(x) == max(table(x)))
+  if(length(maxes)==1){
+    out <- as.numeric(names(which.max(table(x))))
+  }else{
+    out <- 1 # if the 0 and 1 is tied, put 1
+  }
 }
-
+apply(responseArray[4:5,7:15,], 1:2, FUN=fun)
 
 responseDf <- apply(responseArray[,-c(1:5),], 1:2, FUN=fun) # condense to most frequently appearing value
 responseDf <- as.data.frame(responseDf)
@@ -704,16 +712,21 @@ responseDf[,"coder_1"] <- rep("all_combined", nrow(responseDf))
 
 
 # for all inclusions where common decision is to include, but could not agree on ORO, set to unclear
-incl <- which(responseDf[,"include_code"] == 1 & 
-               sum(responseDf[,which(colnames(responseDf) == "oro_type.M_Renewables"):which(colnames(responseDf) == "oro_type.Unclear")] == 0))
-noORO <- which(rowSums(responseDf[,which(colnames(responseDf) == "oro_type.M_Renewables"):which(colnames(responseDf) == "oro_type.Unclear")], na.rm=T) == 0)
 
-responseDf[intersect(incl, noORO), "oro_type.Unclear"] <- 1
+incl <- which(responseDf[,"include_code"] == 1)
+noORO <- which(rowSums(responseDf[,grep("oro_type", colnames(responseDf))], na.rm=T) == 0)
+if(length(noORO) >0){
+  View(responseArray[intersect(incl, noORO)[1],grep("oro_type", colnames(responseDf)),])
+  responseDf[intersect(incl, noORO), "oro_type.Unclear"] <- 1
+}
+
 
 
 # # save
 
 # screening decisions
+responseDf$include_code[responseDf$sysrev_id == 91759652] <- 0 # set to exclusion b/c it was set to exclusion before
+
 write.csv(responseDf[,1:6], 
           here::here("data","derived-data","screening","screened-records","coding-screening_set-0.csv"),row.names = FALSE)
 
@@ -730,6 +743,8 @@ write.csv(responseDf %>% filter(include_code == 1) %>% select(-c(include_code)),
 
 
 ```{r format initial sets into binary columns for predictions in distilBERT}
+source(here::here("R/formatCoding2distilBert.R"))
+
 ## READ IN FILES
 
 # files of coding results
@@ -973,9 +988,9 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 src_dbi(all_db) # look at all the tables in the database
 
 # check for duplicates and filter out
-responseDf %>%
-  filter(duplicate_id == responseDf$duplicate_id[duplicated(responseDf$duplicate_id)]) %>%
-  View
+# responseDf %>%
+#   filter(duplicate_id == responseDf$duplicate_id[duplicated(responseDf$duplicate_id)]) %>%
+#   View
 responseDf <- responseDf[!duplicated(responseDf$duplicate_id),]
 
 # unique reference metadata
@@ -1094,6 +1109,7 @@ supplementaryCoding$sysrev_id <- rep(NA, nrow(supplementaryCoding)) # add a blac
 
 # check what columns they have in common and if any important ones are missing
 cols <- intersect(colnames(initialCoding), colnames(supplementaryCoding))
+# check there are no columns getting dropped
 colnames(initialCoding)[which(!(colnames(initialCoding) %in% colnames(supplementaryCoding)))]
 colnames(supplementaryCoding)[which(!(colnames(supplementaryCoding) %in% colnames(initialCoding)))]
 
@@ -1106,48 +1122,26 @@ dbDisconnect(all_db)
 codebookCombined <- rbind(initialCoding[,cols], supplementaryCoding[,cols])
 
 # check IDs to make sure they are unique
-length(unique(codebookCombined$duplicate_id))
-length(codebookCombined$duplicate_id)
+anyDuplicated(codebookCombined$duplicate_id)
+
 ```
 
 
 ```{r tabulate all coding results}
+source(here::here("R/tabulateCoding.R"))
 
-# index of which columns belong to which variables
-variableInd <- unlist(lapply(strsplit(colnames(codebookCombined), "[.]"), function(x) x[[1]]))
-
-# identify variables to tabulate (i.e. not identification columns)
-variables_to_tab <- unique(variableInd)
-idCols <- c("sysrev_id","analysis_id","duplicate_id","title","abstract","keywords","year","coder_1","coder_2")
-variables_to_tab <- variables_to_tab[which(!(variables_to_tab %in% idCols))]
-  
-# empty list to fill with tabulated tables (one item for each variable)
-tabulated_variables <- list()
-
-for(v in 1:length(variables_to_tab)){
-  colsInd <- grep(variables_to_tab[v], variableInd, ignore.case = TRUE)
-  
-  if(is.character(codebookCombined[,colsInd])){next} # can't tabulate character vectors
-  
-  if(!is.null(dim(codebookCombined[,colsInd]))){
-    tab <- colSums(codebookCombined[,colsInd], na.rm=TRUE)
-    # if there are multiple values for each variable, get the variable name
-    if(sum(grepl("[.]", colnames(codebookCombined)[colsInd])) > 0){
-      names(tab) <- unlist(lapply(strsplit(colnames(codebookCombined)[colsInd], "[.]"), function(x) x[[2]]))
-    }
-  }else{
-    tab <- tabulate(codebookCombined[,colsInd])
-  }
-  tabulated_variables[[v]] <- tab
-  names(tabulated_variables)[v] <- variables_to_tab[v]
-}
-
+tabulated_variables <- tabulateCoding(
+  codebookCombined,
+  c("sysrev_id","analysis_id","duplicate_id","title","abstract","keywords","year","coder_1","coder_2")
+)
 
 sink(here::here("outputs","coding","tabulated_coding_round1And2.txt"))
 print(tabulated_variables)
 sink()
 
 ```
+
+
 
 
 ```{r simplify coding variables and save as all-coding-format-distilBERT.txt}
@@ -1188,6 +1182,87 @@ RSQLite::dbDisconnect(all_db)
 ```
 
 
+```{r use the tabulated coded variables to determine F1 score calculation method}
+## load
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables") %>% collect()
+
+RSQLite::dbDisconnect(all_db)
+
+## Tabulate
+source(here::here("R/tabulateCoding.R"))
+tabulated_variables <- tabulateCoding(codebookCombinedSimplified,
+               idCols = c("sysrev_id","analysis_id","duplicate_id","title",
+                          "abstract","keywords","year","coder_1","coder_2"))
+
+
+## Explore
+varMeans <- unlist(lapply(tabulated_variables, function(x) mean(x, na.rm=T)))
+varMedian <- unlist(lapply(tabulated_variables, function(x) quantile(x, probs = 0.5, na.rm=T)))
+meanMinusMedian <- varMeans-varMedian
+
+hist(meanMinusMedian,breaks = 20)
+
+# which variables are in the top 75% where one value is very low
+vars <- variables_to_tab[which(meanMinusMedian > quantile(meanMinusMedian, probs=0.75))]
+
+for(i in 1:length(vars)){
+  print(vars[i])
+  print(tabulated_variables[[vars[i]]])
+}
+
+tabulated_variables$time_period # low value = all pre-industrials, combine with modern
+tabulated_variables$data_scale_spatial # low value = micro --> combine with small
+
+# variables where one value is very high
+variables_to_tab[which(meanMinusMedian < 0)]
+# impact ncp is because one value that is any
+tabulated_variables$impact_ncp
+# economic sector is very high on renewable_energy. 
+tabulated_variables$economic_sector
+```
+
+
+```{r simplify codebook even more}
+idCols <- c("sysrev_id","analysis_id","duplicate_id","title","abstract","keywords","year","coder_1","coder_2")
+
+
+# load
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables") %>% collect()
+
+# reformat
+source(here::here("R","simplifyCodebook2.R"))
+codebookCombinedSimplifiedMore <- simplifyCodebook2(codebookCombinedSimplified,idCols)
+
+
+# tabulate
+source(here::here("R/tabulateCoding.R"))
+tabulated_variables <- tabulateCoding(codebookCombinedSimplifiedMore,
+               idCols = c("sysrev_id","analysis_id","duplicate_id","title",
+                          "abstract","keywords","year","coder_1","coder_2"))
+
+
+# write to database
+RSQLite::dbWriteTable(all_db, 
+                      "allCodingSimplifiedVariablesMore", 
+                      codebookCombinedSimplifiedMore, overwrite=TRUE) 
+
+RSQLite::dbDisconnect(all_db)
+
+# write to txt file for Vicky
+write.table(
+  codebookCombinedSimplifiedMore,
+  file = here::here("data","derived-data","coding", "all-coding-format-distilBERT-simplifiedMore.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
+```
 
 # Compare these with all the articles that were screened to come up with updated screening decisions data
 

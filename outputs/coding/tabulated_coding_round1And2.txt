@@ -1,70 +1,86 @@
 $oro_type
-                          M_Renewables                  M_Increase_efficiency               M_CO2_removal_or_storage 
-                                   129                                     65                                    240 
-            N_Human_assisted_evolution                           N_Protection                          N_Restoration 
-                                    38                                    122                                    112 
-SA_Built_infrastructure_and_technology                  SA_Socioinstitutional                                Unclear 
-                                   114                                    236                                     11 
+                          M_Renewables                  M_Increase_efficiency 
+                                   130                                     65 
+              M_CO2_removal_or_storage             N_Human_assisted_evolution 
+                                   241                                     38 
+                          N_Protection                          N_Restoration 
+                                   122                                    113 
+SA_Built_infrastructure_and_technology                  SA_Socioinstitutional 
+                                   116                                    236 
+                               Unclear 
+                                     7 
 
 $oro_development_stage
-Design__observeconceptpreliminary_testingside_effects        Evaluating_future_placementupscaling_potential 
-                                                  503                                                   180 
-                                           Pilot_demo                      Implemented_continued_assessment 
-                                                   50                                                   275 
+Design__observeconceptpreliminary_testingside_effects 
+                                                  508 
+       Evaluating_future_placementupscaling_potential 
+                                                  180 
+                                           Pilot_demo 
+                                                   51 
+                     Implemented_continued_assessment 
+                                                  276 
                                               Unclear 
                                                     7 
 
 $economic_sector_involved
-            Fisheries           Aquaculture       Pharmaceuticals              Shipping   Port_infrastructure   Tourism__Recreation 
-                   76                    64                     3                    51                     7                    23 
-  Coastal_development Seabed_miningoil__gas      Renewable_energy              Informal            Livelihood                 Other 
-                   45                    20                   115                     3                    35                    46 
+            Fisheries           Aquaculture       Pharmaceuticals              Shipping 
+                   76                    64                     3                    51 
+  Port_infrastructure   Tourism__Recreation   Coastal_development Seabed_miningoil__gas 
+                    7                    23                    46                    20 
+     Renewable_energy              Informal            Livelihood                 Other 
+                  115                     3                    36                    46 
 
 $m_co2_removal
-                     Bioenergy                   Openocean_PP    Macroalgae_kelp_cultivation         Microalgae_cultivation 
-                            34                             48                             36                             20 
- Weathering_and_alkinalization Coastal_blue_carbon_ecosystems                          Other 
-                            42                             90                             12 
+                     Bioenergy                   Openocean_PP    Macroalgae_kelp_cultivation 
+                            34                             48                             36 
+        Microalgae_cultivation  Weathering_and_alkinalization Coastal_blue_carbon_ecosystems 
+                            20                             42                             91 
+                         Other 
+                            12 
 
 $m_co2_ocean_storage
-Select_Muliple_Inorganic                  Organic           Deep_sediments                  Unclear 
-                       0                      193                       69                        5 
+     Inorganic        Organic Deep_sediments        Unclear 
+            69            195             70              5 
 
 $data_type
-                      Primary Secondary__evidence_synthesis              Secondary__other                       Unclear 
-                          769                           164                            11                             8 
+                      Primary Secondary__evidence_synthesis              Secondary__other 
+                          772                           164                            11 
+                      Unclear 
+                            8 
 
 $method_type
-              Experimental_exsitu               Experimental_insitu                    Expert_opinion  Method_or_technology_development 
-                               57                                54                                77                                79 
-                    Observational Mathematical_predictionsimulation                    Social_primary                             Other 
-                              173                               250                               153                                 1 
-                          Unclear 
-                                9 
+              Experimental_exsitu               Experimental_insitu                    Expert_opinion 
+                               57                                54                                77 
+ Method_or_technology_development                     Observational Mathematical_predictionsimulation 
+                               79                               175                               252 
+                   Social_primary                             Other                           Unclear 
+                              154                                 1                                 9 
 
 $ocean_basin
-                   Pacific                   Atlantic                     Indian                   Southern                     Arctic 
-                       224                        244                         94                         12                         17 
-Mediterranean_or_Black_Sea                     Global                    Unclear 
-                        36                         73                         24 
+                   Pacific                   Atlantic                     Indian 
+                       226                        244                         95 
+                  Southern                     Arctic Mediterranean_or_Black_Sea 
+                        12                         17                         36 
+                    Global                    Unclear 
+                        74                         25 
 
 $ecosystem_type
-        Salt_marsh           Mangrove     Wetland__other        Oyster_reef         Coral_reef         Macroalgae           Seagrass 
-                40                 63                 26                 12                 86                 43                 35 
-Blue_carbon__other              Other 
-                11                 81 
+        Salt_marsh           Mangrove     Wetland__other        Oyster_reef         Coral_reef 
+                41                 63                 26                 12                 86 
+        Macroalgae           Seagrass Blue_carbon__other              Other 
+                44                 35                 11                 81 
 
 $marine_system
       estuary          land coastal ocean    open-ocean    deep-ocean       unclear 
-           15           260           547           119            37            27 
+           15           261           549           120            37            27 
 
 $time_period
 Before pre-ind Pre-industrial         Modern       Forecast 
-             2              6            625            127 
+             2              6            630            127 
 
 $data_scale_spatial
    Micro    Small    Local Regional    Large   Global  Unclear 
-       4       90      308      156       63       53       17 
+       4       91      312      158       63       53       18 
 
 $climate_mitigation
 climate_mitigation 
@@ -72,43 +88,49 @@ climate_mitigation
 
 $adapt_to_threat
   Human Natural    Both 
-    219     102      98 
+    222     103     100 
 
 $climate_threat
-    Temperature Marine_heatwave Sea_ice_changes   Acidification             SLR   Deoxygenation Extreme_weather Natural_impacts 
-             59              22               5              54             197               4             134              20 
-  Human_impacts      General_CC           Other         Unclear 
-              1             191               7              10 
+    Temperature Marine_heatwave Sea_ice_changes   Acidification             SLR   Deoxygenation 
+             59              22               5              54             198               4 
+Extreme_weather Natural_impacts   Human_impacts      General_CC           Other         Unclear 
+            137              20               1             191               7              10 
 
 $impact_nature
 impact_nature 
-          226 
+          228 
 
 $impact_ncp
  Regulating    Material Nonmaterial 
-         79          91          31 
+         79          92          32 
 
 $impact_economy
-            Fisheries           Aquaculture       Pharmaceuticals              Shipping   Port_infrastructure   Tourism__Recreation 
-                   53                    17                     1                     9                     5                    22 
-  Coastal_development Seabed_miningoil__gas      Renewable_energy              Informal            Livelihood                 Other 
-                   38                     4                    20                     2                    40                    31 
+            Fisheries           Aquaculture       Pharmaceuticals              Shipping 
+                   53                    17                     1                     9 
+  Port_infrastructure   Tourism__Recreation   Coastal_development Seabed_miningoil__gas 
+                    5                    22                    40                     4 
+     Renewable_energy              Informal            Livelihood                 Other 
+                   20                     2                    42                    31 
 
 $impact_oro
-                          M_Renewables                  M_Increase_efficiency               M_CO2_removal_or_storage 
-                                    14                                      8                                     14 
-            N_Human_assisted_evolution                           N_Protection                          N_Restoration 
-                                     3                                     23                                     21 
-SA_Built_infrastructure_and_technology                  SA_Socioinstitutional                                Unclear 
-                                    30                                     15                                      0 
+                          M_Renewables                  M_Increase_efficiency 
+                                    14                                      8 
+              M_CO2_removal_or_storage             N_Human_assisted_evolution 
+                                    14                                      3 
+                          N_Protection                          N_Restoration 
+                                    24                                     21 
+SA_Built_infrastructure_and_technology                  SA_Socioinstitutional 
+                                    30                                     15 
+                               Unclear 
+                                     0 
 
 $techological_scalability
 techological_scalability 
-                     177 
+                     178 
 
 $technological_readiness
 technological_readiness 
-                    259 
+                    261 
 
 $lead_time
 lead_time 
@@ -128,15 +150,15 @@ cost
 
 $enabling_factors
 enabling_factors 
-             224 
+             226 
 
 $governability
 governability 
-          226 
+          227 
 
 $biodiversity_metric
 biodiversity_metric 
-                166 
+                167 
 
 $restoration
 restoration 
@@ -144,17 +166,19 @@ restoration
 
 $safe_fish
 safe_fish 
-       90 
+       91 
 
 $safe_space
 safe_space 
-       245 
+       246 
 
 $scientific_discipline
-            Chemistry       Biogeochemistry               Biology             Economics           Engineering               Ecology 
-                  127                   116                    39                    82                   208                   238 
-            Fisheries      Physical_science     Political_science  Science__tech__other Social_science__other                 Other 
-                   58                   395                   395                   395                   395                   271 
+            Chemistry       Biogeochemistry               Biology             Economics 
+                  128                   116                    39                    82 
+          Engineering               Ecology             Fisheries      Physical_science 
+                  210                   239                    58                   397 
+    Political_science  Science__tech__other Social_science__other                 Other 
+                  397                   397                   397                   272 
               Unclear 
                     4 
 
