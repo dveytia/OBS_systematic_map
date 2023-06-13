@@ -36,7 +36,15 @@ src_dbi(all_db)
 
 
 ## Write relevance predictions to a sqlite database for easy joining
-predRel <- read.csv(here::here("data","raw-data","relevance-predictions","1_document_relevance_06062023.csv"))
+
+# read in latest file
+relDir <- here::here("data","raw-data","relevance-predictions")
+relFiles <- dir(relDir)
+relFiles <- relFiles[grep(".csv", relFiles)]
+dates<- gsub("[^0-9-]", "", relFiles)
+dates <- stringr::str_sub(dates, 2)
+dates <- as.Date(dates, format="%d%m%Y")
+predRel <- read.csv(file.path(relDir, relFiles[which.max(dates)]))
 
 # rename columns
 colnames(predRel) <- c("analysis_id","relevance_mean","relevance_std","relevance_lower","relevance_upper")
@@ -44,60 +52,64 @@ colnames(predRel) <- c("analysis_id","relevance_mean","relevance_std","relevance
 
 
 # check for duplicates
-sum(duplicated(predRel$analysis_id))
-dupsIds <- predRel$analysis_id[duplicated(predRel$analysis_id)]
-View(predRel[which(predRel$analysis_id %in% dupsIds),])
+if(sum(duplicated(predRel$analysis_id)) > 0){
+  print("duplicates present")
+  dupsIds <- predRel$analysis_id[duplicated(predRel$analysis_id)]
+  View(predRel[which(predRel$analysis_id %in% dupsIds),])
+  
+  # are the dupliate ids articles that have been "seen"? Yes
+  screens <- tbl(all_db, "allScreen_afterCoding") %>% 
+    select(analysis_id, sample_screen, include_screen) %>%
+    collect()
+  sum(dupsIds %in% screens$analysis_id)
+  sum(screens$analysis_id %in% dupsIds)
+  test <- predRel[which(predRel$analysis_id %in% dupsIds),] %>%
+    inner_join(screens, by="analysis_id")
+  summary(test)
+  
+  summary(predRelMeta[which(predRel$analysis_id %in% dupsIds),])
+  nrow(predRelMeta[which(predRel$analysis_id %in% dupsIds),])
 
-# are the dupliate ids articles that have been "seen"? Yes
-screens <- tbl(all_db, "allScreen_afterCoding") %>% 
-  select(analysis_id, sample_screen, include_screen) %>%
-  collect()
-sum(dupsIds %in% screens$analysis_id)
-sum(screens$analysis_id %in% dupsIds)
-test <- predRel[which(predRel$analysis_id %in% dupsIds),] %>%
-  inner_join(screens, by="analysis_id")
-summary(test)
+}
 
-summary(predRelMeta[which(predRel$analysis_id %in% dupsIds),])
-nrow(predRelMeta[which(predRel$analysis_id %in% dupsIds),])
+
 
 
 
 ## Write to sql database
-dbWriteTable(all_db, "predRel2", predRel)
+dbWriteTable(all_db, "predRel2", predRel, overwrite=TRUE)
 
 dbDisconnect(all_db)
 ```
 
 
-```{r compare to old relevance predictions}
+```{r assess performance to predict to known values and compare to old relevance predictions}
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
 predRelOld <- tbl(all_db, "predRel") %>% collect()
+predRel <- tbl(all_db, "predRel2") %>% collect()
+screens <- tbl(all_db, "allScreen_afterCoding") %>% 
+    select(analysis_id, sample_screen, include_screen) %>%
+    collect()
 dbDisconnect(all_db)
 
-
+# merge dataframes so I can compare relevance predictions side by side,
+# along with actual screening decisions
 test <- screens %>%
   left_join(predRel %>% 
-              select(analysis_id, relevance_mean) %>%
-              filter(!(relevance_mean %in% c(1,0))), by="analysis_id") %>%
+              select(analysis_id, relevance_mean)) %>%
+              #filter(!(relevance_mean %in% c(1,0))), by="analysis_id") %>%
   rename(relevance_mean2 = relevance_mean) %>%
   left_join(predRelOld %>% select(analysis_id, relevance_mean), by="analysis_id") %>%
   rename(relevance_mean1 = relevance_mean) %>%
   mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude")))
 summary(test)
 
-ggplot(test, aes(relevance_mean1, relevance_mean2))+
-  geom_point()+
-  facet_wrap(vars(include_screen))
 
+## Plots
 
-ggplot(test, aes(relevance_mean1, relevance_mean2))+
-   geom_point()+
-   facet_wrap(vars(include_screen))
-
-
+# compare distributions between inclusions and exclusions
 test %>%
   reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2")) %>% 
   ggplot()+
@@ -106,8 +118,37 @@ test %>%
   facet_wrap(vars(include_screen))+
   theme(
     axis.text.x = element_blank(),
-    axis.ticks.x = element_blank()
+    axis.ticks.x = element_blank(),
+    legend.position = "bottom"
   )
+
+# facet by sampling strategy as well
+test %>%
+  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2")) %>% 
+  ggplot()+
+  geom_violin(aes(x=variable, y=value, fill = variable), trim=T)+
+  labs(y="predicted relevance", x="iteration")+
+  facet_grid(sample_screen~include_screen)+
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "bottom"
+  )
+
+# predictions for articles that were first predicted include but are now exclude
+# -- no pattern is apparent
+test %>%
+  filter(0.5 <= relevance_mean1 & relevance_mean2 < 0.5) %>%
+  ggplot(aes(relevance_mean1, relevance_mean2))+
+  geom_point()+
+  facet_wrap(vars(include_screen))
+
+# predictions for articles that were first predicted exclude but are now include
+# -- no pattern is apparent
+test %>%
+  filter(0.5 <= relevance_mean2 & relevance_mean1 < 0.5) %>%
+  ggplot(aes(relevance_mean1, relevance_mean2))+
+  geom_point()
 
 
 # what does the old relevance predictions say for the new additions?
@@ -119,15 +160,60 @@ test %>%
 
 
 
+## Summary statistics
 
-## Explore the changes in inclusions/exclusions between the datasets
+## Model performance metrics
+test <- test %>%
+  mutate(predIncl = ifelse(0.5 <= relevance_mean2, 1, 0),
+         TP = ifelse(0.5 <= relevance_mean2 & include_screen == "include", 1,0),
+         FP = ifelse(0.5 <= relevance_mean2 & include_screen == "exclude", 1,0),
+         FN = ifelse(relevance_mean2 < 0.5 & include_screen == "include", 1,0)) 
 
-# data load
-all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
-                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
-                                create=FALSE)
-# get screen results after coding
-screens <- tbl(all_db, "allScreen_afterCoding") %>% collect()
+
+performanceTabs <- colSums(test[,c("TP","FP","FN")])
+#  TP  FP  FN 
+# 925 172  31
+
+# F-beta scores
+FBetaFunction <- function(TP,FP, FN, Beta){
+  precision = TP/(TP+FP)
+  recall = TP/(TP+FN)
+  Beta2 <- Beta^2
+  FBeta = ((1+Beta2)*precision*recall)/(Beta2*precision+recall)
+  names(FBeta) <- paste0("Beta=", Beta)
+  return(FBeta)
+}
+
+Betas <- seq(1, 2, length.out = 5)
+FBeta <- vector("numeric", length=5)
+
+for(i in 1:length(Betas)){
+  FBeta[i] <- FBetaFunction(performanceTabs[1], performanceTabs[2], performanceTabs[3], Betas[i])
+}
+FBeta
+
+summaryStats <- test %>%
+  group_by(sample_screen) %>%
+  summarise(TP = sum(TP), FP = sum(FP), FN = sum(FN)) %>%
+  mutate(precision = TP/(TP+FP), recall = TP/(TP+FN))
+summaryStats
+
+#   sample_screen          TP    FP    FN precision recall
+#   <chr>               <dbl> <dbl> <dbl>     <dbl>  <dbl>
+# 1 random                401    70    26     0.851  0.939
+# 2 relevance sort        185    36     4     0.837  0.979
+# 3 supplemental coding   253    60     1     0.808  0.996
+# 4 test list              86     6     0     0.935  1 
+
+
+# distribution of predicted values for test list includes
+quantile(test$relevance_mean2[test$sample_screen =="test list" &
+                       test$include_screen == "include"])
+```
+
+```{r Explore the changes in inclusions/exclusions between the datasets}
+
+# load screen results before coding as well
 load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
 
 # after coding, 2060 exclusions, 956 inclusions
@@ -138,11 +224,11 @@ screens %>%
   group_by(include_screen, sample_screen) %>%
   summarise(n=n())
 
+# which test list articles were excluded?
 screens %>%
   filter(include_screen == 0 & sample_screen == "test list") %>%
   View()
 
-# load initial screen results
 
 # initally, 886 included, 1796 excluded
 # note that one test list article was excluded
@@ -179,7 +265,6 @@ changedScreens %>%
   nrow()
 
 
-dbDisconnect(all_db)
 ```
 
 
@@ -191,9 +276,8 @@ dbDisconnect(all_db)
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
-src_dbi(all_db)
 
-predRel <- tbl(all_db, "predRel2") 
+predRel <- tbl(all_db, "predRel2") %>% collect() 
 dedups <- tbl(all_db, "uniquerefs") %>% 
   select(analysis_id, duplicate_id, title, abstract, keywords, doi)
 screens <- tbl(all_db, "allScreen_afterCoding") %>% 
@@ -204,7 +288,7 @@ predRelMeta <- dedups %>%
   full_join(screens, by = "duplicate_id") %>%
   collect()
 
-nrow(predRelMeta) # check number of rows is correct -- 268452
+nrow(predRelMeta)== nrow(predRel)# check number of rows is correct and none were lost
 
 dbDisconnect(all_db)
 ```
