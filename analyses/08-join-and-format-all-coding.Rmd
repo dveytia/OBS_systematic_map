@@ -1164,7 +1164,7 @@ anyDuplicated(codebookCombinedSimplified)
 # write for Vicky & save
 write.table(
   codebookCombinedSimplified,
-  file = here::here("data","derived-data","coding", "all-coding-format-distilBERT.txt"),
+  file = here::here("data","derived-data","coding","manual-coding", "all-coding-format-distilBERT.txt"),
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
 
@@ -1259,7 +1259,7 @@ RSQLite::dbDisconnect(all_db)
 # write to txt file for Vicky
 write.table(
   codebookCombinedSimplifiedMore,
-  file = here::here("data","derived-data","coding", "all-coding-format-distilBERT-simplifiedMore.txt"),
+  file = here::here("data","derived-data","coding","manual-coding", "all-coding-format-distilBERT-simplifiedMore.txt"),
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
 ```

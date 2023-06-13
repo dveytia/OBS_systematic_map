@@ -43,7 +43,11 @@ vignettes/*.pdf
 *.ris
 *.sqlite
 /data/derived-data/coding/coding-pdfs/
-/data/derived-data/coding/manual-coding/
+/data/derived-data/coding/manual-coding/set-0/
+/data/derived-data/coding/manual-coding/set-0_check/
+/data/derived-data/coding/manual-coding/sets/
+/data/derived-data/coding/manual-coding/sets-incomplete/
+/data/derived-data/coding/manual-coding/supplementary-sets/
 /data/derived-data/coding/geoparsing/
 /data/derived-data/coding/nlp-extracted/*.RData
 /data/derived-data/coding/coding-pdfs-training/
