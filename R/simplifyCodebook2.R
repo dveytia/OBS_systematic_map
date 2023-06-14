@@ -36,6 +36,18 @@ simplifyCodebook2 <- function(codebook, idCols){
   codebook[,"climate_threat.Other"] <- temp; rm(temp)
   codebook[,colNames[1:3]] <- NULL
   
+  
+  # m_co2_storage: combine algae cultivation
+  colNames <- c("m_co2_removal.Macroalgae_kelp_cultivation","m_co2_removal.Microalgae_cultivation")
+  temp <- rowSums(codebook[,colNames], na.rm=T)
+  temp[temp > 1] <- 1
+  codebook[,"m_co2_removal.Macroalgae_kelp_cultivation"] <- temp; rm(temp)
+  codebook["m_co2_removal.Microalgae_cultivation"] <- NULL
+  colnames(codebook)[which(colnames(codebook)== "m_co2_removal.Macroalgae_kelp_cultivation")] <- "m_co2_removal.Algae_cultivation"
+  
+  # remove "other" category for co2 storage
+  codebook[,"m_co2_removal.Other"] <- NULL
+  
   # data_type: combine all secondary data types
   colNames <-  c("data_type.Secondary__evidence_synthesis", "data_type.Secondary__other")
   temp <- rowSums(codebook[,colNames], na.rm=T)
@@ -54,12 +66,20 @@ simplifyCodebook2 <- function(codebook, idCols){
   codebook[,"marine_system.coastal ocean"] <- temp; rm(temp)
   codebook[,"marine_system.estuary"] <- NULL
   
-  # ecosystem_type: combine blue carbon other and other
-  colNames <-  c("ecosystem_type.Blue_carbon__other", "ecosystem_type.Other")
+  # marine_system: combine open_ocean and deep_ocean
+  colNames <-  c("marine_system.open-ocean", "marine_system.deep-ocean")
+  temp <- rowSums(codebook[,colNames], na.rm=T)
+  temp[temp > 1] <- 1
+  codebook[,"marine_system.open-ocean"] <- temp; rm(temp)
+  codebook[,"marine_system.deep-ocean"] <- NULL
+  
+  # ecosystem_type: combine blue carbon other, oyster_reef and other
+  colNames <-  c("ecosystem_type.Blue_carbon__other", "ecosystem_type.Oyster_reef", 
+                 "ecosystem_type.Wetland__other","ecosystem_type.Other")
   temp <- rowSums(codebook[,colNames], na.rm=T)
   temp[temp > 1] <- 1
   codebook[,"ecosystem_type.Other"] <- temp; rm(temp)
-  codebook[,"ecosystem_type.Blue_carbon__other"] <- NULL
+  codebook[,colNames[1:3]] <- NULL
   
   # time_period: into whether it's forecast or not
   colNames <- grep("time_period", colnames(codebook), ignore.case = T)
@@ -75,8 +95,32 @@ simplifyCodebook2 <- function(codebook, idCols){
   codebook[,"data_scale_spatial.Small"] <- temp; rm(temp)
   codebook[,"data_scale_spatial.Micro"] <- NULL
   
-
   
+  # economic_sector: combine Other, Seabed_miningoil__gas, Tourism__Recreation
+  colNames <- paste("economic_sector", c("Other","Seabed_miningoil__gas", "Tourism__Recreation"), sep=".")
+  temp <- rowSums(codebook[,colNames], na.rm=T)
+  temp[temp > 1] <- 1
+  codebook[,"economic_sector.Other"] <- temp; rm(temp)
+  codebook[,colNames[2:3]] <- NULL
+  
+  # economic_sector: combine Port_infrastructure and Shipping into Shipping_and_ports
+  colNames <- paste("economic_sector", c("Port_infrastructure", "Shipping"), sep=".")
+  temp <- rowSums(codebook[,colNames], na.rm=T)
+  temp[temp > 1] <- 1
+  codebook[,"economic_sector.Shipping"] <- temp; rm(temp)
+  codebook[,colNames[1]] <- NULL
+  colnames(codebook)[which(colnames(codebook) == "economic_sector.Shipping")] <- "economic_sector.Shipping_and_ports"
+  
+  
+  # scientific discipline: combine Biology, Ecology, Fisheries
+  colNames <- paste("scientific_discipline", 
+                    c("Biology", "Ecology","Fisheries"), sep=".")
+  temp <- rowSums(codebook[,colNames], na.rm=T)
+  temp[temp > 1] <- 1
+  codebook[,"scientific_discipline.Biology"] <- temp; rm(temp)
+  codebook[,colNames[2:3]] <- NULL
+  
+   
   ## output results
   codebook <- cbind(idMat, codebook)
   return(codebook)

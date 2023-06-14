@@ -132,9 +132,17 @@ formatCoding2distilBert <- function(codebookFp, skipLines=3,
       if(length(grep("macroalgae",vals, ignore.case = TRUE))>0){
         vals[grep("macroalgae",vals, ignore.case = TRUE)] <- "macroalgae"
       }
-      if(length(grep("science",vals, ignore.case = TRUE))>0){
-        vals[grep("science",vals, ignore.case = TRUE)] <- "science"
+      # if(length(grep("science",vals, ignore.case = TRUE))>0){
+      #   vals[grep("science",vals, ignore.case = TRUE)] <- "science"
+      # }
+      if(colnames(temp)[j] == c("scientific_discipline")){
+        vals <- c("Chemistry","Biogeochemistry","Biology","Economics","Engineering",
+                  "Ecology","Fisheries","physical","political","tech","social","Other","Unclear")
+        valLabels <- c("Chemistry","Biogeochemistry","Biology","Economics","Engineering","Ecology",
+                       "Fisheries","Physical_science","Political_science","Science__tech__other",
+                       "Social_science__other","Other","Unclear")
       }
+      
       
       if(colnames(temp)[j] == c("time_period")){
         vals <- c("Before pre-ind","Pre-industrial", "Modern","Forecast")

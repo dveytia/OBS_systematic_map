@@ -24,13 +24,6 @@ library(ggrepel)
 # Read in all coding results and format
 
 
-```{r Source formatting function}
-
-source(here::here("R","formatCoding2distilBert.R"))
-
-# note that this function does not combine rows -- each row of output = each row of input
-
-```
 
 
 ## Set-0 finalised
@@ -912,6 +905,7 @@ RSQLite::dbDisconnect(all_db)
 ## Supplementary sets
 
 ```{r format supplementary sets}
+source(here::here("R/formatCoding2distilBert.R"))
 
 ## READ IN FILES
 
@@ -1179,6 +1173,11 @@ RSQLite::dbWriteTable(all_db, "allCodingSimplifiedVariables", codebookCombinedSi
 
 RSQLite::dbDisconnect(all_db)
 
+# save tabulations
+sink(here::here("outputs","coding","tabulated_coding_simplified.txt"))
+print(tabulated_variables)
+sink()
+
 ```
 
 
@@ -1248,6 +1247,10 @@ tabulated_variables <- tabulateCoding(codebookCombinedSimplifiedMore,
                idCols = c("sysrev_id","analysis_id","duplicate_id","title",
                           "abstract","keywords","year","coder_1","coder_2"))
 
+sink(here::here("outputs","coding","tabulated_coding_simplifiedMore.txt"))
+print(tabulated_variables)
+sink()
+
 
 # write to database
 RSQLite::dbWriteTable(all_db, 
@@ -1262,6 +1265,101 @@ write.table(
   file = here::here("data","derived-data","coding","manual-coding", "all-coding-format-distilBERT-simplifiedMore.txt"),
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
+```
+
+```{r compare counts amongst clusters of variable priorities}
+varPriority <- readxl::read_excel(
+  here::here("data","derived-data","coding","variablePriorities.xlsx")
+)
+varPriority <- varPriority[,c("Variable name","Cluster 4")]
+colnames(varPriority) <- c("variable","cluster")
+
+
+
+# data frame of the tabulation
+for(i in 1:length(tabulated_variables)){
+  if(is.null(names(tabulated_variables[[i]]))){
+    values = names(tabulated_variables)[i]
+  }else{
+    values = names(tabulated_variables[[i]])
+  }
+  
+  temp <- data.frame(
+    variable = rep(names(tabulated_variables)[i], length(tabulated_variables[[i]])),
+    value = values,
+    counts = tabulated_variables[[i]]
+  )
+  rownames(temp) <- NULL
+  if(i==1){
+    clusterCounts <- temp
+  }else{
+    clusterCounts <- rbind(clusterCounts, temp)
+  }
+}
+
+# Format columns
+clusterCounts <- inner_join(clusterCounts, varPriority, by="variable")
+clusterCounts$variable.value <- paste(clusterCounts$variable,
+                                      clusterCounts$value, sep=".")
+clusterCounts <- clusterCounts %>%
+  filter(variable != "oro_branch")
+clusterCounts$cluster <- as.factor(clusterCounts$cluster)
+clusterCounts <- clusterCounts%>%
+  arrange(cluster)%>%
+  mutate(order = row_number())
+
+
+
+## Summarise
+clusterCounts %>%
+  group_by(cluster)%>%
+  summarise(
+    mean = mean(counts),
+    median = quantile(counts, probs=0.5),
+    low_q = quantile(counts, probs=0.25),
+    high_q = quantile(counts, probs=0.75),
+    variance = var(counts),
+    cv = var(counts)/mean(counts)
+  )
+
+
+## Plots 
+
+# ggplot(clusterCounts, aes(x=cluster, y=counts, fill = cluster, col = cluster))+
+#   geom_violin(alpha = 0.5, trim=T)+
+#   theme(
+#     axis.text.x = element_text(angle=45, hjust=1)
+#   )
+
+
+
+# ggplot(clusterCounts, aes(x = reorder(variable, order), y=counts, fill = cluster))+
+#   geom_col()+
+#   theme(
+#     axis.text.x = element_text(angle=45, hjust=1)
+#   )
+
+
+require(gtable)
+clusters <- unique(clusterCounts$cluster)
+ggps <- vector("list", length(clusters))
+
+for(c in 1:length(clusters)){
+  temp <- clusterCounts %>%
+    filter(cluster == clusters[c])
+  ggps[[c]] <- ggplot(temp, aes(x=value, y=counts, fill=variable))+
+    geom_col()+
+    scale_fill_discrete(name = paste(clusters[c]))+
+    theme(
+      axis.text.x = element_text(angle=45, hjust=1)
+    )
+  ggps[[c]] <- ggplotGrob(ggps[[c]])
+}
+
+
+gridExtra::grid.arrange(ggps[[1]],ggps[[2]],ggps[[3]],ggps[[4]], nrow=2)
+gridExtra::grid.arrange(ggps[[5]],ggps[[6]],ggps[[7]],ggps[[8]],ggps[[9]], nrow=3)
+
 ```
 
 # Compare these with all the articles that were screened to come up with updated screening decisions data
