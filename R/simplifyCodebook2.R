@@ -7,7 +7,7 @@
 #' @param idCols The names of the identification columns (never simplified)
 
 
-simplifyCodebook2 <- function(codebook, idCols){
+simplifyCodebook2 <- function(codebook, idCols, combineAlgaeCultivation = TRUE){
   
   # seperate out idColumns from the data columns
   idMat <- codebook[,idCols]
@@ -38,12 +38,15 @@ simplifyCodebook2 <- function(codebook, idCols){
   
   
   # m_co2_storage: combine algae cultivation
-  colNames <- c("m_co2_removal.Macroalgae_kelp_cultivation","m_co2_removal.Microalgae_cultivation")
-  temp <- rowSums(codebook[,colNames], na.rm=T)
-  temp[temp > 1] <- 1
-  codebook[,"m_co2_removal.Macroalgae_kelp_cultivation"] <- temp; rm(temp)
-  codebook["m_co2_removal.Microalgae_cultivation"] <- NULL
-  colnames(codebook)[which(colnames(codebook)== "m_co2_removal.Macroalgae_kelp_cultivation")] <- "m_co2_removal.Algae_cultivation"
+  if(combineAlgaeCultivation){
+    colNames <- c("m_co2_removal.Macroalgae_kelp_cultivation","m_co2_removal.Microalgae_cultivation")
+    temp <- rowSums(codebook[,colNames], na.rm=T)
+    temp[temp > 1] <- 1
+    codebook[,"m_co2_removal.Macroalgae_kelp_cultivation"] <- temp; rm(temp)
+    codebook["m_co2_removal.Microalgae_cultivation"] <- NULL
+    colnames(codebook)[which(colnames(codebook)== "m_co2_removal.Macroalgae_kelp_cultivation")] <- "m_co2_removal.Algae_cultivation"
+  }
+  
   
   # remove "other" category for co2 storage
   codebook[,"m_co2_removal.Other"] <- NULL

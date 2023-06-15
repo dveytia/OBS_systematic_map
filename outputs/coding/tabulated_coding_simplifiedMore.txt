@@ -60,10 +60,10 @@ $method_type
                               154 
 
 $m_co2_removal
-                     Bioenergy                   Openocean_PP              Algae_cultivation 
-                            34                             48                             55 
- Weathering_and_alkinalization Coastal_blue_carbon_ecosystems 
-                            42                             91 
+                     Bioenergy                   Openocean_PP    Macroalgae_kelp_cultivation 
+                            34                             48                             36 
+        Microalgae_cultivation  Weathering_and_alkinalization Coastal_blue_carbon_ecosystems 
+                            20                             42                             91 
 
 $m_co2_ocean_storage
      Inorganic        Organic Deep_sediments 
