@@ -23,7 +23,7 @@ library(ggplot2)
 
 This code explores relevance predictions after coding 
 
-# Load relevance predictions and metadata
+# Add predictions to sqlite database
 
 ```{r load in predicted relevance and convert to sqlite, eval=FALSE}
 
@@ -35,12 +35,13 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 src_dbi(all_db)
 
 
-## Write relevance predictions to a sqlite database for easy joining
+## Write include/exclude relevance predictions to a sqlite database for easy joining
 
 # read in latest file
 relDir <- here::here("data","raw-data","relevance-predictions")
 relFiles <- dir(relDir)
 relFiles <- relFiles[grep(".csv", relFiles)]
+relFiles <- relFiles[-grep("Branch", relFiles, ignore.case = T)]
 dates<- gsub("[^0-9-]", "", relFiles)
 dates <- stringr::str_sub(dates, 2)
 dates <- as.Date(dates, format="%d%m%Y")
@@ -48,8 +49,6 @@ predRel <- read.csv(file.path(relDir, relFiles[which.max(dates)]))
 
 # rename columns
 colnames(predRel) <- c("analysis_id","relevance_mean","relevance_std","relevance_lower","relevance_upper")
-
-
 
 # check for duplicates
 if(sum(duplicated(predRel$analysis_id)) > 0){
@@ -74,16 +73,43 @@ if(sum(duplicated(predRel$analysis_id)) > 0){
 
 
 
+## Multilabel screen using ORO_branch
+relFiles <- dir(relDir)
+relFiles <- relFiles[grep("Branch", relFiles, ignore.case = T)]
+dates<- gsub("[^0-9-]", "", relFiles)
+dates <- stringr::str_sub(dates, 2)
+dates <- as.Date(dates, format="%d%m%Y")
+ind <- which.max(dates)
+if(grepl(".csv", relFiles[ind])){
+  predBranch <- read.csv(file.path(relDir, relFiles[ind]))
+}else{
+  predBranch <- readxl::read_excel(file.path(relDir, relFiles[ind]))
+}
+# rename columns
+colnames(predBranch) <- c("analysis_id",
+                          paste("Mitigation", c("mean","std","lower","upper"), sep="_"),
+                          paste("Nature", c("mean","std","lower","upper"), sep="_"),
+                          paste("Societal", c("mean","std","lower","upper"), sep="_"),
+                          paste("Unclear", c("mean","std","lower","upper"), sep="_")
+                          )
+
+# check for duplicates
+if(anyDuplicated(predBranch$id)){
+  print("duplicates present")
+}
+
+
 
 
 ## Write to sql database
 dbWriteTable(all_db, "predRel2", predRel, overwrite=TRUE)
+dbWriteTable(all_db, "predBranch", predBranch, overwrite=TRUE)
 
 dbDisconnect(all_db)
 ```
 
 
-## Compare different methods of relevance predictions
+# Compare different methods of relevance predictions
 
 ```{r assess performance to predict to known values and compare to old just screening relevance predictions}
 
@@ -93,12 +119,43 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                                 create=FALSE)
 predRelOld <- tbl(all_db, "predRel") %>% collect()
 predRel <- tbl(all_db, "predRel2") %>% collect()
+predBranch <- tbl(all_db, "predBranch") %>%
+  select(analysis_id, Mitigation_mean, Nature_mean, Societal_mean) %>%
+  collect()
 screens <- tbl(all_db, "allScreen_afterCoding") %>% collect()
 dedupsSub <- tbl(all_db, "uniquerefs") %>% 
   select(analysis_id, duplicate_id, title) %>%
   collect()
 
 dbDisconnect(all_db)
+
+
+## use the test list screens to classify articles into branch
+library(metagear)
+
+testListBranch <- screens %>% 
+  filter(sample_screen == "test list" & include_screen == 1) %>%
+  select(analysis_id, sysrev_id, title, abstract)
+
+temp <- effort_distribute(testListBranch, 
+                          initialize = T, save_split = T,
+                          reviewers = c("Devi"), effort= c(100),
+                  directory = here::here("data/raw-data/test-list"))
+
+buttonOptions <- c("Mitigate","Natural","Societal","Other")
+keyOptions <- c("m","n","s","o")
+
+metagear::abstract_screener(
+  here::here("data/raw-data/test-list/effort_Devi.csv"),
+  aReviewer = "Devi", abstractColumnName = "abstract", titleColumnName = "title",
+  theButtons = buttonOptions, keyBindingToButtons = keyOptions)
+
+testListBranch2 <- read.csv(here::here("data/raw-data/test-list/effort_Devi.csv"))
+
+testListBranch <- testListBranch %>%
+  left_join(testListBranch2 %>% select(sysrev_id, INCLUDE)) %>%
+  rename(ORO_branch = INCLUDE)
+
 
 # merge dataframes so I can compare relevance predictions side by side,
 # along with actual screening decisions
@@ -108,8 +165,11 @@ test <- screens %>%
   rename(relevance_mean2 = relevance_mean) %>%
   left_join(predRelOld %>% select(analysis_id, relevance_mean), by="analysis_id") %>%
   rename(relevance_mean1 = relevance_mean) %>%
+  left_join(predBranch) %>%
+  left_join(testListBranch %>% select(analysis_id, ORO_branch))%>%
   mutate(include_screen = factor(include_screen, 
-                                 levels = c(1,0), labels = c("include","exclude"))) %>%
+                                 levels = c(1,0), labels = c("include","exclude")),
+         ORO_branch = factor(ORO_branch, levels = c("Mitigate","Natural","Societal","Other"))) %>%
   left_join(dedupsSub %>% select(analysis_id, duplicate_id))
 summary(test)
 
@@ -118,7 +178,8 @@ summary(test)
 
 # compare distributions between inclusions and exclusions
 test %>%
-  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2")) %>% 
+  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2",
+                                  "Mitigation_mean","Nature_mean","Societal_mean")) %>% 
   ggplot()+
   geom_violin(aes(x=variable, y=value, fill = variable))+
   labs(y="predicted relevance", x="iteration")+
@@ -131,7 +192,8 @@ test %>%
 
 # facet by sampling strategy as well
 test %>%
-  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2")) %>% 
+  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2",
+                                  "Mitigation_mean","Nature_mean","Societal_mean")) %>% 
   ggplot()+
   geom_violin(aes(x=variable, y=value, fill = variable), trim=T)+
   labs(y="predicted relevance", x="iteration")+
@@ -172,16 +234,43 @@ test %>%
 ## Summary statistics
 
 ## Model performance metrics
-test <- test %>%
+predRelSummary <-  test %>%
   mutate(predIncl = ifelse(0.5 <= relevance_mean2, 1, 0),
          TP = ifelse(0.5 <= relevance_mean2 & include_screen == "include", 1,0),
          FP = ifelse(0.5 <= relevance_mean2 & include_screen == "exclude", 1,0),
          FN = ifelse(relevance_mean2 < 0.5 & include_screen == "include", 1,0)) 
 
 
-performanceTabs <- colSums(test[,c("TP","FP","FN")])
+performanceTabs <- colSums(predRelSummary[,c("TP","FP","FN")])
+performanceTabs
 #  TP  FP  FN 
 # 925 172  31
+predBranchSummary <- test
+predBranchSummary$maxPred <- apply(
+  test[,c("Mitigation_mean", "Nature_mean", "Societal_mean")], 1, max)
+predBranchSummary <-  predBranchSummary %>%
+  mutate(predIncl = ifelse(0.5 <= maxPred, 1, 0),
+         TP = ifelse(0.5 <= maxPred & include_screen == "include", 1,0),
+         FP = ifelse(0.5 <= maxPred & include_screen == "exclude", 1,0),
+         FN = ifelse(maxPred < 0.5 & include_screen == "include", 1,0))
+    
+
+colSums(predBranchSummary[,c("TP","FP","FN")]) 
+#  TP  FP  FN 
+# 503 927 453 
+
+# how many inclusions and exclusions overall?
+predBranchBinary <- data.frame(
+  analysis_id = predBranch$analysis_id,
+  Mitigation = ifelse(0.5 <= predBranch$Mitigation_mean, 1, 0),
+  Nature = ifelse(0.5 <= predBranch$Nature_mean, 1, 0),
+  Societal = ifelse(0.5 <= predBranch$Societal_mean, 1, 0)
+)
+predBranchBinary$Combined <- rowSums(predBranchBinary[,2:4])
+predBranchBinary$Combined[predBranchBinary$Combined>1]<-1
+
+colSums(predBranchBinary[,2:5])
+
 
 # F-beta scores
 FBetaFunction <- function(TP,FP, FN, Beta){
@@ -201,7 +290,7 @@ for(i in 1:length(Betas)){
 }
 FBeta
 
-summaryStats <- test %>%
+summaryStats <- predRelSummary %>%
   group_by(sample_screen) %>%
   summarise(TP = sum(TP), FP = sum(FP), FN = sum(FN)) %>%
   mutate(precision = TP/(TP+FP), recall = TP/(TP+FN))
@@ -214,10 +303,30 @@ summaryStats
 # 3 supplemental coding   253    60     1     0.808  0.996
 # 4 test list              86     6     0     0.935  1 
 
+predBranchSummary %>%
+  group_by(sample_screen) %>%
+  summarise(TP = sum(TP), FP = sum(FP), FN = sum(FN)) %>%
+  mutate(precision = TP/(TP+FP), recall = TP/(TP+FN))
 
 # distribution of predicted values for test list inclusions
 quantile(test$relevance_mean2[test$sample_screen =="test list" &
                        test$include_screen == "include"])
+
+
+# distribution of branch predictions for test list -- very low
+test %>%
+  filter(!is.na(ORO_branch)) %>%
+  reshape2::melt(measure.vars = c("Mitigation_mean","Nature_mean","Societal_mean")) %>%
+  ggplot(aes(x=ORO_branch, y=value))+
+  geom_violin()+
+  facet_wrap(vars(variable))
+
+# distribution of overall branch predictions
+test %>%
+  reshape2::melt(measure.vars = c("Mitigation_mean","Nature_mean","Societal_mean")) %>%
+  ggplot(aes(variable, y=value))+
+  geom_violin()
+
 ```
 
 ```{r Explore the changes in inclusions/exclusions between the screening and post coding datasets}

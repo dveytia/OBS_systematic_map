@@ -1270,14 +1270,28 @@ write.table(
 ```
 
 ```{r compare counts amongst clusters of variable priorities}
+## Load & format
+
+# Codebook
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                      here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                 create=FALSE)
+
+codebookCombinedSimplifiedMore <- tbl(all_db, "allCodingSimplifiedVariablesMore")%>% collect()
+dbDisconnect(all_db)
+
+source(here::here("R/tabulateCoding.R"))
+tabulated_variables <- tabulateCoding(codebookCombinedSimplifiedMore,
+               idCols = c("sysrev_id","analysis_id","duplicate_id","title",
+                          "abstract","keywords","year","coder_1","coder_2"))
+
+# clusters
 varPriority <- readxl::read_excel(
   here::here("data","derived-data","coding","variablePriorities.xlsx")
 )
-
 varPriority <- varPriority[,c("Variable name","Cluster","Cluster priority")]
 colnames(varPriority) <- c("variable","cluster","clusterPriority")
 varPriority <- na.omit(varPriority)
-
 clusterPriorityLookup <- varPriority[!duplicated(varPriority[,2:3]), 2:3]
 clusterPriorityLookup <- clusterPriorityLookup %>% arrange(clusterPriority)
 clusterLev <- clusterPriorityLookup$cluster
@@ -1285,7 +1299,7 @@ clusterLev <- clusterLev[-1] # remove intervention_0 for now because it's ORO_br
 
 
 
-# data frame of the tabulation
+## Data frame of the tabulation
 for(i in 1:length(tabulated_variables)){
   if(is.null(names(tabulated_variables[[i]]))){
     values = names(tabulated_variables)[i]
@@ -1307,7 +1321,10 @@ for(i in 1:length(tabulated_variables)){
 }
 
 # Format columns
+clusterCountsOld <- clusterCounts
 clusterCounts <- inner_join(clusterCounts, varPriority, by="variable")
+clusterCountsOld[!(clusterCountsOld$variable %in% clusterCounts$variable),] # check missing vars
+rm(clusterCountsOld)
 clusterCounts$variable.value <- paste(clusterCounts$variable,
                                       clusterCounts$value, sep=".")
 clusterCounts <- clusterCounts %>% filter(variable != "oro_branch")
@@ -1315,6 +1332,7 @@ clusterCounts$cluster <- factor(clusterCounts$cluster, levels = clusterLev)
 clusterCounts <- clusterCounts%>%
   arrange(cluster)%>%
   mutate(order = row_number())
+
 
 
 ## Summarise
