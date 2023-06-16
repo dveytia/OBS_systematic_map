@@ -1,0 +1,30 @@
+Confusion Matrix and Statistics
+
+            predicted
+seen         Mitigation Nature Societal
+  Mitigation          4      2        0
+  Nature            179     46        0
+  Societal           16    301        0
+
+Overall Statistics
+                                          
+               Accuracy : 0.0912          
+                 95% CI : (0.0685, 0.1185)
+    No Information Rate : 0.6369          
+    P-Value [Acc > NIR] : 1               
+                                          
+                  Kappa : -0.2372         
+                                          
+ Mcnemar's Test P-Value : <2e-16          
+
+Statistics by Class:
+
+                     Class: Mitigation Class: Nature Class: Societal
+Sensitivity                   0.020101       0.13181              NA
+Specificity                   0.994269       0.10050          0.4215
+Pos Pred Value                0.666667       0.20444              NA
+Neg Pred Value                0.640221       0.06192              NA
+Prevalence                    0.363139       0.63686          0.0000
+Detection Rate                0.007299       0.08394          0.0000
+Detection Prevalence          0.010949       0.41058          0.5785
+Balanced Accuracy             0.507185       0.11615              NA

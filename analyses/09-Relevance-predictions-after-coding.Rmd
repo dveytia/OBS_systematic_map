@@ -111,9 +111,126 @@ dbDisconnect(all_db)
 
 # Compare different methods of relevance predictions
 
-```{r assess performance to predict to known values and compare to old just screening relevance predictions}
 
-##  Load data
+## Summarise overall relevance numbers
+
+
+```{r load all relevance predictions}
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+predRelOld <- tbl(all_db, "predRel") %>% collect()
+predRel <- tbl(all_db, "predRel2") %>% collect()
+predBranch <- tbl(all_db, "predBranch") %>% collect()
+
+dbDisconnect(all_db)
+```
+
+```{r plot numbers of relevant predictions}
+## Format dataframes
+# combine predictions from the three different branches into just the max relevance across any branch
+predBranch <- predBranch[,-grep("Unclear",colnames(predBranch))] # remove unclear from predictions
+predBranchMax <- data.frame(
+  analysis_id = predBranch$analysis_id,
+  relevance_mean = apply(predBranch[,grep("mean", colnames(predBranch))],1, max, na.rm=T),
+  relevance_lower = apply(predBranch[,grep("lower", colnames(predBranch))],1,max, na.rm=T),
+  relevance_upper = apply(predBranch[,grep("upper", colnames(predBranch))],1,max, na.rm=T)
+)
+
+# combine predictions from all the models
+df <- predRelOld %>%
+  select(analysis_id, relevance_mean, relevance_lower, relevance_upper) %>%
+  mutate(model = "Binary after screen") %>%
+  rbind(predRel %>% 
+              select(analysis_id, relevance_mean, relevance_lower, relevance_upper) %>%
+          mutate(model = "Binary after code")) %>%
+  rbind(predBranchMax %>% mutate(model = "Binary ORO_branch after code")) %>%
+  mutate(include = ifelse(0.5 <= relevance_mean, "include","exclude"))%>%
+  mutate(include = factor(include,levels = c("include","exclude"))) %>%
+  mutate(model = factor(model, levels=c(
+    "Binary after screen", "Binary after code", "Binary ORO_branch after code"
+  )))
+
+
+
+## Summarise numbers of relevant predictions
+relevanceSummaries <- df %>%
+  group_by(model) %>%
+  summarise(include_mean = sum(0.5 <= relevance_mean),
+            include_lower = sum(0.5 <= relevance_lower),
+            include_upper = sum(0.5 <= relevance_upper))
+relevanceSummaries
+
+
+
+## fit loess smoothers to make a line for mean, lower and upper
+smoothFitFn <- function(dfSub, subSamp=100){
+  dfSub <- dfSub[order(dfSub$relevance_mean),]
+  dfSub$ID <- seq(1:nrow(dfSub))
+  # sub-sample
+  dfSub <- dfSub[seq(1,nrow(dfSub), subSamp),]
+  # mean
+  meanSmooth <- loess(relevance_mean~ID, data=dfSub)
+  meanPred <- predict(meanSmooth,
+                 data.frame(ID=seq(1, max(dfSub$ID), 100)))
+  # lower
+  lowerSmooth <- loess(relevance_lower~ID, data=dfSub)
+  lowerPred <- predict(lowerSmooth,
+                 data.frame(ID=seq(1, max(dfSub$ID), 100)))
+  # upper
+  upperSmooth <- loess(relevance_upper~ID, data=dfSub)
+  upperPred <- predict(upperSmooth,
+                 data.frame(ID=seq(1, max(dfSub$ID), 100)))
+  # return
+  out <- data.frame(
+    analysis_id = seq(1, max(dfSub$ID), 100),
+    mean_smooth = meanPred,
+    lower_smooth = lowerPred,
+    upper_smooth = upperPred
+  )
+  return(out)
+}
+
+mods <- levels(df$model)
+for(m in 1:length(mods)){
+  dfSub <- subset(df, model == mods[m])
+  temp <- smoothFitFn(dfSub, subSamp = 75)
+  temp$model <- mods[m]
+  if(m==1){
+    predSmoothDf = temp
+  }else{
+    predSmoothDf <- rbind(predSmoothDf, temp)
+  }
+  if(m==length(m)){
+    predSmoothDf$model <- factor(predSmoothDf$model, levels=mods)
+  }
+}
+
+
+
+
+
+ggplot(predSmoothDf)+
+  geom_ribbon(aes(x=analysis_id, ymin=lower_smooth, ymax=upper_smooth), fill="pink")+
+  geom_hline(yintercept = 0.5, linewidth = 0.5, col="red", linetype="dashed")+
+  geom_path(aes(x=analysis_id, y = mean_smooth), linewidth=0.75)+
+  geom_text(data=relevanceSummaries, x=0,y=1.25, aes(label = paste("mean", include_mean)), hjust=0, size=3)+
+  geom_text(data=relevanceSummaries, x=0,y=1.15, aes(label = paste0("(", include_lower,"-",include_upper,")")), hjust=0, size=3)+
+  facet_wrap(vars(model))+
+  labs(x="article","predicted relevance smooth")+
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+
+```
+
+
+## Assess mean relevance against seen articles
+
+
+```{r load all relevance predictions and accompanying metadata}
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
@@ -123,32 +240,38 @@ predBranch <- tbl(all_db, "predBranch") %>%
   select(analysis_id, Mitigation_mean, Nature_mean, Societal_mean) %>%
   collect()
 screens <- tbl(all_db, "allScreen_afterCoding") %>% collect()
+codebookCombinedSimplified <- tbl(all_db, "allCodingSimplifiedVariables") %>% 
+  select(analysis_id, oro_branch.Mitigation,oro_branch.Nature,oro_branch.Societal) %>%
+  collect()
 dedupsSub <- tbl(all_db, "uniquerefs") %>% 
   select(analysis_id, duplicate_id, title) %>%
   collect()
 
 dbDisconnect(all_db)
+```
 
 
-## use the test list screens to classify articles into branch
-library(metagear)
+```{r categorize test list into oro_branch}
 
 testListBranch <- screens %>% 
-  filter(sample_screen == "test list" & include_screen == 1) %>%
-  select(analysis_id, sysrev_id, title, abstract)
+   filter(sample_screen == "test list" & include_screen == 1) %>%
+   select(analysis_id, sysrev_id, title, abstract)
 
-temp <- effort_distribute(testListBranch, 
-                          initialize = T, save_split = T,
-                          reviewers = c("Devi"), effort= c(100),
-                  directory = here::here("data/raw-data/test-list"))
-
-buttonOptions <- c("Mitigate","Natural","Societal","Other")
-keyOptions <- c("m","n","s","o")
-
-metagear::abstract_screener(
-  here::here("data/raw-data/test-list/effort_Devi.csv"),
-  aReviewer = "Devi", abstractColumnName = "abstract", titleColumnName = "title",
-  theButtons = buttonOptions, keyBindingToButtons = keyOptions)
+## Uncomment to run code for analysis
+# library(metagear)
+# 
+# temp <- effort_distribute(testListBranch, 
+#                           initialize = T, save_split = T,
+#                           reviewers = c("Devi"), effort= c(100),
+#                   directory = here::here("data/raw-data/test-list"))
+# 
+# buttonOptions <- c("Mitigate","Natural","Societal","Other")
+# keyOptions <- c("m","n","s","o")
+# 
+# metagear::abstract_screener(
+#   here::here("data/raw-data/test-list/effort_Devi.csv"),
+#   aReviewer = "Devi", abstractColumnName = "abstract", titleColumnName = "title",
+#   theButtons = buttonOptions, keyBindingToButtons = keyOptions)
 
 testListBranch2 <- read.csv(here::here("data/raw-data/test-list/effort_Devi.csv"))
 
@@ -156,98 +279,55 @@ testListBranch <- testListBranch %>%
   left_join(testListBranch2 %>% select(sysrev_id, INCLUDE)) %>%
   rename(ORO_branch = INCLUDE)
 
+```
 
-# merge dataframes so I can compare relevance predictions side by side,
-# along with actual screening decisions
-test <- screens %>%
+```{r merge dataframes so I can compare relevance predictions side by side}
+
+df <- screens %>%
   select(analysis_id, sample_screen, include_screen) %>%
   left_join(predRel %>% select(analysis_id, relevance_mean)) %>%
   rename(relevance_mean2 = relevance_mean) %>%
   left_join(predRelOld %>% select(analysis_id, relevance_mean), by="analysis_id") %>%
   rename(relevance_mean1 = relevance_mean) %>%
   left_join(predBranch) %>%
-  left_join(testListBranch %>% select(analysis_id, ORO_branch))%>%
+  left_join(codebookCombinedSimplified, by="analysis_id")%>%
+  #left_join(testListBranch %>% select(analysis_id, ORO_branch))%>%
   mutate(include_screen = factor(include_screen, 
-                                 levels = c(1,0), labels = c("include","exclude")),
-         ORO_branch = factor(ORO_branch, levels = c("Mitigate","Natural","Societal","Other"))) %>%
+                                 levels = c(1,0), labels = c("include","exclude")))%>% #ORO_branch = factor(ORO_branch, levels = c("Mitigate","Natural","Societal","Other"))
   left_join(dedupsSub %>% select(analysis_id, duplicate_id))
-summary(test)
 
+# add a column for the maximum prediction for any branch, and what the name of the branch was
+df$branchMaxPred <- apply(df[,c("Mitigation_mean","Nature_mean","Societal_mean")],
+                        1, max, na.rm=T)
+df$branchMax <- apply(df[,c("Mitigation_mean","Nature_mean","Societal_mean")],
+                        1, which.max)
+df$branchMax <- c("Mitigation","Nature","Societal")[df$branchMax]
 
-## Plots
+# summarise
+summary(df)
+```
 
-# compare distributions between inclusions and exclusions
-test %>%
-  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2",
-                                  "Mitigation_mean","Nature_mean","Societal_mean")) %>% 
-  ggplot()+
-  geom_violin(aes(x=variable, y=value, fill = variable))+
-  labs(y="predicted relevance", x="iteration")+
-  facet_wrap(vars(include_screen))+
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    legend.position = "bottom"
-  )
+### compare all models at predicting seen inclusions and exclusions
 
-# facet by sampling strategy as well
-test %>%
-  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2",
-                                  "Mitigation_mean","Nature_mean","Societal_mean")) %>% 
-  ggplot()+
-  geom_violin(aes(x=variable, y=value, fill = variable), trim=T)+
-  labs(y="predicted relevance", x="iteration")+
-  facet_grid(sample_screen~include_screen)+
-  theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
-    legend.position = "bottom"
-  )
-
-# predictions for articles that were first predicted include but are now exclude
-# -- no pattern is apparent
-test %>%
-  filter(0.5 <= relevance_mean1 & relevance_mean2 < 0.5) %>%
-  ggplot(aes(relevance_mean1, relevance_mean2))+
-  geom_point()+
-  facet_wrap(vars(include_screen))
-
-# predictions for articles that were first predicted exclude but are now include
-# -- no pattern is apparent
-test %>%
-  filter(0.5 <= relevance_mean2 & relevance_mean1 < 0.5) %>%
-  ggplot(aes(relevance_mean1, relevance_mean2))+
-  geom_point()
-
-
-# what does the old relevance predictions say for the new additions from supplementary coding?
-test %>%
-  filter(sample_screen == "supplemental coding") %>%
-  ggplot(aes(x=relevance_mean1, fill = include_screen)) +
-  ggtitle("supplemental coding articles")+
-  geom_density(alpha = 0.25)
-
-
-
-
-
+```{r summary statistics}
 ## Summary statistics
 
-## Model performance metrics
-predRelSummary <-  test %>%
+## Model performance metrics : TP, FP, FN
+predRel1Summary <-  df %>%
+  mutate(predIncl = ifelse(0.5 <= relevance_mean1, 1, 0),
+         TP = ifelse(0.5 <= relevance_mean1 & include_screen == "include", 1,0),
+         FP = ifelse(0.5 <= relevance_mean1 & include_screen == "exclude", 1,0),
+         FN = ifelse(relevance_mean1 < 0.5 & include_screen == "include", 1,0)) 
+
+predRel2Summary <-  df %>%
   mutate(predIncl = ifelse(0.5 <= relevance_mean2, 1, 0),
          TP = ifelse(0.5 <= relevance_mean2 & include_screen == "include", 1,0),
          FP = ifelse(0.5 <= relevance_mean2 & include_screen == "exclude", 1,0),
          FN = ifelse(relevance_mean2 < 0.5 & include_screen == "include", 1,0)) 
 
-
-performanceTabs <- colSums(predRelSummary[,c("TP","FP","FN")])
-performanceTabs
-#  TP  FP  FN 
-# 925 172  31
-predBranchSummary <- test
+predBranchSummary <- df
 predBranchSummary$maxPred <- apply(
-  test[,c("Mitigation_mean", "Nature_mean", "Societal_mean")], 1, max)
+  df[,c("Mitigation_mean", "Nature_mean", "Societal_mean")], 1, max)
 predBranchSummary <-  predBranchSummary %>%
   mutate(predIncl = ifelse(0.5 <= maxPred, 1, 0),
          TP = ifelse(0.5 <= maxPred & include_screen == "include", 1,0),
@@ -255,21 +335,18 @@ predBranchSummary <-  predBranchSummary %>%
          FN = ifelse(maxPred < 0.5 & include_screen == "include", 1,0))
     
 
-colSums(predBranchSummary[,c("TP","FP","FN")]) 
-#  TP  FP  FN 
-# 503 927 453 
-
-# how many inclusions and exclusions overall?
-predBranchBinary <- data.frame(
-  analysis_id = predBranch$analysis_id,
-  Mitigation = ifelse(0.5 <= predBranch$Mitigation_mean, 1, 0),
-  Nature = ifelse(0.5 <= predBranch$Nature_mean, 1, 0),
-  Societal = ifelse(0.5 <= predBranch$Societal_mean, 1, 0)
+performanceTabs <- rbind(
+  colSums(predRel1Summary[,c("TP","FP","FN")]),
+  colSums(predRel2Summary[,c("TP","FP","FN")]),
+  colSums(predBranchSummary[,c("TP","FP","FN")]) 
 )
-predBranchBinary$Combined <- rowSums(predBranchBinary[,2:4])
-predBranchBinary$Combined[predBranchBinary$Combined>1]<-1
+rownames(performanceTabs) <- c("Binary after screen","Binary after code","Binary ORO_branch after code")
+performanceTabs <- as.data.frame(performanceTabs)
+performanceTabs <- performanceTabs %>%
+  mutate(precision = TP/(TP+FP), recall = TP/(TP+FN),
+         Fratio = ((2)*precision*recall)/(precision+recall))
+print(signif(performanceTabs, 3))
 
-colSums(predBranchBinary[,2:5])
 
 
 # F-beta scores
@@ -290,6 +367,8 @@ for(i in 1:length(Betas)){
 }
 FBeta
 
+
+## Seperated by sample_screen method
 summaryStats <- predRelSummary %>%
   group_by(sample_screen) %>%
   summarise(TP = sum(TP), FP = sum(FP), FN = sum(FN)) %>%
@@ -307,6 +386,14 @@ predBranchSummary %>%
   group_by(sample_screen) %>%
   summarise(TP = sum(TP), FP = sum(FP), FN = sum(FN)) %>%
   mutate(precision = TP/(TP+FP), recall = TP/(TP+FN))
+
+#   sample_screen          TP    FP    FN precision recall
+#   <chr>               <dbl> <dbl> <dbl>     <dbl>  <dbl>
+# 1 random                250   731   177     0.255  0.585
+# 2 relevance sort        134   142    55     0.486  0.709
+# 3 supplemental coding    73    47   181     0.608  0.287
+# 4 test list              46     7    40     0.868  0.535
+
 
 # distribution of predicted values for test list inclusions
 quantile(test$relevance_mean2[test$sample_screen =="test list" &
@@ -327,7 +414,190 @@ test %>%
   ggplot(aes(variable, y=value))+
   geom_violin()
 
+
 ```
+
+
+```{r plots of predicted relevance for known screening decisions}
+# compare distributions between inclusions and exclusions
+df %>%
+  select(include_screen, relevance_mean1, relevance_mean2, branchMaxPred) %>%
+  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2","branchMaxPred")) %>% 
+  ggplot()+
+  geom_hline(yintercept = 0.5, linetype="dashed", col="red")+
+  geom_violin(aes(x=variable, y=value, fill = variable))+
+  labs(y="predicted relevance", x="iteration")+
+  scale_fill_discrete(name="Model")+
+  facet_wrap(vars(include_screen))+
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "bottom"
+  )
+
+# facet by sampling strategy as well
+df %>%
+  select(include_screen, sample_screen, relevance_mean1, relevance_mean2, branchMaxPred) %>%
+  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2","branchMaxPred")) %>% 
+  ggplot()+
+  geom_hline(yintercept = 0.5, linetype="dashed", col="red")+
+  geom_violin(aes(x=variable, y=value, fill = variable), trim=T)+
+  labs(y="predicted relevance", x="iteration")+
+  facet_grid(sample_screen~include_screen)+
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    legend.position = "bottom"
+  )
+
+# predictions for articles that were first predicted include but are now exclude
+# -- no pattern is apparent
+df %>%
+  filter(0.5 <= relevance_mean1 & relevance_mean2 < 0.5) %>%
+  ggplot(aes(relevance_mean1, relevance_mean2))+
+  geom_point()+
+  facet_wrap(vars(include_screen))
+# maybe if we took the relevance down to ~0.3 we would include most of them, but is it worth it?
+
+# predictions for articles that were first predicted exclude but are now include
+# -- no pattern is apparent
+df %>%
+  filter(0.5 <= relevance_mean2 & relevance_mean1 < 0.5) %>%
+  ggplot(aes(relevance_mean1, relevance_mean2))+
+  geom_point()
+
+
+# what does the old relevance predictions say for the new additions from supplementary coding?
+# as a violin plot
+df %>%
+  filter(sample_screen == "supplemental coding") %>%
+  reshape2::melt(measure.vars = c("relevance_mean1","relevance_mean2","branchMaxPred"),
+                 variable.name = "model")%>% 
+  ggplot(aes(x=model, y=value, fill = model)) +
+  geom_hline(yintercept = 0.5, linetype="dashed", col="red")+
+  ggtitle("supplemental coding articles")+
+  geom_violin()+
+  labs(y = "predicted relevance")+
+  facet_wrap(vars(include_screen))+
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+# as density plots
+df %>%
+  filter(sample_screen == "supplemental coding") %>%
+  reshape2::melt(measure.vars = c("relevance_mean1","relevance_mean2","branchMaxPred"),
+                 variable.name = "model")%>% 
+  ggplot(aes(x=value, fill = include_screen)) +
+  geom_vline(xintercept = 0.5, linetype="dashed", col="red")+
+  ggtitle("supplemental coding articles")+
+  geom_density(alpha=0.5)+
+  scale_fill_discrete(name = "include screen")+
+  labs(x = "predicted relevance")+
+  facet_wrap(vars(model))
+
+
+
+## For ORO_branch, can break this down further by ORO_branch classification
+
+# melt the dataframe by the seen values
+branchDf <- df %>%
+  select(-c(relevance_mean1, relevance_mean2)) %>%
+  reshape2::melt(measure.vars = colnames(df)[grep("oro_branch", colnames(df))],
+                 value.name = "seen_branch",variable.name = "oro_branch")%>%
+  mutate(oro_branch = factor(oro_branch, 
+                             c("oro_branch.Mitigation","oro_branch.Nature",
+                               "oro_branch.Societal"),
+                             c("Mitigation","Nature","Societal")))%>%
+  mutate(seen_branch = ifelse(seen_branch==1, as.character(oro_branch), NA)) %>%
+  select(-c(oro_branch)) %>%
+  filter(!is.na(seen_branch))
+# branchDf %>% filter(is.na(seen_branch)) %>% View # NB seen_branch will == NA when include_screen == exclude 
+
+# check all inclusions have an oro_branch
+if(sum(!(branchDf$analysis_id %in% df$analysis_id[df$include_screen == "include"])) >0){
+  print("inclusions with no ORO branch assignment")
+  View(df[which(!(branchDf$analysis_id %in% df$analysis_id[df$include_screen == "include"])),])
+}
+
+# add a column for the predictions for the branch that was picked when seen
+pred <- rep(NA, nrow(branchDf))
+for(i in 1:length(pred)){
+  if(branchDf$seen_branch[i] == "Mitigation"){
+    pred[i] <- branchDf[i, grep("Mitigation", colnames(branchDf), ignore.case = T)]
+  }else if(branchDf$seen_branch[i] == "Nature"){
+    pred[i] <- branchDf[i, grep("Natur", colnames(branchDf), ignore.case = T)]
+  }else if(branchDf$seen_branch[i] == "Societal"){
+    pred[i] <- branchDf[i, grep("Societal", colnames(branchDf), ignore.case = T)]
+  }else{
+    pred[i] <- NA
+  }
+}
+branchDf$seen_branch_pred <- pred; rm(pred)
+
+# plot what the predicted relevance is for the branch that should have been chosen
+ggplot(branchDf, aes(x=seen_branch, y=seen_branch_pred))+
+  geom_violin()
+
+
+# facetted by the branch seen, what branch had the highest prediction? 
+branchDf %>%
+  select(analysis_id, Mitigation_mean, Societal_mean, Nature_mean, seen_branch) %>%
+  reshape2::melt(measure.vars = c("Mitigation_mean", "Societal_mean", "Nature_mean"),
+                 variable.name = "predictedBranch", value.name = "predictedRelevance")%>%
+  mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA)) %>%
+  ggplot(aes(x=predictedBranch, y= predictedRelevance, fill=predictedBranch))+
+  geom_violin()+
+  facet_wrap(vars(seen_branch))+
+  labs(y="predicted relevance", x = "predicted ORO branch", fill = "predicted ORO branch",
+       caption="Facetted by the branch seen, what branches were predicted to be relevant?")+
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+
+
+# tabulate the actual and predicted Branch classifications (just compare selections to the maximum predicted relevance branch, even though there may be multiple predictions/ analysis)
+lev <- c("Mitigation","Nature","Societal")
+# get all the branches predicted for each article
+predictedBranch <- df %>%
+  mutate(Mitigation = ifelse(0.5 <=Mitigation_mean, Mitigation_mean, NA),
+         Nature = ifelse(0.5 <= Nature_mean, Nature_mean, NA),
+         Societal = ifelse(0.5 <= Societal_mean, Societal_mean, NA)) %>%
+  reshape2::melt(measure.vars = lev, variable.name = "predictedBranch",
+                 value.name = "predictedBranchRelevance") %>%
+  filter(!is.na(predictedBranchRelevance), include_screen == "include") %>% 
+  select(analysis_id, predictedBranch, predictedBranchRelevance)
+# tabulate a confusion matrix
+seenBranch <- branchDf %>%
+  select(analysis_id, seen_branch)
+analysis_ids <- unique(branchDf$analysis_id)
+tempTab <- array(dim = c(length(lev),length(lev),length(analysis_ids)),
+                 dimnames = list(seen = lev, predicted = lev, analysis_id = analysis_ids))
+for(o in 1:length(analysis_ids)){
+  seenClasses <- unique(branchDf$seen_branch[which(branchDf$analysis_id == analysis_ids[o])])
+  predClasses <- unique(predictedBranch$predictedBranch[which(predictedBranch$analysis_id ==analysis_ids[o])])
+  if(length(predClasses)==0){
+    next
+  }
+  for(i in 1:length(lev)){
+    for(j in 1:length(lev)){
+      tempTab[i,j,o] <- sum(lev[i] %in% seenClasses & lev[j] %in% predClasses)
+    }
+  }
+}
+branchPredictionsTab <- apply(tempTab, 1:2, sum, na.rm=T)
+branchPredictionsTab
+
+# write outcomes
+sink(here::here("outputs/coding/ConfusionMatrix_oroBranchPredictions.txt"))
+print(caret::confusionMatrix(branchPredictionsTab))
+sink()
+```
+
+## Explore changes in seen article datasets used between models
+
 
 ```{r Explore the changes in inclusions/exclusions between the screening and post coding datasets}
 
@@ -398,8 +668,9 @@ changedScreens %>%
   nrow()
 
 
+```
 
-
+```{r relevance predictions for changed screens}
 ## Explore relevance predictions for changed screens
 # what are the relevance predictions for articles that were include after screening, then changed to exclude?
 changedScreensRelevance <- changedScreens %>%
@@ -419,8 +690,8 @@ ggplot(changedScreensRelevance, aes(x=iteration, y=relevance)) +
   labs(caption = "amongst the articles that were included at screening and excluded at coding")
 
 
-```
 
+```
 
 
 # Summarise relevance predictions for best model
