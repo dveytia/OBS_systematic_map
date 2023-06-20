@@ -41,7 +41,10 @@ src_dbi(all_db)
 relDir <- here::here("data","raw-data","relevance-predictions")
 relFiles <- dir(relDir)
 relFiles <- relFiles[grep(".csv", relFiles)]
-relFiles <- relFiles[-grep("Branch", relFiles, ignore.case = T)]
+if(sum(grepl("Branch", relFiles, ignore.case = T))>0){
+  relFiles <- relFiles[-grep("Branch", relFiles, ignore.case = T)]
+}
+
 dates<- gsub("[^0-9-]", "", relFiles)
 dates <- stringr::str_sub(dates, 2)
 dates <- as.Date(dates, format="%d%m%Y")
@@ -53,22 +56,36 @@ colnames(predRel) <- c("analysis_id","relevance_mean","relevance_std","relevance
 # check for duplicates
 if(sum(duplicated(predRel$analysis_id)) > 0){
   print("duplicates present")
-  dupsIds <- predRel$analysis_id[duplicated(predRel$analysis_id)]
-  View(predRel[which(predRel$analysis_id %in% dupsIds),])
+  dupIds <- predRel$analysis_id[duplicated(predRel$analysis_id)]
+  #View(predRel[which(predRel$analysis_id %in% dupsIds),])
   
-  # are the dupliate ids articles that have been "seen"? Yes
-  screens <- tbl(all_db, "allScreen_afterCoding") %>% 
-    select(analysis_id, sample_screen, include_screen) %>%
-    collect()
-  sum(dupsIds %in% screens$analysis_id)
-  sum(screens$analysis_id %in% dupsIds)
-  test <- predRel[which(predRel$analysis_id %in% dupsIds),] %>%
-    inner_join(screens, by="analysis_id")
-  summary(test)
+  # # are the dupliate ids articles that have been "seen"? Yes
+  # screens <- tbl(all_db, "allScreen_afterCoding") %>% 
+  #   select(analysis_id, sample_screen, include_screen) %>%
+  #   collect()
+  # sum(dupIds %in% screens$analysis_id)
+  # sum(screens$analysis_id %in% dupsIds)
+  # test <- predRel[which(predRel$analysis_id %in% dupIds),] %>%
+  #   inner_join(screens, by="analysis_id")
+  # summary(test)
+  # 
+  # summary(predRelMeta[which(predRel$analysis_id %in% dupIds),])
+  # nrow(predRelMeta[which(predRel$analysis_id %in% dupIds),])
   
-  summary(predRelMeta[which(predRel$analysis_id %in% dupsIds),])
-  nrow(predRelMeta[which(predRel$analysis_id %in% dupsIds),])
-
+  ## remove dupliate ids
+  
+  for(i in 1:length(dupsIds)){
+    temp <- predRel[predRel$analysis_id == dupIds[i],]
+    temp <- subset(temp, 0 < relevance_mean & relevance_mean < 1)
+    if(i==1)
+      temp2 <- temp
+    else
+      temp2 <- rbind(temp2, temp)
+  }
+  predRel <- rbind(
+    predRel[-dupIds,], temp2
+  )
+  rm(temp2, temp)
 }
 
 
@@ -105,6 +122,7 @@ if(anyDuplicated(predBranch$id)){
 dbWriteTable(all_db, "predRel2", predRel, overwrite=TRUE)
 dbWriteTable(all_db, "predBranch", predBranch, overwrite=TRUE)
 
+
 dbDisconnect(all_db)
 ```
 
@@ -119,7 +137,8 @@ dbDisconnect(all_db)
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
-predRelOld <- tbl(all_db, "predRel") %>% collect()
+predRel0 <- tbl(all_db, "predRel") %>% collect()
+predRel1 <- tbl(all_db, "predRel1") %>% collect()
 predRel <- tbl(all_db, "predRel2") %>% collect()
 predBranch <- tbl(all_db, "predBranch") %>% collect()
 
@@ -138,17 +157,21 @@ predBranchMax <- data.frame(
 )
 
 # combine predictions from all the models
-df <- predRelOld %>%
+df <- predRel0 %>%
   select(analysis_id, relevance_mean, relevance_lower, relevance_upper) %>%
   mutate(model = "Binary after screen") %>%
-  rbind(predRel %>% 
+  rbind(predRel1 %>% 
               select(analysis_id, relevance_mean, relevance_lower, relevance_upper) %>%
           mutate(model = "Binary after code")) %>%
+  rbind(predRel %>% 
+              select(analysis_id, relevance_mean, relevance_lower, relevance_upper) %>%
+          mutate(model = "Binary excl screen, incl code")) %>%
   rbind(predBranchMax %>% mutate(model = "Binary ORO_branch after code")) %>%
   mutate(include = ifelse(0.5 <= relevance_mean, "include","exclude"))%>%
   mutate(include = factor(include,levels = c("include","exclude"))) %>%
   mutate(model = factor(model, levels=c(
-    "Binary after screen", "Binary after code", "Binary ORO_branch after code"
+    "Binary after screen", "Binary after code","Binary excl screen, incl code",
+    "Binary ORO_branch after code"
   )))
 
 
@@ -234,7 +257,8 @@ ggplot(predSmoothDf)+
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
-predRelOld <- tbl(all_db, "predRel") %>% collect()
+predRel0 <- tbl(all_db, "predRel") %>% collect()
+predRel1<- tbl(all_db, "predRel1") %>% collect()
 predRel <- tbl(all_db, "predRel2") %>% collect()
 predBranch <- tbl(all_db, "predBranch") %>%
   select(analysis_id, Mitigation_mean, Nature_mean, Societal_mean) %>%
@@ -251,43 +275,13 @@ dbDisconnect(all_db)
 ```
 
 
-```{r categorize test list into oro_branch}
-
-testListBranch <- screens %>% 
-   filter(sample_screen == "test list" & include_screen == 1) %>%
-   select(analysis_id, sysrev_id, title, abstract)
-
-## Uncomment to run code for analysis
-# library(metagear)
-# 
-# temp <- effort_distribute(testListBranch, 
-#                           initialize = T, save_split = T,
-#                           reviewers = c("Devi"), effort= c(100),
-#                   directory = here::here("data/raw-data/test-list"))
-# 
-# buttonOptions <- c("Mitigate","Natural","Societal","Other")
-# keyOptions <- c("m","n","s","o")
-# 
-# metagear::abstract_screener(
-#   here::here("data/raw-data/test-list/effort_Devi.csv"),
-#   aReviewer = "Devi", abstractColumnName = "abstract", titleColumnName = "title",
-#   theButtons = buttonOptions, keyBindingToButtons = keyOptions)
-
-testListBranch2 <- read.csv(here::here("data/raw-data/test-list/effort_Devi.csv"))
-
-testListBranch <- testListBranch %>%
-  left_join(testListBranch2 %>% select(sysrev_id, INCLUDE)) %>%
-  rename(ORO_branch = INCLUDE)
-
-```
-
 ```{r merge dataframes so I can compare relevance predictions side by side}
 
 df <- screens %>%
   select(analysis_id, sample_screen, include_screen) %>%
   left_join(predRel %>% select(analysis_id, relevance_mean)) %>%
   rename(relevance_mean2 = relevance_mean) %>%
-  left_join(predRelOld %>% select(analysis_id, relevance_mean), by="analysis_id") %>%
+  left_join(predRel0 %>% select(analysis_id, relevance_mean), by="analysis_id") %>%
   rename(relevance_mean1 = relevance_mean) %>%
   left_join(predBranch) %>%
   left_join(codebookCombinedSimplified, by="analysis_id")%>%
