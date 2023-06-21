@@ -1295,7 +1295,7 @@ varPriority <- na.omit(varPriority)
 clusterPriorityLookup <- varPriority[!duplicated(varPriority[,2:3]), 2:3]
 clusterPriorityLookup <- clusterPriorityLookup %>% arrange(clusterPriority)
 clusterLev <- clusterPriorityLookup$cluster
-clusterLev <- clusterLev[-1] # remove intervention_0 for now because it's ORO_branch
+#clusterLev <- clusterLev[-1] # remove intervention_0 for now because it's ORO_branch
 
 
 
@@ -1333,6 +1333,8 @@ clusterCounts <- clusterCounts%>%
   arrange(cluster)%>%
   mutate(order = row_number())
 
+write.csv(clusterCounts, 
+          here::here("outputs/coding/tabulatedVariableClusters.csv"))
 
 
 ## Summarise
@@ -1344,12 +1346,12 @@ clusterCountsSummary <- clusterCounts %>%
     low_q = quantile(counts, probs=0.25),
     high_q = quantile(counts, probs=0.75),
     variance = var(counts),
-    cv = var(counts)/mean(counts),
+    cv = sd(counts)/mean(counts),
     nLabels = n()
   )
 
 write.csv(clusterCountsSummary, 
-          here::here("outputs/coding/tabulatedVariableClusters.csv"))
+          here::here("outputs/coding/tabulatedVariableClustersSummary.csv"))
 
 ## Plots 
 
@@ -1370,25 +1372,50 @@ write.csv(clusterCountsSummary,
 
 require(gtable)
 clusters <- unique(clusterCounts$cluster)
-ggps <- vector("list", length(clusters))
+nplots <- 4 # number of plots/page
+page <- seq(1,length(clusters), by=nplots) # number of pages
+# create a list item to hold the plots
+ggps <- vector("list", length(page))
+ggps <- lapply(ggps, function(x) vector("list", nplots))
 
 for(c in 1:length(clusters)){
+  # identify page to write to
+  p <- page[which(page-c <=0)]
+  pNum <- p[which.max(p)]
+  p <- which.max(p)
+  # filter data
   temp <- clusterCounts %>%
-    filter(cluster == clusters[c])
-  ggps[[c]] <- ggplot(temp, aes(x=value, y=counts, fill=variable))+
+    filter(cluster == clusters[c]) %>%
+    mutate(value = gsub("_"," ", value),
+           variable = gsub("_"," ", variable),
+           cluster = gsub("_"," ", cluster)) %>%
+    arrange(variable) %>%
+    mutate(valueOrder = as.factor(row_number()))
+  
+  # plot
+  ggps[[p]][[c-pNum+1]] <- ggplot(temp, aes(x=valueOrder, y=counts, fill=variable))+
     geom_col()+
-    scale_fill_discrete(name = paste(clusters[c]))+
+    scale_fill_discrete(name = paste(gsub("_"," ", clusters[c])))+
+    scale_x_discrete(limits = levels(temp$valueOrder), 
+                     labels = temp$value[order(temp$valueOrder)])+
     theme(
-      axis.text.x = element_text(angle=45, hjust=1),
+      axis.text.x = element_text(angle=90, hjust=1),
       axis.title.x = element_blank()
     )
-  ggps[[c]] <- ggplotGrob(ggps[[c]])
 }
 
+library(egg)
 
-gridExtra::grid.arrange(ggps[[1]],ggps[[2]],ggps[[3]],ggps[[4]], nrow=2)
-gridExtra::grid.arrange(ggps[[5]],ggps[[6]],ggps[[7]],ggps[[8]], nrow=2)
-gridExtra::grid.arrange(ggps[[9]],ggps[[10]], nrow=2)
+pdf(here::here("figures/additional/codingVariableClustering.pdf"), onefile = TRUE,
+    width = 10, height = 10)
+for(i in 1:length(ggps)){
+  ggTemp <- ggps[[i]]
+  ggTemp <- ggTemp[!sapply(ggTemp, is.null)]
+
+  do.call("ggarrange", ggTemp)
+}
+while (!is.null(dev.list()))  dev.off()
+ 
 ```
 
 # Compare these with all the articles that were screened to come up with updated screening decisions data

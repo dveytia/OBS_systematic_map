@@ -126,6 +126,13 @@ dbWriteTable(all_db, "predBranch", predBranch, overwrite=TRUE)
 dbDisconnect(all_db)
 ```
 
+```{r}
+modelLevels = c(
+    "Binary after screen", "Binary after code","Binary excl screen, incl code",
+    "Binary ORO_branch after code"
+  )
+```
+
 
 # Compare different methods of relevance predictions
 
@@ -169,10 +176,7 @@ df <- predRel0 %>%
   rbind(predBranchMax %>% mutate(model = "Binary ORO_branch after code")) %>%
   mutate(include = ifelse(0.5 <= relevance_mean, "include","exclude"))%>%
   mutate(include = factor(include,levels = c("include","exclude"))) %>%
-  mutate(model = factor(model, levels=c(
-    "Binary after screen", "Binary after code","Binary excl screen, incl code",
-    "Binary ORO_branch after code"
-  )))
+  mutate(model = factor(model, levels= modelLevels))
 
 
 
@@ -282,6 +286,8 @@ df <- screens %>%
   left_join(predRel %>% select(analysis_id, relevance_mean)) %>%
   rename(relevance_mean2 = relevance_mean) %>%
   left_join(predRel0 %>% select(analysis_id, relevance_mean), by="analysis_id") %>%
+  rename(relevance_mean0 = relevance_mean) %>%
+  left_join(predRel1 %>% select(analysis_id, relevance_mean), by="analysis_id") %>% 
   rename(relevance_mean1 = relevance_mean) %>%
   left_join(predBranch) %>%
   left_join(codebookCombinedSimplified, by="analysis_id")%>%
@@ -307,6 +313,12 @@ summary(df)
 ## Summary statistics
 
 ## Model performance metrics : TP, FP, FN
+predRel0Summary <-  df %>%
+  mutate(predIncl = ifelse(0.5 <= relevance_mean1, 1, 0),
+         TP = ifelse(0.5 <= relevance_mean0 & include_screen == "include", 1,0),
+         FP = ifelse(0.5 <= relevance_mean0 & include_screen == "exclude", 1,0),
+         FN = ifelse(relevance_mean0 < 0.5 & include_screen == "include", 1,0)) 
+
 predRel1Summary <-  df %>%
   mutate(predIncl = ifelse(0.5 <= relevance_mean1, 1, 0),
          TP = ifelse(0.5 <= relevance_mean1 & include_screen == "include", 1,0),
@@ -330,11 +342,12 @@ predBranchSummary <-  predBranchSummary %>%
     
 
 performanceTabs <- rbind(
+  colSums(predRel0Summary[,c("TP","FP","FN")]),
   colSums(predRel1Summary[,c("TP","FP","FN")]),
   colSums(predRel2Summary[,c("TP","FP","FN")]),
   colSums(predBranchSummary[,c("TP","FP","FN")]) 
 )
-rownames(performanceTabs) <- c("Binary after screen","Binary after code","Binary ORO_branch after code")
+rownames(performanceTabs) <- modelLevels
 performanceTabs <- as.data.frame(performanceTabs)
 performanceTabs <- performanceTabs %>%
   mutate(precision = TP/(TP+FP), recall = TP/(TP+FN),
@@ -389,25 +402,6 @@ predBranchSummary %>%
 # 4 test list              46     7    40     0.868  0.535
 
 
-# distribution of predicted values for test list inclusions
-quantile(test$relevance_mean2[test$sample_screen =="test list" &
-                       test$include_screen == "include"])
-
-
-# distribution of branch predictions for test list -- very low
-test %>%
-  filter(!is.na(ORO_branch)) %>%
-  reshape2::melt(measure.vars = c("Mitigation_mean","Nature_mean","Societal_mean")) %>%
-  ggplot(aes(x=ORO_branch, y=value))+
-  geom_violin()+
-  facet_wrap(vars(variable))
-
-# distribution of overall branch predictions
-test %>%
-  reshape2::melt(measure.vars = c("Mitigation_mean","Nature_mean","Societal_mean")) %>%
-  ggplot(aes(variable, y=value))+
-  geom_violin()
-
 
 ```
 
@@ -415,11 +409,12 @@ test %>%
 ```{r plots of predicted relevance for known screening decisions}
 # compare distributions between inclusions and exclusions
 df %>%
-  select(include_screen, relevance_mean1, relevance_mean2, branchMaxPred) %>%
-  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2","branchMaxPred")) %>% 
+  select(include_screen, relevance_mean0, relevance_mean1, relevance_mean2, branchMaxPred) %>%
+  reshape2::melt(measure.vars = c("relevance_mean0","relevance_mean1", "relevance_mean2","branchMaxPred")) %>% 
+  mutate(variable = factor(variable, labels = modelLevels))%>%
   ggplot()+
   geom_hline(yintercept = 0.5, linetype="dashed", col="red")+
-  geom_violin(aes(x=variable, y=value, fill = variable))+
+  geom_violin(aes(x=variable, y=value, fill = variable), trim=T)+
   labs(y="predicted relevance", x="iteration")+
   scale_fill_discrete(name="Model")+
   facet_wrap(vars(include_screen))+
@@ -429,10 +424,10 @@ df %>%
     legend.position = "bottom"
   )
 
-# facet by sampling strategy as well
+# facet by sampling strategy as well -- patterns remain consistent
 df %>%
-  select(include_screen, sample_screen, relevance_mean1, relevance_mean2, branchMaxPred) %>%
-  reshape2::melt(measure.vars = c("relevance_mean1", "relevance_mean2","branchMaxPred")) %>% 
+  select(include_screen, sample_screen,relevance_mean0, relevance_mean1, relevance_mean2, branchMaxPred) %>%
+  reshape2::melt(measure.vars = c("relevance_mean0", "relevance_mean1", "relevance_mean2","branchMaxPred")) %>% 
   ggplot()+
   geom_hline(yintercept = 0.5, linetype="dashed", col="red")+
   geom_violin(aes(x=variable, y=value, fill = variable), trim=T)+
@@ -465,8 +460,10 @@ df %>%
 # as a violin plot
 df %>%
   filter(sample_screen == "supplemental coding") %>%
-  reshape2::melt(measure.vars = c("relevance_mean1","relevance_mean2","branchMaxPred"),
+  reshape2::melt(measure.vars = c("relevance_mean0","relevance_mean1",
+                                  "relevance_mean2","branchMaxPred"),
                  variable.name = "model")%>% 
+  mutate(model = factor(model, labels = modelLevels))%>%
   ggplot(aes(x=model, y=value, fill = model)) +
   geom_hline(yintercept = 0.5, linetype="dashed", col="red")+
   ggtitle("supplemental coding articles")+
@@ -480,8 +477,10 @@ df %>%
 # as density plots
 df %>%
   filter(sample_screen == "supplemental coding") %>%
-  reshape2::melt(measure.vars = c("relevance_mean1","relevance_mean2","branchMaxPred"),
+  reshape2::melt(measure.vars = c("relevance_mean0","relevance_mean1",
+                                  "relevance_mean2","branchMaxPred"),
                  variable.name = "model")%>% 
+  mutate(model = factor(model, labels = modelLevels))%>%
   ggplot(aes(x=value, fill = include_screen)) +
   geom_vline(xintercept = 0.5, linetype="dashed", col="red")+
   ggtitle("supplemental coding articles")+
@@ -496,7 +495,7 @@ df %>%
 
 # melt the dataframe by the seen values
 branchDf <- df %>%
-  select(-c(relevance_mean1, relevance_mean2)) %>%
+  select(-c(relevance_mean0, relevance_mean1, relevance_mean2)) %>%
   reshape2::melt(measure.vars = colnames(df)[grep("oro_branch", colnames(df))],
                  value.name = "seen_branch",variable.name = "oro_branch")%>%
   mutate(oro_branch = factor(oro_branch, 
@@ -511,7 +510,7 @@ branchDf <- df %>%
 # check all inclusions have an oro_branch
 if(sum(!(branchDf$analysis_id %in% df$analysis_id[df$include_screen == "include"])) >0){
   print("inclusions with no ORO branch assignment")
-  View(df[which(!(branchDf$analysis_id %in% df$analysis_id[df$include_screen == "include"])),])
+  #View(df[which(!(branchDf$analysis_id %in% df$analysis_id[df$include_screen == "include"])),])
 }
 
 # add a column for the predictions for the branch that was picked when seen
@@ -616,6 +615,7 @@ table(screens$include_screen)
 screens %>%
   group_by(include_screen, sample_screen) %>%
   summarise(n=n())
+reshape2::acast(screens, include_screen~sample_screen)
 
 # which test list articles were excluded?
 screens %>%
@@ -671,17 +671,23 @@ changedScreensRelevance <- changedScreens %>%
   filter(include_screen == 0) %>%
   select(sysrev_id, analysis_id, duplicate_id, title.x, sample_screen) %>%
   rename(title = title.x) %>%
-  left_join(test %>% select(duplicate_id, relevance_mean2, relevance_mean1)) %>%
-  reshape2::melt(measure.vars = c("relevance_mean2","relevance_mean1"),
-                 variable.name = "iteration",value.name="relevance")%>%
-  mutate(iteration = factor(iteration, 
-                            levels = c("relevance_mean1","relevance_mean2"),
-                            labels = c("screening","screen excl, coding incl"))) 
+  left_join(df %>% select(duplicate_id, relevance_mean2, relevance_mean1, relevance_mean0, branchMaxPred)) %>%
+  reshape2::melt(measure.vars = c("relevance_mean2","relevance_mean1",
+                                  "relevance_mean0","branchMaxPred"),
+                 variable.name = "model",value.name="relevance")%>%
+  mutate(model = factor(model, 
+                            levels = c(paste0("relevance_mean",0:2),"branchMaxPred"),
+                            labels = paste0(c("* ","","* ",""), modelLevels))) 
 
 
-ggplot(changedScreensRelevance, aes(x=iteration, y=relevance)) +
+ggplot(changedScreensRelevance, aes(x=model, y=relevance, fill=model)) +
   geom_violin()+
-  labs(caption = "amongst the articles that were included at screening and excluded at coding")
+  labs(y= "Predicted relevance",
+       caption = "amongst the articles that were included at screening and excluded at coding\n * These articles were not seen by these models")+
+  theme(
+    axis.text.x = element_text(angle=45, hjust=1),
+    legend.position = "none"
+  )
 
 
 
