@@ -1,0 +1,166 @@
+---
+title: "Database-description-coauthors"
+author: "Devi Veytia"
+date: "2023-06-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning =FALSE)
+```
+
+
+```{r set up}
+
+## Load libraries
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+library(reticulate)
+library(ggplot2)
+
+
+## database connection
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+```
+
+# Background
+
+Here I present the preliminary predictions from the machine learning model for (1) relevance, and (2) metadata coding.
+
+To achieve this, first our search string was used to retrieve a literature from two citation indexed databases: Web of Science and Scopus. These articles were then de-duplicated based on title and year matching. 
+
+From this de-duplicated corpus, a subset of articles were screened for inclusion or exclusion:
+```{r}
+screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
+screenSummary <- table(screens2$include_screen)
+names(screenSummary) <- c("exclude","include")
+print(screenSummary)
+
+rm(screens2, screenSummary)
+```
+
+To generate predicted relevance for all "unseen" articles, a machine learning binary classification model was trained and tested on the "seen" corpus summarized above (see Section 1).
+
+The articles that were labelled as inclusions from the screened subset above were then coded for metadata variables. For each variable, the labels decided by a human were used to train multi-label or binary classifiers (using the former if the variable allowed multiple choice values) analagous to the method used above. After the model training and selection, the best performing model was used to calculate predicted relevance for the "unseen" articles with a predicted relevance greater or equal to 0.5 at the mean confidence level (see Section 2).
+
+# Screening
+
+```{r read in files for relevance predictions}
+
+## READ IN 
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+
+predRel <- tbl(all_db, "predRel2") 
+dedups <- tbl(all_db, "uniquerefs") %>% 
+  select(analysis_id, duplicate_id, title, abstract, keywords, doi)
+
+screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
+screens2 <- screens2 %>%
+  select(duplicate_id, sample_screen, include_screen)
+
+
+## FORMAT
+predRelMeta <- dedups %>%
+  inner_join(predRel, by = "analysis_id") %>%
+  collect()
+predRelMeta <- predRelMeta %>% full_join(screens2, by = "duplicate_id")
+
+```
+
+In total, the model predicts the following numbers of relevant articles for each error margin (lower, mean, upper):
+```{r summaries of numbers of articles across all error margins}
+
+predRelMeta %>%
+  summarise(
+    mean = sum(0.5 <= relevance_mean),
+    lower = sum(0.5 <= relevance_lower),
+    upper = sum(0.5 <= relevance_upper)
+  )
+
+```
+
+
+## Assessing screening model against human decisions
+
+Comparing the human screening decisions (y axis of table) with the predictions for the machine learning model (x axis), the model performs fairly well with high accuracy by predicting true positives and true negatives. 
+
+```{r tabulate the number of included and excluded screens fall on either side of the 0.5 threshold}
+predRelMeta %>%
+  filter(!is.na(include_screen)) %>%
+  mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
+  group_by(include_screen) %>%
+  summarise(pred_include = sum(0.5 <= relevance_mean), pred_exclude = sum(relevance_mean < 0.5)) 
+
+```
+
+This can be further broken down by looking at the distribution of predicted relevance (a continuous value from 0 to 1 with articles greater or equal to 0.5 being considered an inclusion):
+
+```{r fig.cap= "The distribution of predicted relevance by manual screening decision"}
+
+predRelMeta %>%
+  filter(!is.na(include_screen)) %>%
+  mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
+  
+  ggplot(aes(x= include_screen, y=relevance_mean, fill = include_screen)) +
+  geom_violin(trim=TRUE)+
+  geom_hline(yintercept = 0.5)+
+  scale_y_continuous(limits = c(0,1))+
+  scale_fill_discrete(guide="none")+
+  labs(x="Reviewer decision", y = "Predicted relevance (mean)")+
+  theme_bw()
+
+```
+
+```{r fig.cap = "Predicted relevance (y-axis) for screened abstracts (panels)"}
+predRelMeta %>% 
+  filter(!is.na(include_screen))%>%
+  mutate(include_screen = factor(include_screen, levels = c(1,0), 
+                                 labels = c("include","exclude"))) %>%
+  arrange(relevance_mean) %>% 
+  mutate(id = row_number()) %>%
+  ggplot(aes(id, relevance_mean))+ 
+  geom_ribbon(aes(ymin = relevance_mean, ymax = relevance_upper), alpha = 0.5, fill="pink")+
+  geom_point(size=1, alpha = 0.3)+
+  geom_hline(yintercept = 0.5, col="darkgrey")+
+  facet_wrap(vars(include_screen))+
+  labs(x="Article ID", y = "Predicted relevance (mean)")+
+  theme_bw()
+```
+
+Just looking at the test list articles, then the model performs a lot better and has only one false negative.
+
+```{r tabulate but for test list}
+predRelMeta %>%
+  filter(!is.na(include_screen) & sample_screen == "test list") %>%
+  mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
+  group_by(include_screen) %>%
+  summarise(pred_include = sum(0.5 <= relevance_mean), pred_exclude = sum(relevance_mean < 0.5)) 
+```
+
+
+# Coding
+
+## ORO type
+
+Since our ORO typology is hierarchical (see below), an incremental approach was taken to predict the type of ORO mentioned in the abstract. First the "branch" of the ORO was predicted (i.e. Mitigation, Natural resilience and Societal adaptation). Given the branch predicted (e.g. Societal), then the more granular type of ORO was predicted (Socio-institutional, Built infrastructure). 
+
+![ORO typology](/figures/external/ORO-typology.png)
+
+### ORO branch
+
+
+
+
+
+
+
+
+
+
+

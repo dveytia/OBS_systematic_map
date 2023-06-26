@@ -1,0 +1,213 @@
+---
+title: "10-Coding-predictions"
+author: "Devi Veytia"
+date: "2023-06-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load libraries}
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+library(reticulate)
+library(ggplot2)
+
+```
+
+
+
+# ORO branch 
+
+```{r read in the oro_branch labels}
+## READ IN
+
+# ORO branch
+predBranch <- readr::read_csv(
+  here::here("data/raw-data/coding-predictions/oro_branch_predictions.csv")
+)
+
+colnames(predBranch) <- c("analysis_id",
+                          paste("Mitigation", c("mean","std","lower","upper"), sep="_"),
+                          paste("Nature", c("mean","std","lower","upper"), sep="_"),
+                          paste("Societal", c("mean","std","lower","upper"), sep="_")
+                          )
+
+if(anyDuplicated(predBranch$analysis_id)){ # check for duplicates
+  print("duplicates present")
+}else{print("no duplicates")}
+
+# Relevance predictions
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+predRel <- tbl(all_db, "predRel2") %>% collect()
+
+
+# Coding decisions
+codebookCombinedSimplifiedMore <- tbl(all_db, "allCodingSimplifiedVariablesMore") %>% collect()
+
+
+# ## write to sql?
+# dbWriteTable(all_db, "predBranchMultilabel", predBranch, overwrite=TRUE)
+dbDisconnect(all_db)
+
+```
+
+```{r format dataframes together to only inclusions and their predicted branches}
+# merge with relevance predictions for inclusions, branch predictions and actual coding decisions
+df <- predRel %>%
+  filter(0.5 <= relevance_mean)%>%
+  left_join(predBranch, by = "analysis_id") %>%
+  left_join(codebookCombinedSimplifiedMore %>%
+               select(analysis_id, title, oro_branch.Mitigation, 
+                      oro_branch.Nature, oro_branch.Societal))
+
+# if an inclusion but none of the branches relevant, then unclear
+df$Unclear <- ifelse(df$Mitigation_mean < 0.5 |
+                       df$Nature_mean < 0.5 |
+                       df$Societal_mean < 0.5, 1,0)
+
+```
+
+```{r exploration}
+# are there any missing predictions for relevant articles? -- no, good 
+sum(0.5 <= df$relevance_mean & is.na(df$Mitigation_mean))
+
+```
+
+```{r summary statistics}
+
+```
+
+```{r plot predicted ORO_branch based on decision}
+
+# melt based on seen decisions for each unit of publication
+branchDf <- df %>%
+  select(analysis_id, relevance_mean, Mitigation_mean, Nature_mean, Societal_mean,
+         oro_branch.Mitigation, oro_branch.Nature,oro_branch.Societal)%>%
+  reshape2::melt(
+    measure.vars = c("oro_branch.Mitigation","oro_branch.Nature","oro_branch.Societal"),
+    #measure.vars = c("Mitigation_mean","Nature_mean","Societal_mean"),
+    value.name = "seen_branch", variable.name = "oro_branch") %>%
+  mutate(oro_branch = factor(oro_branch, 
+                             c("oro_branch.Mitigation","oro_branch.Nature",
+                               "oro_branch.Societal"),
+                             c("Mitigation","Nature","Societal")))%>%
+  mutate(seen_branch = ifelse(seen_branch==1, as.character(oro_branch), NA)) %>%
+  select(-c(oro_branch)) %>%
+  filter(!is.na(seen_branch))
+
+# add a column for the predictions for the branch that was picked when seen
+pred <- rep(NA, nrow(branchDf))
+for(i in 1:length(pred)){
+  if(branchDf$seen_branch[i] == "Mitigation"){
+    pred[i] <- branchDf[i, grep("Mitigation", colnames(branchDf), ignore.case = T)]
+  }else if(branchDf$seen_branch[i] == "Nature"){
+    pred[i] <- branchDf[i, grep("Natur", colnames(branchDf), ignore.case = T)]
+  }else if(branchDf$seen_branch[i] == "Societal"){
+    pred[i] <- branchDf[i, grep("Societal", colnames(branchDf), ignore.case = T)]
+  }else{
+    pred[i] <- NA
+  }
+}
+branchDf$seen_branch_pred <- pred; rm(pred)
+
+
+## PLOTS
+
+# 1. plot what the predicted relevance is for the branch that should have been chosen
+ggplot(branchDf, aes(x=seen_branch, y=seen_branch_pred, fill = seen_branch))+
+  labs(x = "Reviewer branch classification",
+       y= "Predicted relevance for classified branch")+
+  geom_violin(trim=TRUE)+
+  scale_fill_discrete(guide="none")+
+    theme_bw()
+  
+
+# 2. facetted by the branch seen, which branches were predicted relevant? 
+branchDf %>%
+  select(analysis_id, Mitigation_mean, Societal_mean, Nature_mean, seen_branch) %>%
+  reshape2::melt(measure.vars = c("Mitigation_mean", "Societal_mean", "Nature_mean"),
+                 variable.name = "predictedBranch", value.name = "predictedRelevance")%>% 
+  mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA)) %>%
+  ggplot(aes(x=predictedBranch, y= predictedRelevance, fill=predictedBranch))+
+  geom_violin()+
+  facet_wrap(vars(seen_branch))+
+  labs(y="predicted relevance", x = "predicted ORO branch", fill = "predicted ORO branch",
+       caption="Facetted by the branch seen, what branches were predicted to be relevant?")+
+  theme(
+    panel.background = element_rect(fill="white", colour = "black"),
+    panel.grid.major = element_line(colour = "grey"),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+
+
+
+
+# tabulate the actual and predicted Branch classifications (just compare selections to the maximum predicted relevance branch, even though there may be multiple predictions/ analysis)
+lev <- c("Mitigation","Nature","Societal")
+# get all the branches predicted for each article
+predictedBranch <- df %>%
+  select(analysis_id, Mitigation_mean, Nature_mean, Societal_mean) %>%
+  mutate(Mitigation = ifelse(0.5 <= Mitigation_mean, Mitigation_mean, NA),
+         Nature = ifelse(0.5 <= Nature_mean, Nature_mean, NA),
+         Societal = ifelse(0.5 <= Societal_mean, Societal_mean, NA)) %>% 
+  reshape2::melt(measure.vars = lev, variable.name = "predictedBranch",
+                 value.name = "predictedBranchRelevance") %>%
+  filter(!is.na(predictedBranchRelevance)) %>% 
+  select(analysis_id, predictedBranch, predictedBranchRelevance)
+
+
+```
+
+```{r summary statistics}
+
+# how many articles have > 1 branch predicted relevant?
+sum(duplicated(predictedBranch$analysis_id)) # 130
+
+# how many predictions (out of 0.5 <= relevance_mean) for each branch?
+table(predictedBranch$predictedBranch)
+# Mitigation     Nature   Societal 
+#      27112       2239       2959 
+
+
+
+# A confusion matrix of seen choices vs model predictions
+seenBranch <- branchDf %>%
+  select(analysis_id, seen_branch) 
+analysis_ids <- unique(branchDf$analysis_id)
+tempTab <- array(dim = c(length(lev),length(lev),length(analysis_ids)),
+                 dimnames = list(seen = lev, predicted = lev, analysis_id = analysis_ids))
+for(o in 1:length(analysis_ids)){
+  seenClasses <- unique(branchDf$seen_branch[which(branchDf$analysis_id == analysis_ids[o])])
+  predClasses <- unique(predictedBranch$predictedBranch[which(predictedBranch$analysis_id ==analysis_ids[o])])
+  if(length(predClasses)==0){
+    next
+  }
+  for(i in 1:length(lev)){
+    for(j in 1:length(lev)){
+      tempTab[i,j,o] <- sum(lev[i] %in% seenClasses & lev[j] %in% predClasses)
+    }
+  }
+}
+branchPredictionsTab <- apply(tempTab, 1:2, sum, na.rm=T)
+branchPredictionsTab
+#             predicted
+# seen         Mitigation Nature Societal
+#   Mitigation        375      7        5
+#   Nature             10    156       52
+#   Societal            3     15      265
+
+```
+
+
+
+
