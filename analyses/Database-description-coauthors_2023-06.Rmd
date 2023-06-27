@@ -55,8 +55,7 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 
 predRel <- tbl(all_db, "predRel2") %>% collect() 
 dedups <- tbl(all_db, "uniquerefs") %>% 
-  select(analysis_id, duplicate_id, title)%>%
-  collect()
+  select(analysis_id, duplicate_id, title)
 
 screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
 screens2 <- screens2 %>%
@@ -365,8 +364,8 @@ rm(list = ls())
 ```
 
 ```{r read in oro_any predictions}
-# Note these predictions were made using the upper confidence limit for ORO_branch
 
+# Note these predictions were made using the upper confidence limit for ORO_branch
 oroAnyFiles <- dir(here::here("data/raw-data/coding-predictions"))
 oroAnyFiles <- oroAnyFiles[grep("oro_any", oroAnyFiles)]
 
@@ -412,6 +411,28 @@ for(i in 1:length(predOROAnyList)){
 }
 
 
+## Read in other metadata
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+
+dedups <- tbl(all_db, "uniquerefs") %>% 
+  select(analysis_id, duplicate_id, title) %>%
+  collect()
+
+screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
+screens2 <- screens2 %>%
+  select(duplicate_id, sample_screen, include_screen)
+
+
+## FORMAT
+predOROAnyMeta <- dedups %>%
+  inner_join(predOROAny, by = "analysis_id") 
+rm(dedups)
+predOROAnyMeta <- predOROAnyMeta %>% full_join(screens2, by = "duplicate_id")
+
+# disconnect
+dbDisconnect(all_db)
 
 ```
 
