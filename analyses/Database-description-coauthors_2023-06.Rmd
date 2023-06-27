@@ -410,6 +410,7 @@ for(i in 1:length(predOROAnyList)){
     predOROAny <- rbind(predOROAny, temp)
 }
 
+rm(predOROAnyList)
 
 ## Read in other metadata
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
@@ -420,16 +421,13 @@ dedups <- tbl(all_db, "uniquerefs") %>%
   select(analysis_id, duplicate_id, title) %>%
   collect()
 
-screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
-screens2 <- screens2 %>%
-  select(duplicate_id, sample_screen, include_screen)
+codebookCombinedSimplifiedMore <- tbl(all_db, "allCodingSimplifiedVariablesMore") %>% collect()
 
 
 ## FORMAT
 predOROAnyMeta <- dedups %>%
   inner_join(predOROAny, by = "analysis_id") 
 rm(dedups)
-predOROAnyMeta <- predOROAnyMeta %>% full_join(screens2, by = "duplicate_id")
 
 # disconnect
 dbDisconnect(all_db)
@@ -464,17 +462,51 @@ ggplot(temp, aes(x=valueOrder, y=n_articles, fill = oro_branch))+
 
 From the figure above, you can see an additional category added under the Natural resilience ORO branch: Conservation. This was trialed as a combination between Protection and Restoration, as often in the literature these options are used together as a broader conservation portfolio and may be difficult to distinguish. Here I compare the performance of these three labels (protection, restoration and conservation) against the decisions from the seen articles.
 
-```{r}
-predOROAnyMeta <- dedups %>%
-  inner_join(predOROAny, by = "analysis_id") %>%
-  collect()
-predRelMeta <- merge(predRelMeta, screens2, all.y=TRUE)
+```{r melt based on seen decisions for each article}
 
-
+# melt based on seen decisions for each unit of publication
+predOROAnyDf <- predOROAnyMeta %>%
+  filter(oro_any %in% c("Protection","Restoration","Conservation"))%>%
+  reshape2::dcast(analysis_id~oro_any, value.var = "value") %>%
+  left_join(codebookCombinedSimplifiedMore %>%
+               select(analysis_id, oro_any.N_Protection,oro_any.N_Restoration))%>% 
+  reshape2::melt(
+    measure.vars = c("oro_any.N_Protection","oro_any.N_Restoration"),
+    value.name = "seen_oro", variable.name = "oro_any") %>%
+  mutate(oro_any = factor(oro_any, 
+                             c("oro_any.N_Protection","oro_any.N_Restoration"),
+                             c("Protection","Restoration")))%>%
+  mutate(seen_oro = ifelse(seen_oro==1, as.character(oro_any), NA)) %>%
+  select(-c(oro_any)) 
+  
 ```
 
 
 
+```{r fig.cap="facetted by the branch seen, which branches were predicted relevant?"}
+
+predOROAnyDf %>%
+  filter(!is.na(seen_oro))%>%
+  reshape2::melt(measure.vars = c("Protection","Restoration","Conservation"),
+                 variable.name = "predictedORO", value.name = "predictedRelevance")%>% 
+  mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA)) %>%
+  ggplot(aes(x=predictedORO, y= predictedRelevance, fill=predictedORO))+
+  geom_violin()+
+  facet_wrap(vars(seen_oro))+
+  labs(y="Predicted relevance", x = "Predicted ORO type", fill = "predicted\nORO type")+
+  theme(
+    panel.background = element_rect(fill="white", colour = "black"),
+    panel.grid.major = element_line(colour = "grey"),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
+
+```
 
 
+This indicates that for protection OROs, the model predicts a higher protection relevance than restoration, however the reverse is not true for restoration. Conservation is consistently high for both. 
+
+
+
+Extending this analysis to all the types of oros, this yeilds:
 
