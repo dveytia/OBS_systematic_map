@@ -1,5 +1,5 @@
 ---
-title: "Database-description-coauthors"
+title: "Database description"
 author: "Devi Veytia"
 date: "2023-06-26"
 output: html_document
@@ -28,9 +28,9 @@ library(ggplot2)
 
 Here I present the preliminary predictions from the machine learning model for (1) relevance, and (2) metadata coding.
 
-To achieve this, first our search string was used to retrieve a literature from two citation indexed databases: Web of Science and Scopus. These articles were then de-duplicated based on title and year matching. 
+To achieve this, first we used our search string to retrieve a literature from two citation indexed databases: Web of Science and Scopus. These articles were then de-duplicated based on title and year matching. 
 
-From this de-duplicated corpus, a subset of articles were screened for inclusion or exclusion:
+From this de-duplicated corpus, a subset of articles were screened for inclusion or exclusion, with the following results:
 ```{r}
 screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
 screenSummary <- table(screens2$include_screen)
@@ -40,9 +40,9 @@ print(screenSummary)
 rm(screens2, screenSummary)
 ```
 
-To generate predicted relevance for all "unseen" articles, a machine learning binary classification model was trained and tested on the "seen" corpus summarized above (see Section 1).
+To generate predicted relevance for all "unseen" articles, a machine learning binary classification model was trained and tested on the "seen" corpus summarized above (see "Screening" section). The model generates a prediction of relevance -- a value between 0 and 1, with 1 being relevant and 0 being irrelevant. Estimates for the mean, lower (mean - 1 std) and upper (mean + 1 std) are also generated. Following the approach of Callaghan et al 2021, we use the upper estimate for the relevance predictions which is the most conservative. A value of greater or equal to 0.5 would be considered an inclusion.
 
-The articles that were labelled as inclusions from the screened subset above were then coded for metadata variables. For each variable, the labels decided by a human were used to train multi-label or binary classifiers (using the former if the variable allowed multiple choice values) analagous to the method used above. After the model training and selection, the best performing model was used to calculate predicted relevance for the "unseen" articles with a mean predicted relevance greater or equal to 0.5 (see Section 2).
+The articles that were labelled as inclusions from the screened subset above were then coded for metadata variables. For each variable, the labels decided by a human were used to train multi-label or binary classifiers (using the former if the variable allowed multiple choice values) analagous to the method used above(see "Coding" section).
 
 # Screening
 
@@ -55,7 +55,7 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 
 predRel <- tbl(all_db, "predRel2") %>% collect() 
 dedups <- tbl(all_db, "uniquerefs") %>% 
-  select(analysis_id, duplicate_id, title)
+  select(analysis_id, duplicate_id, title) %>% collect
 
 screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
 screens2 <- screens2 %>%
@@ -86,10 +86,10 @@ predRel %>%
 ```
 
 
-However, a lot of information about model performance can be gained by comparing the distribution of predicted relevance (a continuous value from 0 to 1 with articles greater or equal to 0.5 being considered an inclusion) to screening decisions made by human reviewers (binary outcome = inclusion vs exclusion). Ideally, high predicted relevance will be seen for articles which were included, and vice versa. 
+To dig further, a lot of information about model performance can be gained by comparing the distribution of predicted relevance to screening decisions made by human reviewers (binary outcome = inclusion vs exclusion). Ideally, high predicted relevance will be seen for articles which were included, and vice versa. 
 
 Of the test list articles (our list of benchmark/exemplary articles), was was the predicted relevance? Overall, both mean and upper estimate (+1 standard deviation) demonstrate 100% recall for the test list articles (i.e. no false negatives).
-```{r fig.cap="predicted relevance for test list articles", out.width="80%", fig.asp=0.67, fig.align='center'}
+```{r fig.cap="predicted relevance for test list articles", out.width="80%", fig.asp=0.5, fig.align='center'}
 predRelMeta %>%
   filter(sample_screen == "test list" & include_screen == 1) %>%
   reshape2::melt(
@@ -105,8 +105,8 @@ predRelMeta %>%
   
 ```
 
-Note that in the "lower" is there one False negative:
-```{r}
+
+```{r Note that for the "lower" estimate is there only one False negative, eval = FALSE}
 predRelMeta %>%
   filter(sample_screen == "test list" & include_screen == 1) %>%
   mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
@@ -121,7 +121,7 @@ predRelMeta %>%
 
 
 
-This can be extended to all the articles screened. The red text labels show the counts of articles which fall into each possible outcome with a binary classification (true positive, false positive, true negative, false negative). Overall the model performs fairly well with high accuracy by predicting true positives and true negatives. While taking the upper limit minimizes the number of false negatives, it also performs more poorly on precision (more false positives). 
+This can be extended to all the articles screened, not just the test list articles. The red text labels show the counts of articles which fall into each possible outcome with a binary classification (true positive, false positive, true negative, false negative). Overall the model performs fairly well with high accuracy by predicting true positives and true negatives. While taking the upper limit minimizes the number of false negatives, it also performs more poorly on precision (more false positives). 
 
 
 ```{r tabulate the number of included and excluded screens fall on either side of the 0.5 threshold}
@@ -147,7 +147,7 @@ tabText <- predRelMeta %>%
 
 ```
 
-```{r fig.cap= "The distribution of predicted relevance for all articles screened by model estimate", out.width="90%", fig.asp=0.7, fig.align='center'}
+```{r fig.cap= "The distribution of predicted relevance for all articles screened by model estimate", out.width="90%", fig.asp=0.5, fig.align='center'}
 
 predRelMeta %>%
   filter(!is.na(include_screen)) %>%
@@ -169,8 +169,6 @@ predRelMeta %>%
 
 ```
 
-
-In the Callaghan et al 2021 paper, the upper estimate of relevance was used as this is the most conservative. For now, I suggest staying with this precedent and we can always truncate at the mean estimate if we want to.
 
 
 
@@ -238,7 +236,7 @@ df <- predRel %>%
 
 ```
 
-Firstly, of all the articles predicted relevant at the screeing stage, how many articles are predicted for each ORO branch? to be relevant for each ORO branch? Note the unclear option is chosen for any article included at the screening stage, but without a relevance prediction for any particular branch.
+Firstly, of all the articles predicted relevant at the screeing stage, how many articles are predicted to be relevant for each ORO branch? Note the unclear option is chosen for any article included at the screening stage, but without a relevance prediction for any particular branch.
 
 ```{r tabulate oro_branch}
 predBranch[,c(grep("upper", colnames(predBranch)), grep("Unclear", colnames(predBranch)))]%>%
@@ -247,6 +245,8 @@ predBranch[,c(grep("upper", colnames(predBranch)), grep("Unclear", colnames(pred
   summarise(n_articles = sum(0.5 <= value))
 ```
 
+
+We can next look at what the predicted relevance was for all the three branches, compared to what branch was selected:
 
 ```{r}
 
@@ -282,7 +282,7 @@ for(i in 1:length(pred)){
 branchDf$seen_branch_pred <- pred; rm(pred)
 ```
 
-```{r fig.cap = "what is the predicted relevance for the branch that was chosen by the reviewer?", out.width="90%", fig.asp=0.7, fig.align='center', eval=FALSE}
+```{r fig.cap = "what is the predicted relevance for the branch that was chosen by the reviewer?", out.width="90%", fig.asp=0.5, fig.align='center', eval=FALSE}
 
 ggplot(branchDf, aes(x=seen_branch, y=seen_branch_pred, fill = seen_branch))+
   labs(x = "Reviewer branch classification",
@@ -294,7 +294,7 @@ ggplot(branchDf, aes(x=seen_branch, y=seen_branch_pred, fill = seen_branch))+
 
 
 
-```{r fig.cap="facetted by the branch seen, which branches were predicted relevant?", out.width="90%", fig.asp=0.7, fig.align='center'}
+```{r fig.cap="facetted by the branch seen, which branches were predicted relevant?", out.width="90%", fig.asp=0.5, fig.align='center'}
 
 branchDf %>%
   select(analysis_id, Mitigation_mean, Societal_mean, Nature_mean, seen_branch) %>%
@@ -302,6 +302,7 @@ branchDf %>%
                  variable.name = "predictedBranch", value.name = "predictedRelevance")%>% 
   mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA)) %>%
   ggplot(aes(x=predictedBranch, y= predictedRelevance, fill=predictedBranch))+
+  geom_hline(yintercept = 0.5)+
   geom_violin()+
   facet_wrap(vars(seen_branch))+
   labs(y="predicted relevance", x = "predicted ORO branch", fill = "predicted ORO branch",
@@ -315,16 +316,12 @@ branchDf %>%
 
 ```
 
-
+Overall the ORO branch predictions seem to perform well for Mitigation and Societal branches, but the Natural resilience branch both mitigation and societal are showing high relevance predictions (although not at much as for "Nature" itself). Often though, many Natural resilience options tend to lie at the intersection between mitigation and societal adaptation goals, so it is not unsurprising that some of this language crosses over and predicts relevance for mitigation and societal as well.
 
 ## ORO type
 
-```{r clear r working environment}
-rm(list = ls())
-```
 
 ```{r read in oro_any predictions}
-
 # Note these predictions were made using the upper confidence limit for ORO_branch
 oroAnyFiles <- dir(here::here("data/raw-data/coding-predictions"))
 oroAnyFiles <- oroAnyFiles[grep("oro_any", oroAnyFiles)]
@@ -371,32 +368,19 @@ for(i in 1:length(predOROAnyList)){
 }
 
 rm(predOROAnyList)
+```
 
-## Read in other metadata
-all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
-                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
-                                create=FALSE)
-
-dedups <- tbl(all_db, "uniquerefs") %>% 
-  select(analysis_id, duplicate_id, title) %>%
-  collect()
-
-codebookCombinedSimplifiedMore <- tbl(all_db, "allCodingSimplifiedVariablesMore") %>% collect()
-
-
-## FORMAT
+```{r join in oro_any metadata}
 predOROAnyMeta <- dedups %>%
   inner_join(predOROAny, by = "analysis_id") 
 rm(dedups)
 
-# disconnect
-dbDisconnect(all_db)
-
 ```
 
-How many articles are predicted relevant for each category?
 
-```{r fig.cap="number of articles relevant to each ORO type", out.width="90%", fig.asp=0.8, fig.align='center'}
+Next, looking at the more granular typology of ORO type, we can first ask "How many articles (over the whole relevant corpus) are predicted relevant for each ORO type?"
+
+```{r fig.cap="number of articles relevant to each ORO type", out.width="90%", fig.asp=0.65, fig.align='center'}
 temp <- predOROAny %>%
   group_by(oro_branch, oro_any)%>%
   summarise(n_articles = sum(0.5 <= value))%>%
@@ -420,7 +404,7 @@ ggplot(temp, aes(x=valueOrder, y=n_articles, fill = oro_branch))+
 ```
 
 
-From the figure above, you can see an additional category added under the Natural resilience ORO branch: Conservation. This was trialed as a combination between Protection and Restoration, as often in the literature these options are used together as a broader conservation portfolio and may be difficult to distinguish. Here I compare the performance of these three labels (protection, restoration and conservation) against the decisions from the seen articles.
+From the figure above, we can see an additional category added under the Natural resilience ORO branch: Conservation. This was trialed as a union between Protection and/or Restoration, as often in the literature these options are used together as a broader conservation portfolio and may be difficult to distinguish. Here I compare the performance of these three labels (protection, restoration and conservation) against the decisions from the seen articles.
 
 ```{r}
 
@@ -443,7 +427,7 @@ predOROAnyDf <- predOROAnyMeta %>%
 
 
 
-```{r fig.cap="facetted by the branch seen, which branches were predicted relevant?"}
+```{r fig.cap="facetted by the branch seen, which branches were predicted relevant?",out.width="90%", fig.asp=0.5, fig.align='center'}
 
 predOROAnyDf %>%
   filter(!is.na(seen_oro))%>%
@@ -451,6 +435,7 @@ predOROAnyDf %>%
                  variable.name = "predictedORO", value.name = "predictedRelevance")%>% 
   mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA)) %>%
   ggplot(aes(x=predictedORO, y= predictedRelevance, fill=predictedORO))+
+  geom_hline(yintercept = 0.5)+
   geom_violin()+
   facet_wrap(vars(seen_oro))+
   labs(y="Predicted relevance", x = "Predicted ORO type", fill = "predicted\nORO type")+
@@ -464,11 +449,11 @@ predOROAnyDf %>%
 ```
 
 
+
 This indicates that for protection OROs, the model predicts a higher protection relevance than restoration, however the reverse is not true for restoration. Conservation is consistently high for both.
 
 
-
-Extending this analysis to all the types of OROs (not including the Conservation label), this yeilds:
+Extending this analysis to all the types of OROs (not including the Conservation label), this yeilds the following figure. Note that each panel refers to the ORO type that was chosen by the reviewer.
 
 ```{r}
 # melt based on seen decisions for each unit of publication
@@ -509,14 +494,15 @@ predOROAnyDf %>%
   reshape2::melt(id.vars = c("analysis_id", "seen_oro"),
                  variable.name = "predictedORO", value.name = "predictedRelevance")%>% 
   filter(!is.na(predictedORO))%>%
-  mutate(predictedORO = factor(gsub("_"," ", predictedORO)),
-         seen_oro = factor(gsub("_"," ",seen_oro)))  %>%
+  mutate(predictedORO = factor(gsub("_"," ", predictedORO), oroAnyColsLabels),
+         seen_oro = factor(gsub("_"," ",seen_oro), oroAnyColsLabels))  %>%
 
   ggplot()+
+  geom_hline(yintercept = 0.5)+
   geom_violin(aes(x=predictedORO, y= predictedRelevance, col=predictedORO),
-              trim=TRUE, width=1.5, scale = "count")+
+              trim=TRUE, width=1.5, scale = "count", linewidth = 0.75)+
   facet_wrap(vars(seen_oro), labeller=label_wrap_gen(35))+
-  geom_rect(data=facetCol, aes(xmin=-Inf, xmax=Inf, ymin=1.1, ymax=1.5,
+  geom_rect(data=facetCol, aes(xmin=-Inf, xmax=Inf, ymin=1.05, ymax=1.35,
                                fill=seen_oro))+
   coord_cartesian(clip = "off", ylim=c(0,1))+
   labs(y="Predicted relevance", x = "Predicted ORO type",
@@ -533,3 +519,144 @@ predOROAnyDf %>%
 
 
 ```
+
+
+# README: Information about the dataset
+
+All files are formatted as tab-delimited .txt files, so that commas and punctuation appearing in the free text columns (e.g. abstract) do not mess up the allocations of cells.
+
+Each file contains a different componenet of information from different stages of the analysis (described below), and each can be joined by the following common ID column:
+
+analysis_id = A unique identifier for each publiction retrieved by the search strategy
+Each dataset 
+
+
+
+**Dataset 1.1: screeningDecisions.txt**
+
+This file contains the screening decisions for each article that was coded manually to train the data.
+
+The columns include:
+reviewer = the name of the first reviewer
+reviewer_2 = the name of the second reviewer if the article underwent a double-blind check.
+test_list = will equal "test list" if the article was a part of the test list or "NA" if not
+include_screen = a binary value of 0 or 1, 1 indicating the article was included
+
+
+```{r}
+screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
+screens2$sample_screen <- ifelse(screens2$sample_screen == "test list", 
+                                 screens2$sample_screen, NA)
+colnames(screens2)[which(colnames(screens2) == "sample_screen")] <- "test_list"
+
+write.table(
+  screens2[,c("analysis_id","reviewer","reviewer_2","test_list","include_screen")],
+  file = here::here("data","derived-data","files_for_coauthors","screeningDecisions.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
+
+```
+
+**Dataset 1.2: codingDecisions.txt**
+
+This file contains the coding decisions for each article that was coded manually to train the data. Descriptions for the different variables and values can be found in the "variableDescriptions.xlsx" file.
+
+The columns include:
+coder_1 = the name of the first coder
+coder_2 = the name of the second coder if the article was coded twice for a consistency check.
+
+The rest of the columns follow the following nomenclature: [name of variable].[name of value] 
+Note that multiple values can be selected for each variable. A value of 1 indicates a selection, while 0 indicates absence.
+
+```{r compile and save coded variables}
+write.table(
+  codebookCombinedSimplifiedMore %>% select(-c("sysrev_id")),
+  file = here::here("data","derived-data","files_for_coauthors","codingDecisions.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
+
+```
+
+
+**Dataset 2: deduplicatedCorpus.txt**
+
+This file contains the de-duplicated corpus of literature that is used for deriving predictions from the model once it is trained.
+
+The additional columns include:
+
+duplicate_id = A unique identifier for each unit of publication (i.e. after de-duplication).
+n_duplicates = the number of articles which were assigned to the same duplicate_id
+title = the title of the article
+abstract = the abstract of the article
+keywords = the keywords of the article
+year = the year of publication
+doi = the DOI of the article if available
+source_title = the title of the source of the publication (e.g. journal name)
+
+
+```{r}
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+dedups <- tbl(all_db, "uniquerefs") %>%
+  select(analysis_id, duplicate_id, n_duplicates, title, abstract, keywords, year, doi, source_title) %>%
+  collect()
+
+dbDisconnect(all_db)
+
+write.table(
+  dedups,
+  file = here::here("data","derived-data","files_for_coauthors","deduplicatedCorpus.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
+
+print(paste("In total, there are",nrow(dedups), "unique articles in the dataset"))
+```
+
+
+**Dataset 3: upperPredictions.txt**
+
+This file contains the predictions (using the upper estimate) of the machine learning model for the coded variables. The column names for the variables and values adopt the same naming convention used in the codingDecisions.txt file. However, instead of a binary value of 0 or 1 for exclusion vs inclusion, the column will contain a continuous value from 0 to 1 indicating the degree of relevance. Columns with predicted relevance greater or equal to 0.5 are classified as a relevant response.
+
+the suffix "_upper" on the column names indicates that it is the upper estimate of predicted relevance
+
+```{r}
+# Note these predictions were made using the upper confidence limit for ORO_branch
+oroAnyFiles <- dir(here::here("data/raw-data/coding-predictions"))
+oroAnyFiles <- oroAnyFiles[grep("oro_any", oroAnyFiles)]
+for(i in 1:length(oroAnyFiles)){
+  temp <- readr::read_csv(
+    here::here("data/raw-data/coding-predictions",oroAnyFiles[i]),
+    show_col_types = FALSE
+  )
+  colnames(temp)[1] <- "analysis_id"
+  temp <- temp[,c(1, grep("upper", colnames(temp)))]
+  colnames(temp) <- gsub(" - upper_pred","_upper",colnames(temp))
+  colnames(temp) <- gsub(" - upper_prediction","_upper",colnames(temp))
+  if(i==1)
+    predOROWide <- temp
+  else
+    predOROWide <- merge(predOROWide, temp, all=T, by="analysis_id")
+}
+
+
+upperPred <- predRel %>% 
+  select(analysis_id, relevance_upper) %>%
+  left_join(predBranch[c(1, grep("upper", colnames(predBranch)))], by="analysis_id")%>%
+  left_join(predOROWide, by="analysis_id")
+
+colnames(upperPred)[3:5] <- paste0("oro_branch.",colnames(upperPred)[3:5])
+
+
+write.table(
+  upperPred,
+  file = here::here("data","derived-data","files_for_coauthors","upperPredictions.txt"),
+  row.names=F, col.names=TRUE, sep='\t', quote=FALSE
+)
+
+```
+
+
+
+
+

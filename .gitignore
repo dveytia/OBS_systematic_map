@@ -42,6 +42,7 @@ vignettes/*.pdf
 *.bib
 *.ris
 *.sqlite
+/data/derived-data/files_for_coauthors/
 /data/derived-data/coding/coding-pdfs/
 /data/derived-data/coding/manual-coding/set-0/
 /data/derived-data/coding/manual-coding/set-0_check/
