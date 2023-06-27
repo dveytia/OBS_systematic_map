@@ -23,6 +23,7 @@ library(ggplot2)
 
 ```
 
+
 # Background
 
 Here I present the preliminary predictions from the machine learning model for (1) relevance, and (2) metadata coding.
@@ -41,7 +42,7 @@ rm(screens2, screenSummary)
 
 To generate predicted relevance for all "unseen" articles, a machine learning binary classification model was trained and tested on the "seen" corpus summarized above (see Section 1).
 
-The articles that were labelled as inclusions from the screened subset above were then coded for metadata variables. For each variable, the labels decided by a human were used to train multi-label or binary classifiers (using the former if the variable allowed multiple choice values) analagous to the method used above. After the model training and selection, the best performing model was used to calculate predicted relevance for the "unseen" articles with a predicted relevance greater or equal to 0.5 at the mean confidence level (see Section 2).
+The articles that were labelled as inclusions from the screened subset above were then coded for metadata variables. For each variable, the labels decided by a human were used to train multi-label or binary classifiers (using the former if the variable allowed multiple choice values) analagous to the method used above. After the model training and selection, the best performing model was used to calculate predicted relevance for the "unseen" articles with a mean predicted relevance greater or equal to 0.5 (see Section 2).
 
 # Screening
 
@@ -52,9 +53,10 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
 
-predRel <- tbl(all_db, "predRel2") 
+predRel <- tbl(all_db, "predRel2") %>% collect() 
 dedups <- tbl(all_db, "uniquerefs") %>% 
-  select(analysis_id, duplicate_id, title, abstract, keywords, doi)
+  select(analysis_id, duplicate_id, title)%>%
+  collect()
 
 screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
 screens2 <- screens2 %>%
@@ -72,10 +74,10 @@ dbDisconnect(all_db)
 
 ```
 
-In total, the model predicts the following numbers of relevant articles for each error margin (lower, mean, upper):
+In total, the model predicts the following numbers of relevant articles for the mean +/- 1 standard deviation:
 ```{r summaries of numbers of articles across all error margins}
 
-predRelMeta %>%
+predRel %>%
   summarise(
     lower = sum(0.5 <= relevance_lower),
     mean = sum(0.5 <= relevance_mean),
@@ -87,19 +89,19 @@ predRelMeta %>%
 
 However, a lot of information about model performance can be gained by comparing the distribution of predicted relevance (a continuous value from 0 to 1 with articles greater or equal to 0.5 being considered an inclusion) to screening decisions made by human reviewers (binary outcome = inclusion vs exclusion). Ideally, high predicted relevance will be seen for articles which were included, and vice versa. 
 
-Of the test list articles (our list of benchmark/exemplary articles), was was the predicted relevance? Overall, both mean and upper confidence intervals demonstrate 100% recall for the test list articles (i.e. no false negatives).
+Of the test list articles (our list of benchmark/exemplary articles), was was the predicted relevance? Overall, both mean and upper estimate (+1 standard deviation) demonstrate 100% recall for the test list articles (i.e. no false negatives).
 ```{r fig.cap="predicted relevance for test list articles", out.width="80%", fig.asp=0.67, fig.align='center'}
 predRelMeta %>%
   filter(sample_screen == "test list" & include_screen == 1) %>%
   reshape2::melt(
     measure.vars = paste("relevance", c("lower","mean","upper"), sep="_"),
-    variable.name = "confidence", value.name = "value"
+    variable.name = "estimate", value.name = "value"
   ) %>%
-  ggplot(aes(x = confidence, y = value, fill = confidence))+
+  ggplot(aes(x = estimate, y = value, fill = estimate))+
   geom_violin(trim=TRUE)+
   geom_hline(yintercept = 0.5)+
   scale_fill_discrete(guide="none")+
-  labs(x="Confidence", y = "Predicted relevance")+
+  labs(x="estimate", y = "Predicted relevance")+
   theme_bw()
   
 ```
@@ -111,9 +113,9 @@ predRelMeta %>%
   mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
   reshape2::melt(
     measure.vars = paste("relevance", c("lower","mean","upper"), sep="_"),
-    variable.name = "confidence", value.name = "value"
+    variable.name = "estimate", value.name = "value"
   ) %>%
-  group_by(include_screen, confidence) %>%
+  group_by(include_screen, estimate) %>%
   summarise(pred_include = sum(0.5 <= value), pred_exclude = sum(value < 0.5)) 
 
 ```
@@ -129,9 +131,9 @@ tabText <- predRelMeta %>%
   mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
   reshape2::melt(
     measure.vars = paste("relevance", c("lower","mean","upper"), sep="_"),
-    variable.name = "confidence", value.name = "value"
+    variable.name = "estimate", value.name = "value"
   ) %>%
-  group_by(include_screen, confidence) %>% 
+  group_by(include_screen, estimate) %>% 
   summarise(pred_include = sum(0.5 <= value), pred_exclude = sum(value < 0.5)) %>% 
   ungroup()%>%
   reshape2::melt(
@@ -146,18 +148,18 @@ tabText <- predRelMeta %>%
 
 ```
 
-```{r fig.cap= "The distribution of predicted relevance for all articles screened by model confidence"}
+```{r fig.cap= "The distribution of predicted relevance for all articles screened by model estimate", out.width="90%", fig.asp=0.7, fig.align='center'}
 
 predRelMeta %>%
   filter(!is.na(include_screen)) %>%
   mutate(include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
   reshape2::melt(
     measure.vars = paste("relevance", c("lower","mean","upper"), sep="_"),
-    variable.name = "confidence", value.name = "value"
+    variable.name = "estimate", value.name = "value"
   ) %>%
   
   ggplot(aes(x= include_screen, y=value, fill = include_screen)) +
-  facet_wrap(vars(confidence))+
+  facet_wrap(vars(estimate))+
   geom_violin(trim=TRUE)+
   geom_text(data=tabText, aes(label = `predicted number`), nudge_x = 0.3, size=3, col="red")+
   geom_hline(yintercept = 0.5)+
@@ -174,6 +176,8 @@ Since our corpus is so large, it may be more sensible to explore the most releva
 
 # Coding
 
+## Overview: Tabulation of articles across all variables
+
 ## ORO type
 
 Since our ORO typology is hierarchical (see below), an incremental approach was taken to predict the type of ORO mentioned in the abstract. First the "branch" of the ORO was predicted (i.e. Mitigation, Natural resilience and Societal adaptation). Given the branch predicted (e.g. Societal), then the more granular type of ORO was predicted (Socio-institutional, Built infrastructure). 
@@ -181,6 +185,8 @@ Since our ORO typology is hierarchical (see below), an incremental approach was 
 ```{r}
 knitr::include_graphics(here::here("figures/external/ORO-typology.png")) 
 ```
+
+
 
 ### ORO branch
 
@@ -198,10 +204,6 @@ colnames(predBranch) <- c("analysis_id",
                           paste("Societal", c("mean","std","lower","upper"), sep="_")
                           )
 
-if(anyDuplicated(predBranch$analysis_id)){ # check for duplicates
-  print("duplicates present")
-}else{print("no duplicates")}
-
 # Relevance predictions
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
@@ -217,6 +219,20 @@ dbDisconnect(all_db)
 
 ```
 
+Firstly, how many articles are predicted to be relevant for each ORO branch? Does this differ depending on whether the mean or upper estimate is used?
+```{r tabulate oro_branch}
+predBranch[,grep("mean", colnames(predBranch))]%>%
+  reshape2::melt(variable.name = "ORO_branch") %>% 
+  group_by(ORO_branch)%>%
+  summarise(n_articles = sum(0.5 <= value))
+
+predBranch[,grep("upper", colnames(predBranch))]%>%
+  reshape2::melt(variable.name = "ORO_branch") %>% 
+  group_by(ORO_branch)%>%
+  summarise(n_articles = sum(0.5 <= value))
+```
+
+
 ```{r format dataframes together to only inclusions and their predicted branches}
 # merge with relevance predictions for inclusions, branch predictions and actual coding decisions
 df <- predRel %>%
@@ -227,9 +243,33 @@ df <- predRel %>%
                       oro_branch.Nature, oro_branch.Societal))
 
 # if an inclusion but none of the branches relevant, then unclear
-df$Unclear <- ifelse(df$Mitigation_mean < 0.5 |
-                       df$Nature_mean < 0.5 |
+df$Unclear <- ifelse(df$Mitigation_mean < 0.5 &
+                       df$Nature_mean < 0.5 &
                        df$Societal_mean < 0.5, 1,0)
+
+```
+
+Of the articles predicted to be relevant (0.5 <= mean estimate) what are the counts for each ORO branch?
+
+```{r of the articles predicted to be relevant what branch are they classified in}
+# using mean
+print("using mean estimate")
+df[c(grep("mean", colnames(df)), which(colnames(df) == "Unclear"))] %>%
+  filter(0.5 <= relevance_mean) %>%
+  select(-c(relevance_mean))%>%
+  reshape2::melt(variable.name = "ORO_branch") %>%
+  group_by(ORO_branch)%>% 
+  summarise(n_articles = sum(0.5 <= value, na.rm=T))
+
+
+# using mean
+print("using upper estimate")
+df[grep("upper", colnames(df))] %>%
+  filter(0.5 <= relevance_upper) %>%
+  select(-c(relevance_upper))%>%
+  reshape2::melt(variable.name = "ORO_branch") %>%
+  group_by(ORO_branch)%>% 
+  summarise(n_articles = sum(0.5 <= value, na.rm=T))
 
 ```
 
@@ -318,11 +358,99 @@ predictedBranch <- df %>%
 
 ```
 
+## ORO type
+
+```{r clear r working environment}
+rm(list = ls())
+```
+
+```{r read in oro_any predictions}
+# Note these predictions were made using the upper confidence limit for ORO_branch
+
+oroAnyFiles <- dir(here::here("data/raw-data/coding-predictions"))
+oroAnyFiles <- oroAnyFiles[grep("oro_any", oroAnyFiles)]
+
+predOROAnyList <- list()
+
+for(i in 1:length(oroAnyFiles)){
+  temp <- readr::read_csv(
+    here::here("data/raw-data/coding-predictions",oroAnyFiles[i]),
+    show_col_types = FALSE
+  )
+  colNames <- colnames(temp)
+  colNames[1] <- "analysis_id"
+  colNames <- gsub("oro_any.","",colNames)
+  colNames <- gsub("M_","", colNames)
+  colNames <- gsub("N_","", colNames)
+  colNames <- gsub("SA_","", colNames)
+  colNames <- gsub(" - ","_", colNames)
+  colNames <- gsub("_prediction","", colNames)
+  colNames <- gsub("_pred","", colNames)
+  colnames(temp) <- colNames
+  
+  temp$oro_branch <- gsub("oro_any_","",oroAnyFiles[i])
+  temp$oro_branch <- gsub("_predictions.csv","",temp$oro_branch)
+  
+  
+  predOROAnyList[[i]] <- temp
+  
+}
+
+
+## Make a dataframe of just the upper predictions
+for(i in 1:length(predOROAnyList)){
+  temp <- predOROAnyList[[i]]
+  temp <- temp[grep("upper", colnames(temp))]
+  colnames(temp) <- gsub("_upper","", colnames(temp))
+  temp <- reshape2::melt(temp, variable.name = "oro_any")
+  temp <- cbind(predOROAnyList[[i]][,c("analysis_id","oro_branch")], temp)
+  
+  if(i==1)
+    predOROAny <- temp
+  else
+    predOROAny <- rbind(predOROAny, temp)
+}
 
 
 
+```
+
+How many articles are predicted relevant for each category?
+
+```{r fig.cap="number of articles relevant to each ORO type", out.width="90%", fig.asp=0.8, fig.align='center'}
+temp <- predOROAny %>%
+  group_by(oro_branch, oro_any)%>%
+  summarise(n_articles = sum(0.5 <= value))%>%
+  arrange(oro_branch,n_articles)%>%
+  ungroup()%>%
+  mutate(valueOrder = as.factor(row_number()))
+  
+ggplot(temp, aes(x=valueOrder, y=n_articles, fill = oro_branch))+
+  geom_col()+
+  geom_text(aes(label = n_articles), nudge_y = 2000, size=3)+
+  scale_fill_discrete(name = "ORO Branch")+
+  scale_x_discrete(limits = levels(temp$valueOrder), 
+                    labels = gsub("_"," ", temp$oro_any[order(temp$valueOrder)]))+
+  labs(y="Number predicted\nrelevant articles (upper)")+
+  theme(
+    panel.background = element_rect(fill="white",colour = "black"),
+    panel.grid.major = element_line(colour = "grey"),
+    axis.text.x = element_text(angle=90, hjust=1),
+    axis.title.x = element_blank()
+  )
+```
 
 
+From the figure above, you can see an additional category added under the Natural resilience ORO branch: Conservation. This was trialed as a combination between Protection and Restoration, as often in the literature these options are used together as a broader conservation portfolio and may be difficult to distinguish. Here I compare the performance of these three labels (protection, restoration and conservation) against the decisions from the seen articles.
+
+```{r}
+predOROAnyMeta <- dedups %>%
+  inner_join(predOROAny, by = "analysis_id") %>%
+  collect()
+predRelMeta <- merge(predRelMeta, screens2, all.y=TRUE)
+
+
+```
 
 
 
