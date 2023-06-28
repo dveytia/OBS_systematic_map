@@ -55,7 +55,9 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 
 predRel <- tbl(all_db, "predRel2") %>% collect() 
 dedups <- tbl(all_db, "uniquerefs") %>% 
-  select(analysis_id, duplicate_id, title) %>% collect
+  select(analysis_id, duplicate_id, title) %>%
+  filter(!is.na(abstract))%>%
+  collect
 
 screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
 screens2 <- screens2 %>%
@@ -639,6 +641,7 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                                 create=FALSE)
 dedups <- tbl(all_db, "uniquerefs") %>%
   select(analysis_id, duplicate_id, n_duplicates, title, abstract, keywords, year, doi, source_title) %>%
+  filter(!is.na(abstract))%>%
   collect()
 
 dbDisconnect(all_db)
