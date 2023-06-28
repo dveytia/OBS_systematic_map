@@ -35,7 +35,8 @@ From this de-duplicated corpus, a subset of articles were screened for inclusion
 screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
 screenSummary <- table(screens2$include_screen)
 names(screenSummary) <- c("exclude","include")
-print(screenSummary)
+
+knitr::kable(screenSummary,col.names = c("Screening decision","Number of articles"))
 
 rm(screens2, screenSummary)
 ```
@@ -43,6 +44,57 @@ rm(screens2, screenSummary)
 To generate predicted relevance for all "unseen" articles, a machine learning binary classification model was trained and tested on the "seen" corpus summarized above (see "Screening" section). The model generates a prediction of relevance -- a value between 0 and 1, with 1 being relevant and 0 being irrelevant. Estimates for the mean, lower (mean - 1 std) and upper (mean + 1 std) are also generated. Following the approach of Callaghan et al 2021, we use the upper estimate for the relevance predictions which is the most conservative. A value of greater or equal to 0.5 would be considered an inclusion.
 
 The articles that were labelled as inclusions from the screened subset above were then coded for metadata variables. For each variable, the labels decided by a human were used to train multi-label or binary classifiers (using the former if the variable allowed multiple choice values) analagous to the method used above(see "Coding" section).
+
+```{r fig.cap="PRISMA diagram of the corpus",fig.width=12, fig.asp=0.6}
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+
+allrefs <- tbl(all_db,"allrefs_join") 
+databaseNum <- allrefs%>%group_by(source_database)%>% summarise(n=n())
+databaseNum <- as.data.frame(databaseNum)
+naAbstracts <- allrefs%>%filter(is.na(abstract))%>% summarise(n=n())
+naAbstracts <- as.data.frame(naAbstracts)
+
+dedups <- tbl(all_db, "uniquerefs") 
+nUnique <- dedups %>%
+  filter(!is.na(abstract)) %>%
+  summarise(n=n())%>%
+  as.data.frame()
+
+predRel <- tbl(all_db, "predRel2")
+nInclude <- predRel %>% 
+  summarise(
+    lower = sum(0.5 <= relevance_lower),
+    mean = sum(0.5 <= relevance_mean),
+    upper = sum(0.5 <= relevance_upper)) %>%
+  as.data.frame()
+  
+dbDisconnect(all_db)
+
+require(metagear)
+
+PRISMAFlow <- c(
+  paste("START_PHASE:", databaseNum$n[databaseNum$source_database == "Web Of Science"],
+        "articles from WOS"),
+  paste("START_PHASE:", databaseNum$n[databaseNum$source_database == "Scopus"],
+        "articles from Scopus"),
+  paste(sum(databaseNum$n),"articles in total"),
+  paste("EXCLUDE_PHASE:", naAbstracts,"abstracts removed as NA"),
+  paste(sum(databaseNum$n)-naAbstracts,"eligible articles"),
+  paste("EXCLUDE_PHASE:",sum(databaseNum$n)-naAbstracts-nUnique,"duplicates removed"),
+  paste(nUnique,"unique articles"),
+  paste(nInclude[3],"articles predicted relevant"),
+  paste("EXCLUDE_PHASE:", nUnique-nInclude[3],"articles excluded")
+)
+
+
+PRISMAFlowChart <- metagear::plot_PRISMA(PRISMAFlow, 
+                                         design = c(E = "lightcoral", flatArrow = TRUE),
+                                         excludeDistance = 0.8, colWidth = 50)
+
+```
+
 
 # Screening
 
@@ -55,8 +107,8 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 
 predRel <- tbl(all_db, "predRel2") %>% collect() 
 dedups <- tbl(all_db, "uniquerefs") %>% 
-  select(analysis_id, duplicate_id, title) %>%
   filter(!is.na(abstract))%>%
+  select(analysis_id, duplicate_id, title) %>%
   collect
 
 screens2 <- read.delim2(here::here("data","derived-data","screening","screened-records","all-screen-results_screenExcl-codeIncl.txt"), quote = "")
@@ -78,12 +130,14 @@ dbDisconnect(all_db)
 In total, the model predicts the following numbers of relevant articles for the mean +/- 1 standard deviation:
 ```{r summaries of numbers of articles across all error margins}
 
-predRel %>%
+relevanceTab <- predRel %>%
   summarise(
     lower = sum(0.5 <= relevance_lower),
     mean = sum(0.5 <= relevance_mean),
     upper = sum(0.5 <= relevance_upper)
   )
+
+knitr::kable(relevanceTab)
 
 ```
 
@@ -98,6 +152,7 @@ predRelMeta %>%
     measure.vars = paste("relevance", c("lower","mean","upper"), sep="_"),
     variable.name = "estimate", value.name = "value"
   ) %>%
+  mutate(estimate = gsub("_"," ", estimate))%>%
   ggplot(aes(x = estimate, y = value, fill = estimate))+
   geom_violin(trim=TRUE)+
   geom_hline(yintercept = 0.5)+
@@ -145,7 +200,8 @@ tabText <- predRelMeta %>%
   mutate(prediction_include = factor(
     prediction_include, levels = c("pred_include","pred_exclude"), 
     labels = c("include","exclude")
-  ))
+  )) %>%
+  mutate(estimate = gsub("_"," ", estimate))
 
 ```
 
@@ -158,6 +214,7 @@ predRelMeta %>%
     measure.vars = paste("relevance", c("lower","mean","upper"), sep="_"),
     variable.name = "estimate", value.name = "value"
   ) %>%
+  mutate(estimate = gsub("_"," ",estimate))%>%
   
   ggplot(aes(x= include_screen, y=value, fill = include_screen)) +
   facet_wrap(vars(estimate))+
@@ -237,14 +294,16 @@ df <- predRel %>%
 Firstly, of all the articles predicted relevant at the screeing stage, how many articles are predicted to be relevant for each ORO branch? Note the unclear option is chosen for any article included at the screening stage, but without a relevance prediction for any particular branch.
 
 ```{r tabulate oro_branch}
-predBranch[,c(grep("upper", colnames(predBranch)), grep("Unclear", colnames(predBranch)))]%>%
+branchTab <- predBranch[,c(grep("upper", colnames(predBranch)), grep("Unclear", colnames(predBranch)))]%>%
   reshape2::melt(variable.name = "ORO_branch") %>% 
   group_by(ORO_branch)%>%
   summarise(n_articles = sum(0.5 <= value))
+
+knitr::kable(branchTab)
 ```
 
 
-We can next look at what the predicted relevance was for all the three branches, compared to what branch was selected:
+We can next look at which branches were predicted to be relevant, compared to what branch was selected:
 
 ```{r}
 
@@ -300,7 +359,7 @@ branchDf %>%
                  variable.name = "predictedBranch", value.name = "predictedRelevance")%>% 
   mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA)) %>%
   ggplot(aes(x=predictedBranch, y= predictedRelevance, fill=predictedBranch))+
-  geom_hline(yintercept = 0.5)+
+  #geom_hline(yintercept = 0.5)+
   geom_violin()+
   facet_wrap(vars(seen_branch))+
   labs(y="predicted relevance", x = "predicted ORO branch", fill = "predicted ORO branch",
@@ -433,7 +492,7 @@ predOROAnyDf %>%
                  variable.name = "predictedORO", value.name = "predictedRelevance")%>% 
   mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA)) %>%
   ggplot(aes(x=predictedORO, y= predictedRelevance, fill=predictedORO))+
-  geom_hline(yintercept = 0.5)+
+  #geom_hline(yintercept = 0.5)+
   geom_violin()+
   facet_wrap(vars(seen_oro))+
   labs(y="Predicted relevance", x = "Predicted ORO type", fill = "predicted\nORO type")+
@@ -558,7 +617,7 @@ writexl::write_xlsx(tabulations,
 ```
 
 ```{r display table of tabulations}
-knitr::ktable(tabulations)
+knitr::kable(tabulations)
 ```
 
 
@@ -652,13 +711,12 @@ write.table(
   row.names=F, col.names=TRUE, sep='\t', quote=FALSE
 )
 
-print(paste("In total, there are",nrow(dedups), "unique articles in the dataset"))
 ```
 
 
 **Dataset 3: upperPredictions.txt**
 
-This file contains the predictions (using the upper estimate) of the machine learning model for the coded variables. The column names for the variables and values adopt the same naming convention used in the codingDecisions.txt file. However, instead of a binary value of 0 or 1 for exclusion vs inclusion, the column will contain a continuous value from 0 to 1 indicating the degree of relevance. Columns with predicted relevance greater or equal to 0.5 are classified as a relevant response.
+This file contains the predictions (using the upper estimate) of the machine learning model for the screening and coded variables. The column names for the variables and values adopt the same naming convention used in the codingDecisions.txt file. However, instead of a binary value of 0 or 1 for exclusion vs inclusion, the column will contain a continuous value from 0 to 1 indicating the degree of relevance. Columns with predicted relevance greater or equal to 0.5 are classified as a relevant response.
 
 the suffix "_upper" on the column names indicates that it is the upper estimate of predicted relevance
 
