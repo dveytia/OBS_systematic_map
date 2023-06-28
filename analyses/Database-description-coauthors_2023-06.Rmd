@@ -174,12 +174,9 @@ predRelMeta %>%
 
 # Coding
 
-## Overview: Tabulation of articles across all variables
+This section will summarise and visualize the model predictions for each of the variables coded so far. At the end of the section will be a summary table providing the article counts (i.e. number of articles predicted relevant) for each variable.
 
-
-FILL HERE
-
-## ORO type
+## ORO Branch
 
 Since our ORO typology is hierarchical (see below), an incremental approach was taken to predict the type of ORO mentioned in the abstract. First the "branch" of the ORO was predicted (i.e. Mitigation, Natural resilience and Societal adaptation). Given the branch predicted (e.g. Societal), then the more granular type of ORO was predicted (Socio-institutional or Built infrastructure). 
 
@@ -189,7 +186,6 @@ knitr::include_graphics(here::here("figures/external/ORO-typology.png"))
 
 
 
-### ORO branch
 
 ```{r read in the oro_branch labels}
 ## READ IN
@@ -518,6 +514,49 @@ predOROAnyDf %>%
   )
 
 
+```
+
+## Summary: Tabulation of articles across all variables
+
+
+The following table provides the number of articles predicted to be relevant for each category. Categories are defined by the columns "variable" and "label". Note that for each variable, multiple labels can be selected for one article. The number of articles is derived using the upper estimate of predicted relevance.
+
+These tabulations are also saved in the file titled "codingTabulations.xlsx"
+
+```{r make a dataframe tabulating all the counts for all variables and values}
+# tabulate ORO_branch
+oroBranchTab <- predBranch[,c(grep("upper", colnames(predBranch)), grep("Unclear", colnames(predBranch)))]%>%
+  reshape2::melt(variable.name = "label") %>% 
+  group_by(label)%>%
+  summarise(n_articles_upper = sum(0.5 <= value))%>%
+  mutate(variable = paste("oro_branch"),
+         label = gsub("_upper","", label)) %>%
+  select(variable, label, n_articles_upper)
+
+# tabulate ORO_any
+oroAnyTab <- predOROAny %>%
+  group_by(oro_branch,oro_any)%>%
+  summarise(n_articles_upper = sum(0.5 <= value))%>%
+  arrange(oro_branch,n_articles_upper)%>%
+  ungroup()%>%
+  select(-c(oro_branch))%>%
+  mutate(variable = paste("oro_type"))%>%
+  rename(label = oro_any) %>%
+  select(variable, label, n_articles_upper)
+
+
+## Join all tabulations together & write
+tabulations <- rbind(oroBranchTab,
+                     oroAnyTab)
+
+writexl::write_xlsx(tabulations,
+                    here::here("data/derived-data/files_for_coauthors/codingTabulations.xlsx"))
+
+
+```
+
+```{r display table of tabulations}
+knitr::ktable(tabulations)
 ```
 
 
