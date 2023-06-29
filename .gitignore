@@ -60,6 +60,7 @@ vignettes/*.pdf
 /data/raw-data/deduplication-files/unique_references.txt
 /data/raw-data/deduplication-files/unique_references2.txt
 /data/raw-data/relevance-predictions/
+/data/raw-data/coding-predictions/
 /*_env/
 *.pickle
 /data/derived-data/coding/keyword-matches-supplemental-coding/*.rds

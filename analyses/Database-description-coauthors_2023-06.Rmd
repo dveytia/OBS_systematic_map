@@ -1,5 +1,5 @@
 ---
-title: "Database description"
+title: "Systematic Map database description"
 author: "Devi Veytia"
 date: "2023-06-26"
 output: html_document
@@ -273,23 +273,13 @@ codebookCombinedSimplifiedMore <- tbl(all_db, "allCodingSimplifiedVariablesMore"
 
 dbDisconnect(all_db)
 
-```
-
-```{r}
 # if an inclusion but none of the branches relevant, then unclear
 predBranch$Unclear <- ifelse(predBranch$Mitigation_mean < 0.5 &
                        predBranch$Nature_mean < 0.5 &
                        predBranch$Societal_mean < 0.5, 1,0)
 
-# merge with relevance predictions for inclusions, branch predictions and actual coding decisions
-df <- predRel %>%
-  filter(0.5 <= relevance_mean)%>%
-  left_join(predBranch, by = "analysis_id") %>%
-  left_join(codebookCombinedSimplifiedMore %>%
-               select(analysis_id, title, oro_branch.Mitigation, 
-                      oro_branch.Nature, oro_branch.Societal))
-
 ```
+
 
 Firstly, of all the articles predicted relevant at the screeing stage, how many articles are predicted to be relevant for each ORO branch? Note the unclear option is chosen for any article included at the screening stage, but without a relevance prediction for any particular branch.
 
@@ -304,6 +294,17 @@ knitr::kable(branchTab)
 
 
 We can next look at which branches were predicted to be relevant, compared to what branch was selected:
+
+```{r merge with relevance predictions for inclusions branch predictions and actual coding decisions}
+
+df <- predRel %>%
+  filter(0.5 <= relevance_mean)%>%
+  left_join(predBranch, by = "analysis_id") %>%
+  left_join(codebookCombinedSimplifiedMore %>%
+               select(analysis_id, title, oro_branch.Mitigation, 
+                      oro_branch.Nature, oro_branch.Societal))
+
+```
 
 ```{r}
 
@@ -476,7 +477,7 @@ temp$oro_any <- factor(as.character(temp$oro_any),
                        labels = oroAnyLabels)
 temp <- crossprod(table(temp[,c("analysis_id","oro_any")]))
 diag(temp) <- NA
-temp[t(lower.tri(temp))] <- NA
+temp[!lower.tri(temp)] <- NA
 
 # melt into long format for plotting
 temp <- reshape2::melt(temp, variable.name="oro_any",value.name = "n_articles")
@@ -490,6 +491,7 @@ temp %>%
   ggplot(aes(oro_any1, oro_any2, fill=n_articles))+
   geom_tile()+
   scale_fill_gradientn(colours = pal)+
+  geom_text(aes(label=n_articles), size=2.5)+
   #scale_fill_gradient2(low="#eff3ff", high="#2171b5",na.value = "grey")+
   geom_rect(xmin=3.5,xmax=7.5-0.02,ymin=0,ymax=3.5-0.02, col="pink", 
             fill="transparent", linewidth=0.75)+
@@ -623,6 +625,121 @@ predOROAnyDf %>%
 
 
 ```
+
+## Product-specific variables
+
+### Product 2: biodiversity_metric and impact_nature
+
+```{r read in biodiversity_metric and impact_nature}
+
+## READ IN
+# to speed this up only look at upper predictions
+
+# biodiversity_metric
+predBiodiv <- readr::read_csv(
+  here::here("data/raw-data/coding-predictions/biodiversity_metric_predictions.csv"),
+  show_col_types = FALSE
+)
+predBiodiv <- predBiodiv[,c(1,grep("upper", colnames(predBiodiv)))]
+colnames(predBiodiv) <- c("analysis_id",paste("biodiversity_metric",c("upper"), sep="_"))
+
+# impact_nature
+predImpactNature <- readr::read_csv(
+  here::here("data/raw-data/coding-predictions/impact_nature_predictions.csv"),
+  show_col_types = FALSE
+)
+predImpactNature <- predImpactNature[,c(1,grep("upper", colnames(predImpactNature)))]
+colnames(predImpactNature) <- c("analysis_id",paste("impact_nature",c("upper"), sep="_"))
+
+
+## Join datasets together
+predPaper2 <- merge(predBiodiv, predImpactNature,by="analysis_id")
+
+```
+
+While neither of these variables received good F1 scores, we can still compare the predicted relevance with the codded answers.
+```{r out.width="80%", fig.asp = 0.6}
+df <- codebookCombinedSimplifiedMore %>%
+  select(analysis_id, biodiversity_metric, impact_nature)%>%
+  reshape2::melt(id.vars = "analysis_id", variable.name = "variable",
+                 value.name = "seen_value")%>%
+  left_join(predPaper2 %>%
+              rename(biodiversity_metric = biodiversity_metric_upper,
+                     impact_nature = impact_nature_upper) %>%
+              reshape2::melt(id.vars="analysis_id",variable.name = "variable",
+                             value.name = "predicted_relevance"))%>%
+  filter(!is.na(predicted_relevance)) %>% 
+  mutate(seen_value = factor(seen_value, levels = c(0,1), 
+                             labels = c("No","Yes")))
+  
+ggplot(df, aes(x=variable, y=predicted_relevance, fill=seen_value, col=seen_value))+
+  geom_violin(trim=TRUE, position="dodge")+
+  geom_hline(yintercept = 0.5)+
+  scale_y_continuous(limits = c(0,1))+
+  labs(y = "Predicted relevance", fill="Reviewer\ndecision",col="Reviewer\ndecision")+
+  theme_bw()
+
+```
+
+However, looking at the distributions, we could attain better precision by increasing the threshold for predicted inclusion.
+
+Which "threshold" would yield the best F1 ratio (harmonic mean of precision and recall)?
+
+```{r Which "threshold" would yield the best F1 ratio, out.width="80%", fig.asp=0.6}
+# different thresholds to try
+thresholds <- seq(0.5,1, length.out=100)
+
+# calculate the precision and recall and F1 for that threshold
+for(i in 1:length(thresholds)){
+  temp <- df %>%
+    group_by(variable)%>%
+    summarise(
+      TP = sum(seen_value == "Yes" & thresholds[i] <= predicted_relevance),
+      FP = sum(seen_value == "No" & thresholds[i] <= predicted_relevance),
+      FN = sum(seen_value == "Yes" & predicted_relevance < thresholds[i])
+    )%>%
+    group_by(variable)%>%
+    summarise(
+      precision=TP/(TP+FP),
+      recall=TP/(TP+FN)
+    )%>%
+    mutate(F1=(2*recall*precision)/(recall+precision),
+           threshold = rep(thresholds[i],2))
+
+ if(i==1){
+   thresholdsDf <- temp
+ }else{
+   thresholdsDf <- rbind(thresholdsDf, temp)
+ }
+}
+thresholdsDf <- na.omit(thresholdsDf)
+
+
+
+## Plot the change in F1 over the different thresholds and find the max
+maxVals <- thresholdsDf %>%
+  group_by(variable)%>%
+  summarise(
+    threshold = threshold[which.max(F1)],
+    F1 = F1[which.max(F1)]
+  )
+
+ggplot(thresholdsDf, aes(threshold, F1))+
+  facet_wrap(vars(variable))+
+  geom_point()+
+  geom_text(data=maxVals, aes(x=threshold-0.05, y=F1/2, label=signif(threshold,2)),
+             col="red")+
+  geom_vline(data=maxVals,aes(xintercept=threshold),col="red")+
+  labs(x="Threshold")+
+  theme_bw()
+
+```
+
+
+### Product 3: restoration
+
+### Product 4: safe_fish and safe_space
+
 
 ## Summary: Tabulation of articles across all variables
 
