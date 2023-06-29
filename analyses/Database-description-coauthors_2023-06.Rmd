@@ -464,7 +464,7 @@ ggplot(temp, aes(x=valueOrder, y=n_articles, fill = oro_branch))+
 
 We may also want to ask, how many articles contain predicted relevance for more than one ORO type, and which types display the most linkages? Note in the figure that the pink rectangle identifies inter-branch interactions between mitigation and natural resilience, the purple between mitigation and societal, and the green between societal adaptation and natural resilience. 
 
-These inter-branch interactions occur most often between Conservation options (Protection and Restoration) and CO2 removal and storage, as well as with societal adaptation options. This may reflect the multiple objectives for both mitigation and societal adaptation that often motivate nature-based solutions and adaptation options.
+These inter-branch interactions occur most often between Conservation options (Protection and Restoration) and CO2 removal and storage, as well as with societal adaptation options. However, recalling evaluating the predictions for ORO type against the known values, both mitigation and societal branches tended to also be predicted as relevant for Natural resilience options. So it is difficult to discern if this is a true phenomenon or just a result of the overlapping language and objectives across these options. It is likely the latter, as objectives for both mitigation and societal adaptation can often motivate nature-based solutions and adaptation options. 
 
 ```{r fig.cap="Interlinkages between ORO types", out.width="80%", fig.asp=0.8}
 # make a co-occurrence matrix
@@ -658,7 +658,7 @@ predPaper2 <- merge(predBiodiv, predImpactNature,by="analysis_id")
 ```
 
 While neither of these variables received good F1 scores, we can still compare the predicted relevance with the codded answers.
-```{r out.width="80%", fig.asp = 0.6}
+```{r out.width="60%", fig.asp = 0.6, fig.align='center'}
 df <- codebookCombinedSimplifiedMore %>%
   select(analysis_id, biodiversity_metric, impact_nature)%>%
   reshape2::melt(id.vars = "analysis_id", variable.name = "variable",
@@ -685,7 +685,7 @@ However, looking at the distributions, we could attain better precision by incre
 
 Which "threshold" would yield the best F1 ratio (harmonic mean of precision and recall)? Note that these F1 ratios do not reflect the "true" values obtained through model selection, because these were calculated from all the seen data, rather than across different folds.
 
-```{r Which "threshold" would yield the best F1 ratio, out.width="80%", fig.asp=0.8}
+```{r out.width="80%", fig.asp=0.8, fig.align='center'}
 # different thresholds to try
 thresholds <- seq(0.5,1, length.out=100)
 
@@ -759,9 +759,16 @@ paper2Tab <- predPaper2%>%
       round(maxVals$threshold[maxVals$variable=="biodiversity_metric"], digits = 1) <= biodiversity_metric_upper),
     impact_nature_relevant = sum(
       round(maxVals$threshold[maxVals$variable=="impact_nature"], digits = 1) <= impact_nature_upper)
-  )
+  )%>%
+  reshape2::melt(value.name = "n_articles_upper")%>%
+  mutate(
+    threshold = c(round(maxVals$threshold[maxVals$variable=="biodiversity_metric"], digits = 1),
+                  round(maxVals$threshold[maxVals$variable=="impact_nature"], digits = 1))
+  )%>%
+  select(variable, threshold, n_articles_upper)
 
-knitr::kable(temp)
+
+knitr::kable(paper2Tab)
 
 ```
 
@@ -783,7 +790,7 @@ colnames(predRestor) <- c("analysis_id",paste("restoration",c("upper"), sep="_")
 ```
 
 Compare the predicted relevance with the coded answers.
-```{r out.width="80%", fig.asp = 0.6}
+```{r out.width="60%", fig.asp = 0.6, fig.align='center'}
 df <- codebookCombinedSimplifiedMore %>%
   select(analysis_id, restoration)%>%
   reshape2::melt(id.vars = "analysis_id", variable.name = "variable",
@@ -839,7 +846,7 @@ predPaper4 <- merge(predFish, predSpace,by="analysis_id")
 ```
 
 While neither of these variables received good F1 scores, we can still compare the predicted relevance with the codded answers.
-```{r out.width="80%", fig.asp = 0.6}
+```{r out.width="60%", fig.asp = 0.6, fig.align='center'}
 df <- codebookCombinedSimplifiedMore %>%
   select(analysis_id, safe_fish, safe_space)%>%
   reshape2::melt(id.vars = "analysis_id", variable.name = "variable",
@@ -1049,11 +1056,14 @@ for(i in 1:length(oroAnyFiles)){
     predOROWide <- merge(predOROWide, temp, all=T, by="analysis_id")
 }
 
-
+# compbine a dataset of all the upper predictions
 upperPred <- predRel %>% 
   select(analysis_id, relevance_upper) %>%
   left_join(predBranch[c(1, grep("upper", colnames(predBranch)))], by="analysis_id")%>%
-  left_join(predOROWide, by="analysis_id")
+  left_join(predOROWide, by="analysis_id")%>%
+  left_join(predPaper2, by="analysis_id") %>%
+  left_join(predRestor, by="analysis_id") %>%
+  left_join(predPaper4, by="analysis_id")
 
 colnames(upperPred)[3:5] <- paste0("oro_branch.",colnames(upperPred)[3:5])
 
