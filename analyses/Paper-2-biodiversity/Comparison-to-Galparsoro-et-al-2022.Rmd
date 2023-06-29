@@ -1,0 +1,11 @@
+---
+title: "Comparison-to-Galparsoro-et-al-2022"
+author: "Devi Veytia"
+date: "2023-06-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+

@@ -461,7 +461,50 @@ ggplot(temp, aes(x=valueOrder, y=n_articles, fill = oro_branch))+
 ```
 
 
-From the figure above, we can see an additional category added under the Natural resilience ORO branch: Conservation. This was trialed as a union between Protection and/or Restoration, as often in the literature these options are used together as a broader conservation portfolio and may be difficult to distinguish. Here I compare the performance of these three labels (protection, restoration and conservation) against the decisions from the seen articles.
+We may also want to ask, how many articles contain predicted relevance for more than one ORO type, and which types display the most linkages? Note in the figure that the pink rectangle identifies inter-branch interactions between mitigation and natural resilience, the purple between mitigation and societal, and the green between societal adaptation and natural resilience. 
+
+These inter-branch interactions occur most often between Conservation options (Protection and Restoration) and CO2 removal and storage, as well as with societal adaptation options. This may reflect the multiple objectives for both mitigation and societal adaptation that often motivate nature-based solutions and adaptation options.
+
+```{r fig.cap="Interlinkages between ORO types", out.width="80%", fig.asp=0.8}
+# make a co-occurrence matrix
+oroAnyLabels <- gsub("_"," ", levels(predOROAny$oro_any))
+oroAnyLabels <- replace(oroAnyLabels, oroAnyLabels=="Socioinstitutional", "Socio-institutional")
+temp <- predOROAny %>%
+  filter(0.5 <= value)
+temp$oro_any <- factor(as.character(temp$oro_any),
+                       levels(predOROAny$oro_any),
+                       labels = oroAnyLabels)
+temp <- crossprod(table(temp[,c("analysis_id","oro_any")]))
+diag(temp) <- NA
+temp[t(lower.tri(temp))] <- NA
+
+# melt into long format for plotting
+temp <- reshape2::melt(temp, variable.name="oro_any",value.name = "n_articles")
+colnames(temp) <- c("oro_any1","oro_any2","n_articles")
+
+# plot
+temp %>%
+  ggplot(aes(oro_any1, oro_any2, fill=n_articles))+
+  geom_tile()+
+  scale_fill_gradient2(low="white", high="#3182bd",na.value = "grey")+
+  geom_rect(xmin=3.5,xmax=7.5-0.02,ymin=0,ymax=3.5-0.02, col="pink", 
+            fill="transparent", linewidth=0.75)+
+  geom_rect(xmin=7.5+0.02, xmax=9.5,ymin=0,ymax=3.5-0.02, col="purple", 
+            fill="transparent", linewidth=0.75)+
+  geom_rect(xmin=7.5, xmax=9.5, ymin=3.5+0.02,ymax=7.5, col="green", 
+            fill="transparent", linewidth=0.75)+
+  labs(
+    y= "",x="",fill="Number\nof articles"
+  )+
+  theme(
+    panel.background = element_rect(fill="white", colour="black"),
+    axis.text.x = element_text(angle=90, hjust=1)
+  )
+    
+
+```
+
+From the figures above, we can see an additional category added under the Natural resilience ORO branch: Conservation. This was trialed as a union between Protection and/or Restoration, as often in the literature these options are used together as a broader conservation portfolio and may be difficult to distinguish. Here I compare the performance of these three labels (protection, restoration and conservation) against the decisions from the seen articles.
 
 ```{r}
 
