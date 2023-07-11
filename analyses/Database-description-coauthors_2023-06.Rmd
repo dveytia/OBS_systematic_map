@@ -657,8 +657,8 @@ predPaper2 <- merge(predBiodiv, predImpactNature,by="analysis_id")
 
 ```
 
-While neither of these variables received good F1 scores, we can still compare the predicted relevance with the codded answers.
-```{r out.width="60%", fig.asp = 0.6, fig.align='center'}
+While neither of these variables received good F1 scores, we can still compare the predicted relevance with the coded answers.
+```{r out.width="80%", fig.asp = 0.6, fig.align='center'}
 df <- codebookCombinedSimplifiedMore %>%
   select(analysis_id, biodiversity_metric, impact_nature)%>%
   reshape2::melt(id.vars = "analysis_id", variable.name = "variable",
@@ -899,10 +899,12 @@ oroAnyTab <- predOROAny %>%
   select(variable, label, n_articles_upper)
 
 # tabulate values for paper 2
-colnames(paper2Tab) <- c("biodiversity_metric","impact_nature") 
-paper2Tab <- reshape2::melt(paper2Tab, value.name = "n_articles_upper")%>%
-  mutate(label = "include")%>%
+paper2Tab <- paper2Tab %>% 
+  select(variable, n_articles_upper) %>%
+  mutate(label ="include") %>%
   select(variable, label, n_articles_upper)
+paper2Tab$variable <- gsub("_relevant","",paper2Tab$variable)
+  
 
 # tabulate restoration
 predRestorTab <- predRestor%>%
@@ -918,6 +920,7 @@ paper4Tab <- predPaper4%>%
   summarise(n_articles_upper = sum(0.5 <= value))%>%
   mutate(label = "include")%>%
   select(variable, label, n_articles_upper)
+
 
 
 ## Join all tabulations together & write
