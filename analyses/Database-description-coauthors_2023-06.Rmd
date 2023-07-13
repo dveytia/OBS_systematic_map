@@ -843,7 +843,8 @@ colnames(predSpace) <- c("analysis_id",paste("safe_space",c("upper"), sep="_"))
 ## Join datasets together
 predPaper4 <- merge(predFish, predSpace,by="analysis_id")
 
-predPaper4.2 <- merge(predPaper4, predBranch[,c("analysis_id","Societal_upper")],
+predPaper4.2 <- merge(predPaper4, 
+                      predBranch[,c("analysis_id","Nature_upper", "Societal_upper")],
                       by="analysis_id")
 
 ```
@@ -876,6 +877,15 @@ ggplot(df, aes(x=variable, y=predicted_relevance, fill=seen_value, col=seen_valu
 ```{r how many articles are societal AND safe fish or safe space}
 predPaper4.2 %>%
   filter(0.5 <= Societal_upper) %>%
+  summarise(
+    n_safe_fish = sum(0.5 <= safe_fish_upper),
+    n_safe_space = sum(0.5 <= safe_space_upper),
+    n_both = sum(0.5 <= safe_fish_upper |
+                   0.5 <= safe_space_upper)
+  )
+
+predPaper4.2 %>%
+  filter(0.5 <= Nature_upper) %>%
   summarise(
     n_safe_fish = sum(0.5 <= safe_fish_upper),
     n_safe_space = sum(0.5 <= safe_space_upper),
