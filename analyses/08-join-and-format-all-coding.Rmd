@@ -1850,7 +1850,7 @@ write.table(
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
-
+dedups <- tbl(all_db, "uniquerefs") %>% collect()
 allScreens <- tbl(all_db, "allScreen_afterCoding") %>% collect()
 # get screen results before coding
 load(here::here("data","derived-data","screening","screened-records","screen_results_merged.RData"))
@@ -1880,11 +1880,19 @@ sum(allScreens2$include_screen == 0) == sum(!(screen_results_merged$include_scre
 ```
 
 ```{r write list of new test list articles}
-newTestList <- allScreens2 %>% 
-  filter(sample_screen == "test list" & include_screen == 1)%>%
-  select(analysis_id, duplicate_id,sysrev_id) %>%
-  left_join(screen_results_merged %>% select(sysrev_id, title, year, author, doi),
-            by="sysrev_id") %>%
+newTestList <- allScreens %>% 
+  filter(sample_screen == "test list") %>%
+  select(analysis_id, duplicate_id,sysrev_id)
+
+exclIds <- allScreens$sysrev_id[which(allScreens$sample_screen == "test list" &
+                                        allScreens$include_screen == 0)]
+newTestList$include <- paste("include")
+newTestList$include[which(newTestList$sysrev_id %in% exclIds)] <- paste("exclude")
+newTestList$include <- factor(newTestList$include, c("include","exclude"))
+
+newTestList <- newTestList%>%
+  left_join(dedups %>% select(duplicate_id, title, year, author, doi),
+            by="duplicate_id") %>%
   select(-c(sysrev_id))
 
 

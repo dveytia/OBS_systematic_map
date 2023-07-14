@@ -23,7 +23,7 @@ library(ggplot2)
 
 This code explores relevance predictions after coding 
 
-# Add predictions to sqlite database
+# Add predictions to sqlite database -- do not run
 
 ```{r load in predicted relevance and convert to sqlite, eval=FALSE}
 
@@ -126,19 +126,22 @@ dbWriteTable(all_db, "predBranch", predBranch, overwrite=TRUE)
 dbDisconnect(all_db)
 ```
 
+
+
+
+# Compare different methods of relevance predictions
+
+
+
+
+## Summarise overall relevance numbers
+
 ```{r}
 modelLevels = c(
     "Binary after screen", "Binary after code","Binary excl screen, incl code",
     "Binary ORO_branch after code"
   )
 ```
-
-
-# Compare different methods of relevance predictions
-
-
-## Summarise overall relevance numbers
-
 
 ```{r load all relevance predictions}
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
