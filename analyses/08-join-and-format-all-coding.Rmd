@@ -1877,7 +1877,23 @@ allScreens2 %>%
 # check that the number of exclusions == number of exclusions from initial
 sum(allScreens2$include_screen == 0) == sum(!(screen_results_merged$include_screen))
 
+```
 
+```{r write list of new test list articles}
+newTestList <- allScreens2 %>% 
+  filter(sample_screen == "test list" & include_screen == 1)%>%
+  select(analysis_id, duplicate_id,sysrev_id) %>%
+  left_join(screen_results_merged %>% select(sysrev_id, title, year, author, doi),
+            by="sysrev_id") %>%
+  select(-c(sysrev_id))
+
+
+writexl::write_xlsx(newTestList,
+  here::here("data/derived-data/screen_test_list/test-list_2023-07-14.xlsx"))
+
+```
+
+```{r write for vicky, eval = FALSE}
 
 ## Write for Vicky
 write.table(
