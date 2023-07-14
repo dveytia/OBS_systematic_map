@@ -1,0 +1,135 @@
+---
+title: "Final_0_summarise-corpus"
+author: "Devi Veytia"
+date: "2023-07-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r set up}
+
+## Load libraries
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+library(reticulate)
+library(ggplot2)
+
+
+```
+
+
+# PRISMA flow chart
+
+
+```{r fig.cap="PRISMA diagram of the corpus",fig.width=12, fig.asp=0.6}
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+
+allrefs <- tbl(all_db,"allrefs_join") 
+databaseNum <- allrefs%>%group_by(source_database)%>% summarise(n=n())
+databaseNum <- as.data.frame(databaseNum)
+naAbstracts <- allrefs%>%filter(is.na(abstract))%>% summarise(n=n())
+naAbstracts <- as.data.frame(naAbstracts)
+
+dedups <- tbl(all_db, "uniquerefs")  # change
+ndedups <- summarise(dedups, n=n())
+ndedups <- as.data.frame(ndedups)
+
+dedups <- tbl(all_db, "uniquerefs_doi")
+nUnique <- dedups %>%
+  filter(!is.na(abstract)) %>%
+  summarise(n=n())%>%
+  as.data.frame()
+
+
+
+ndoidups <- nUnique-ndedups
+
+predRel <- tbl(all_db, "predRel2") %>% collect()
+predRel <- predRel %>%
+  filter(analysis_id %in% dedups$analysis_id)
+
+nInclude <- predRel %>% 
+  summarise(
+    lower = sum(0.5 <= relevance_lower),
+    mean = sum(0.5 <= relevance_mean),
+    upper = sum(0.5 <= relevance_upper)) %>%
+  as.data.frame()
+  
+dbDisconnect(all_db)
+
+require(metagear)
+
+PRISMAFlow <- c(
+  paste("START_PHASE:", databaseNum$n[databaseNum$source_database == "Web Of Science"],
+        "articles from WOS"),
+  paste("START_PHASE:", databaseNum$n[databaseNum$source_database == "Scopus"],
+        "articles from Scopus"),
+  paste(sum(databaseNum$n),"articles in total"),
+  paste("EXCLUDE_PHASE:", naAbstracts,"abstracts removed as NA"),
+  paste(sum(databaseNum$n)-naAbstracts,"eligible articles"),
+  paste("EXCLUDE_PHASE:",sum(databaseNum$n)-naAbstracts-nUnique,"duplicates removed"),
+  paste(nUnique,"unique articles"),
+  paste(nInclude[3],"articles predicted relevant"),
+  paste("EXCLUDE_PHASE:", nUnique-nInclude[3],"articles excluded")
+)
+
+
+PRISMAFlowChart <- metagear::plot_PRISMA(PRISMAFlow, 
+                                         design = c(E = "lightcoral", flatArrow = TRUE),
+                                         excludeDistance = 0.8, colWidth = 50)
+
+```
+
+
+
+# Additional File 1: Test list
+
+
+```{r write test list}
+# From analysis file: 08
+# data load
+# get screen results after coding
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+dedups <- tbl(all_db, "uniquerefs_doi") %>% collect()
+allScreens <- tbl(all_db, "allScreen_afterCoding") %>% collect()
+
+dbDisconnect(all_db)
+
+
+newTestList <- allScreens %>% 
+  filter(sample_screen == "test list") %>% 
+  select(analysis_id, duplicate_id,sysrev_id)
+
+exclIds <- allScreens$sysrev_id[which(allScreens$sample_screen == "test list" &
+                                        allScreens$include_screen == 0)]
+newTestList$include <- paste("include")
+newTestList$include[which(newTestList$sysrev_id %in% exclIds)] <- paste("exclude")
+newTestList$include <- factor(newTestList$include, c("include","exclude"))
+
+newTestList <- newTestList%>%
+  left_join(dedups %>% select(duplicate_id, title, year, author, doi),
+            by="duplicate_id") %>%
+  select(-c(sysrev_id))
+
+summary(newTestList)
+
+writexl::write_xlsx(newTestList,
+  here::here("data/derived-data/screen_test_list/test-list_2023-07-14.xlsx"))
+
+
+```
+
+
+
+
+

@@ -56,7 +56,9 @@ databaseNum <- as.data.frame(databaseNum)
 naAbstracts <- allrefs%>%filter(is.na(abstract))%>% summarise(n=n())
 naAbstracts <- as.data.frame(naAbstracts)
 
-dedups <- tbl(all_db, "uniquerefs") 
+dedups <- tbl(all_db, "uniquerefs") %>% collect() # change
+
+dedups2 <- dedups 
 nUnique <- dedups %>%
   filter(!is.na(abstract)) %>%
   summarise(n=n())%>%
