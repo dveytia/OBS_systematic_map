@@ -1348,41 +1348,6 @@ dbDisconnect(db)
 ```
 
 
-```{r however the title deduplication missed some duplicated dois}
-all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
-                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
-                                create=FALSE)
-dedups <- tbl(all_db, "uniquerefs") %>% collect()
-
-# identify duplicate dois, and for each select the most complete reference
-dupDOI <- unique(dedups$doi[duplicated(dedups$doi)])
-dupDOI <- dupDOI[!is.na(dupDOI)]
-for(i in 1:length(dupDOI)){
-  print(i)
-  matchDf <- dedups[which(dedups$doi == dupDOI[i]),]
-  temp <- revtools::extract_unique_references(matchDf, rep("match", nrow(matchDf)))
-  if(i==1){
-    uniqueDf = matchDf
-  }else{
-    uniqueDf = rbind(uniqueDf, matchDf)
-  }
-}
-# rebind with old dataframe with non-duplicate DOIs
-dedups2 <- rbind(
-  dedups[!(dedups$doi %in% dupDOI),],
-  uniqueDf
-)
-
-# remove NA abstracts
-dedups2 <- dedups2[!is.na(dedups2$abstract),]
-
-# write
-dbWriteTable(conn=all_db, name="uniquerefs_doi", value=dedups2, append=FALSE, overwrite = TRUE)
-DBI::dbDisconnect(all_db)
-
-
-```
-
 
 
 # Check against other benchmark articles

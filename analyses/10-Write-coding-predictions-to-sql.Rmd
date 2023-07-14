@@ -18,9 +18,9 @@ library(RSQLite)
 ```
 
 
-After realizing that uniquerefs has doi duplicates, remove from all csvs then write to sql
+After realizing that uniquerefs has doi duplicates, remove from all csvs then write to sql -- might not need to do this, somehow the numbers work out. It is because the duplicated dois were from the abstracts that were NA.
 
-```{r}
+```{r eval = FALSE}
 # the unique ids to retain
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 

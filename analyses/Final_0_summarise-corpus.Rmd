@@ -32,26 +32,34 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
 
+# Connect to databases and get tables
 allrefs <- tbl(all_db,"allrefs_join") # all merged references in the corpus
-databaseNum <- allrefs%>%group_by(source_database)%>% summarise(n=n()) %>% as.data.frame() # number from each source
-naAbstracts <- allrefs%>%filter(is.na(abstract))%>% summarise(n=n()) %>% as.data.frame() # number of na Abstracts
 
-dedups <- tbl(all_db, "uniquerefs") # deduplicated on title and year  
-ndedups <- as.data.frame(summarise(dedups, n=n()))
-
-
-dedups <- tbl(all_db, "uniquerefs_doi") # fully deduplicated database
-ndoidups <- nUnique-ndedups # number of doi duplicates
-nUnique <- dedups %>% # number of unique references
-  filter(!is.na(abstract)) %>%
-  summarise(n=n())%>%
-  as.data.frame()
-
-keepIDs <- unique(dedups$analysis_id) # unique ids
+dedups <- tbl(all_db, "uniquerefs") %>% filter(!is.na(abstract))  # unique references 
 
 predRel <- tbl(all_db, "predRel2") %>% collect()
-predRel <- predRel %>%
-  filter(analysis_id %in% keepIDs)
+
+
+
+# Summarise counts
+databaseNum <- allrefs%>%
+  group_by(source_database)%>% 
+  summarise(n=n()) %>% 
+  as.data.frame() # number from each source
+naAbstracts <- allrefs%>%
+  filter(is.na(abstract))%>% 
+  summarise(n=n()) %>% 
+  as.data.frame() # number of na Abstracts
+nUnique <- as.data.frame(summarise(dedups, n=n())) # number of unique references
+ndups <- sum(databaseNum$n)-naAbstracts-nUnique # number of duplicates removed
+
+
+
+# Summarise predicted relevance -- the numbers don't change
+keepIDs <- dedups %>% select(analysis_id)%>%collect() # unique ids   
+keepIDs <- unique(keepIDs$analysis_id)
+
+predRel <- predRel[predRel$analysis_id %in% keepIDs,]
 
 nInclude <- predRel %>% 
   summarise(
