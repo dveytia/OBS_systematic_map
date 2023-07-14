@@ -1,0 +1,56 @@
+---
+title: "Remove-duplicate-dois"
+author: "Devi Veytia"
+date: "2023-07-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load libraries}
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+```
+
+
+After realizing that uniquerefs has doi duplicates, remove from all csvs then write to sql
+
+```{r}
+# the unique ids to retain
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
+                    here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
+                                create=FALSE)
+dedups0 <- tbl(all_db, "uniquerefs") %>% collect()
+dedups <- tbl(all_db, "uniquerefs_doi") %>% collect()
+keepIDs <- unique(dedups$analysis_id[!is.na(dedups$abstract)])
+
+dbDisconnect(all_db)
+
+
+# Go in and modify predictions files
+predictionsDir <- here::here("data/raw-data/coding-predictions")
+predictionsFiles <- dir(predictionsDir)
+predictionsFiles <- predictionsFiles[grep(".csv", predictionsFiles)]
+
+# BUT when i == 1, something weird happens, 
+
+for(i in 1:length(predictionsFiles)){
+  preds <- readr::read_csv(file.path(predictionsDir, predictionsFiles[i]),show_col_types = FALSE)
+  preds <- preds %>%
+    rename(analysis_id = id)%>%
+    left_join(dedups0 %>% select(analysis_id,doi))
+  
+  preds <- preds%>%
+    filter((analysis_id %in% keepIDs) | is.na(doi))
+  
+  # re-write
+  write.csv(preds, file = file.path(predictionsDir, predictionsFiles[i]),row.names = FALSE)
+}
+
+
+```
