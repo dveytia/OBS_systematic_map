@@ -75,12 +75,12 @@ PRISMAFlow <- c(
   paste("EXCLUDE_PHASE:", naAbstracts,"NA abstracts"),
   paste(sum(databaseNum$n)-naAbstracts,"eligible abstracts"),
   paste("EXCLUDE_PHASE:",sum(databaseNum$n)-naAbstracts-nUnique,"duplicates"),
-  paste(nUnique,"unique articles")
-  #paste(nInclude[3],"articles predicted relevant"),
-  #paste("EXCLUDE_PHASE:", nUnique-nInclude[3],"articles excluded")
+  paste(nUnique,"unique articles"),
+  paste(nInclude[3],"articles predicted relevant"),
+  paste("EXCLUDE_PHASE:", nUnique-nInclude[3],"articles excluded")
 )
 
-pdf(here::here("figures/protocol/PRISMA.pdf"), width = 9, height = 5)
+pdf(here::here("figures/main/PRISMA.pdf"), width = 9, height = 5)
 PRISMAFlowChart <- metagear::plot_PRISMA(PRISMAFlow, 
                                          design = c(E = "lightcoral", flatArrow = TRUE),
                                          excludeDistance = 0.8, colWidth = 20)
