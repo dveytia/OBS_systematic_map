@@ -27,7 +27,7 @@ library(ggplot2)
 # PRISMA flow chart
 
 
-```{r fig.cap="PRISMA diagram of the corpus",fig.width=12, fig.asp=0.6}
+```{r summarise corpus}
 all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
                     here::here("data","raw-data","sql-databases", "all_tables_v1.sqlite"), 
                                 create=FALSE)
@@ -35,10 +35,9 @@ all_db <- RSQLite::dbConnect(RSQLite::SQLite(),
 # Connect to databases and get tables
 allrefs <- tbl(all_db,"allrefs_join") # all merged references in the corpus
 
-dedups <- tbl(all_db, "uniquerefs") %>% filter(!is.na(abstract))  # unique references 
+dedups <- tbl(all_db, "uniquerefs")  # unique references 
 
-predRel <- tbl(all_db, "predRel2") %>% collect()
-
+predRel <- tbl(all_db, "predRel2") # relevance predictions
 
 
 # Summarise counts
@@ -52,23 +51,18 @@ naAbstracts <- allrefs%>%
   as.data.frame() # number of na Abstracts
 nUnique <- as.data.frame(summarise(dedups, n=n())) # number of unique references
 ndups <- sum(databaseNum$n)-naAbstracts-nUnique # number of duplicates removed
-
-
-
-# Summarise predicted relevance -- the numbers don't change
-keepIDs <- dedups %>% select(analysis_id)%>%collect() # unique ids   
-keepIDs <- unique(keepIDs$analysis_id)
-
-predRel <- predRel[predRel$analysis_id %in% keepIDs,]
-
 nInclude <- predRel %>% 
   summarise(
     lower = sum(0.5 <= relevance_lower),
     mean = sum(0.5 <= relevance_mean),
     upper = sum(0.5 <= relevance_upper)) %>%
-  as.data.frame()
-  
+  as.data.frame() # the number of articles predicted to be relevant
+
+# disconnect  
 dbDisconnect(all_db)
+```
+
+```{r make prisma flow chart}
 
 require(metagear)
 
@@ -78,19 +72,19 @@ PRISMAFlow <- c(
   paste("START_PHASE:", databaseNum$n[databaseNum$source_database == "Scopus"],
         "articles from Scopus"),
   paste(sum(databaseNum$n),"articles in total"),
-  paste("EXCLUDE_PHASE:", naAbstracts,"abstracts removed as NA"),
-  paste(sum(databaseNum$n)-naAbstracts,"eligible articles"),
-  paste("EXCLUDE_PHASE:",sum(databaseNum$n)-naAbstracts-nUnique,"duplicates removed"),
-  paste(nUnique,"unique articles"),
-  paste(nInclude[3],"articles predicted relevant"),
-  paste("EXCLUDE_PHASE:", nUnique-nInclude[3],"articles excluded")
+  paste("EXCLUDE_PHASE:", naAbstracts,"NA abstracts"),
+  paste(sum(databaseNum$n)-naAbstracts,"eligible abstracts"),
+  paste("EXCLUDE_PHASE:",sum(databaseNum$n)-naAbstracts-nUnique,"duplicates"),
+  paste(nUnique,"unique articles")
+  #paste(nInclude[3],"articles predicted relevant"),
+  #paste("EXCLUDE_PHASE:", nUnique-nInclude[3],"articles excluded")
 )
 
-
+pdf(here::here("figures/protocol/PRISMA.pdf"), width = 9, height = 5)
 PRISMAFlowChart <- metagear::plot_PRISMA(PRISMAFlow, 
                                          design = c(E = "lightcoral", flatArrow = TRUE),
-                                         excludeDistance = 0.8, colWidth = 50)
-
+                                         excludeDistance = 0.8, colWidth = 20)
+dev.off()
 ```
 
 
