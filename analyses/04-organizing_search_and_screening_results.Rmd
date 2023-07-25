@@ -1278,7 +1278,7 @@ Now that the duplicates are identified, deduplicate the database using Rossi
 library(dbplyr)
 
 # open the connection
-db <- dbConnect(RSQLite::SQLite(),sqlite_unique_ref_file, create=FALSE)
+db <- RSQLite::dbConnect(RSQLite::SQLite(),sqlite_unique_ref_file, create=FALSE)
 src_dbi(db)
 dedupRefs <- tbl(db, sqlite_unique_ref_table_name)
 
@@ -1324,6 +1324,31 @@ search_string_n <- reshape2::melt(search_string_n, variable.name = "Search_strin
 # 2    Mitigation    156995
 # 3       Natural    129083
 # 4      Societal     18867
+
+
+## Co-mentions -- i.e. how many duplicates between strings?
+strings <- c("General","Mitigation","Renewable","Nature","Societal")
+stringsCombn <- t(combn(strings,2))
+stringsCombn <- as.data.frame(stringsCombn)
+stringsCombn$duplicates <- rep(NA, nrow(stringsCombn))
+colnames(stringsCombn) <- c("string1","string2","duplicates")
+
+dedupRefsAll <- dedupRefs %>% collect() 
+dedupRefsAll <- dedupRefsAll[grepl(" | ", dedupRefsAll$search_substring),]
+
+for(i in 1:nrow(stringsCombn)){
+  stringsCombn$duplicates[i] <- sum(grepl(stringsCombn[i,1], dedupRefsAll$search_substring) & 
+        grepl(stringsCombn[i,2],dedupRefsAll$search_substring), na.rm=T)
+}
+
+stringsCombn %>% tidyr::spread(key = "string1", value = "duplicates", fill = 0)
+
+#      string2 General Mitigation Nature Renewable
+# 1 Mitigation    1954          0      0         0
+# 2     Nature    7160      18995      0      3663
+# 3  Renewable     513       6326      0         0
+# 4   Societal    3764       2586  10379      1026
+
 
 
 require(ggplot2)
