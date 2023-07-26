@@ -1326,28 +1326,53 @@ search_string_n <- reshape2::melt(search_string_n, variable.name = "Search_strin
 # 4      Societal     18867
 
 
-## Co-mentions -- i.e. how many duplicates between strings?
-strings <- c("General","Mitigation","Renewable","Nature","Societal")
-stringsCombn <- t(combn(strings,2))
-stringsCombn <- as.data.frame(stringsCombn)
-stringsCombn$duplicates <- rep(NA, nrow(stringsCombn))
-colnames(stringsCombn) <- c("string1","string2","duplicates")
 
+
+## Co-mentions -- i.e. how many duplicates between strings?
+# subset to all the records with co-mentions
 dedupRefsAll <- dedupRefs %>% collect() 
 dedupRefsAll <- dedupRefsAll[grepl(" | ", dedupRefsAll$search_substring),]
+dedupRefsAll2 <- strsplit(dedupRefsAll$search_substring, " | ")
+dedupRefsAll2 <- lapply(dedupRefsAll2, function(x) x[!(x %in% "|")])
 
-for(i in 1:nrow(stringsCombn)){
-  stringsCombn$duplicates[i] <- sum(grepl(stringsCombn[i,1], dedupRefsAll$search_substring) & 
-        grepl(stringsCombn[i,2],dedupRefsAll$search_substring), na.rm=T)
+# all the possible strings
+strings <- c("General","Mitigation","Renewable","Nature","Societal")
+
+# Loop through to calculate number of co-mentions
+for(n in 2:length(strings)){ # start at 2 because need at least 2 to have a co-mention
+  # filter to all articles with that # of co-mentions
+  dedupRefsAllTemp <- Filter(function(x) length(x) == n, dedupRefsAll2) 
+  # bind into matrix
+  dedupRefsAllTemp <- do.call(rbind, dedupRefsAllTemp)
+  # paste all the words together
+  pasteStrings <- apply(dedupRefsAllTemp, MARGIN = 1, paste, collapse = " ")
+  # All the possible combinations with n
+  stringsCombn <- t(combn(strings,n))
+  stringsCombn <- as.data.frame(stringsCombn)
+  stringsCombn$duplicates <- rep(NA, nrow(stringsCombn))
+  # For all the different possible combinations, tabulate
+  for(i in 1:nrow(stringsCombn)){
+    stringsCombn$duplicates[i] <- sum(grepl(stringsCombn[i,1], pasteStrings) & 
+          grepl(stringsCombn[i,2],pasteStrings), na.rm=T)
+  }
+  # Save data frame
+  # empty temp data frame to store
+  stringsCombnTemp <- as.data.frame(matrix(nrow = nrow(stringsCombn), ncol = 6))
+  colnames(stringsCombnTemp) <- c(paste0("string", 1:5), "n_articles")
+  stringsCombnTemp$n_articles <- stringsCombn$duplicates
+  for(s in 1:n){
+    stringsCombnTemp[,s] <- stringsCombn[,s]
+  }
+  if(n==2){
+    stringsCombnAll <- stringsCombnTemp
+  }else{
+    stringsCombnAll <- rbind(stringsCombnAll, stringsCombnTemp)
+  }
+  
 }
+# Write
+writexl::write_xlsx(stringsCombnAll, here::here("outputs/corpus-summary/search_string_co-mentions.xlsx"))
 
-stringsCombn %>% tidyr::spread(key = "string1", value = "duplicates", fill = 0)
-
-#      string2 General Mitigation Nature Renewable
-# 1 Mitigation    1954          0      0         0
-# 2     Nature    7160      18995      0      3663
-# 3  Renewable     513       6326      0         0
-# 4   Societal    3764       2586  10379      1026
 
 
 
