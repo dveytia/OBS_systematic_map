@@ -1913,6 +1913,73 @@ write.table(
 ```
 
 
+# Exploration for model fitting
+
+```{r}
+# load in table of coding decisions
+codebookCombinedSimplifiedMore <-read.delim(here::here("data","derived-data","coding","manual-coding", "all-coding-format-distilBERT-simplifiedMore.txt"))
+
+df <- subset(
+  codebookCombinedSimplifiedMore, 
+  select = -c(sysrev_id,analysis_id,title,abstract,keywords,year,coder_1,coder_2)
+)
+
+```
+
+## Cramer's V for nominal variable association
+
+useful links: https://towardsdatascience.com/the-search-for-categorical-correlation-a1cf7f1888c9
+
+Calculate the Cramer's V statistic (analagous to correlation coefficient for nominal variables) to see if there are associations between variables. This could indicate that they might be ammenable to clustering. Currently having trouble with getting high F1 scores for ecosystem_type, impact_nature and impact_ncp, so we will focus on those.
+
+```{r}
+library(rcompanion)
+
+variables = colnames(df)[2:ncol(df)]
+variableNames = gsub("[.]"," - ", variables)
+variableNames = gsub("_"," ", variableNames)
+variableNames = gsub("  "," ", variableNames)
+
+cramerMat <- matrix(nrow=ncol(df)-1, ncol = ncol(df)-1, 
+                    dimnames = list(var1 = variableNames,
+                                    var2 = variableNames))
+for(i in 1:nrow(cramerMat))
+  for(j in 1:ncol(cramerMat))
+    cramerMat[i,j] <- cramerV(as.factor(df[,i+1]), as.factor(df[,j+1]))
+
+
+cramerMat[upper.tri(cramerMat, diag = TRUE)] <- NA
+
+image(t(cramerMat))
+
+cramerMat2 <- reshape2::melt(cramerMat)
+
+
+cramerMat2 %>%
+  filter(value > 0.5) %>%
+  ggplot(aes(var1, var2, fill=value))+
+  geom_tile()+
+  scale_fill_viridis_c()+
+  labs(
+    fill = "Cramer's\nV",
+    caption = "showing Cramer's V > 0.5")+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust=1, size = 6),
+    axis.text.y = element_text(size = 5),
+    axis.title = element_blank(),
+    legend.text = element_text(size = 6),
+    legend.title = element_text(size = 8),
+    legend.key.size = unit(0.1,'in'),
+    panel.background = element_rect(fill="white",colour = "black"),
+    panel.grid.major = element_line(colour = "grey", linewidth = 0.2)
+  )
+
+ggsave(here::here("figures/supplementary/codedVariablesCramersVAssociation.pdf"),width = 7,
+       height = 5.5, units="in")
+```
+
+
+
 # Junk
 
 ```{r supplementary coding}
