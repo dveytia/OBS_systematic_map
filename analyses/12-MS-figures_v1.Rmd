@@ -444,16 +444,39 @@ egg::ggarrange(annualTrend_ggp2, annualResearchAreaProportion_ggp,
 dev.off()
 ```
 
-
+IDEAS:
 Maybe it would be good to subset the research area trend by branch as well?? Can do temporal or as pie charts?
 
+Map of First Author Affiliation
 
-
-
+Annual trends in # articles one panel for each branch and then all the numbers of articles for each type
 
 # 2. Intervention breakdown
 
+Resolving differences between ORO branches violin plot
 
+
+
+# Heatmaps of interactions
+
+Heatmap of ORO type by marine system
+
+Heatmap of ORO type by ecosystem_type
+
+Heatmap of outcomes (mitigation, adapt to threat human or natural) by ORO type
+
+Heatmap of outcomes by ecosystem_type
+
+Heatmap of Ecosystem type x blue carbon category?
+
+Data_type?
+
+
+# Geoparsing results
+
+Sankey Diagram of First Author Affiliation compared to where research is conducted 
+
+Maps of # articles by ORO type? ie. one panel with one map/ORO type 
 
 
 
