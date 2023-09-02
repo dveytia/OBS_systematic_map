@@ -368,13 +368,14 @@ low_research_areas <- research_area_tab %>%
 low_research_areas <- low_research_areas[1:10,] # take the top 10
 low_research_areas <- low_research_areas %>%
   arrange(research_area)
+
 # subset
 research_area_tab <- research_area_tab %>%
-  filter(research_area %in% low_research_areas$research_area &
-           year < as.Date("2023-01-01"))
-# Factor order of research area alphabetically
-research_area_tab$research_area <- factor(research_area_tab$research_area,
-                                          levels = low_research_areas$research_area)
+  filter(year < as.Date("2023-01-01")) %>%
+  mutate(research_area = ifelse(research_area %in% low_research_areas$research_area,
+                                as.character(research_area), "Other")) %>% 
+  mutate(research_area = factor(research_area, levels = c(low_research_areas$research_area, "Other"))) 
+
 
 
 ## PLOT
@@ -444,10 +445,230 @@ egg::ggarrange(annualTrend_ggp2, annualResearchAreaProportion_ggp,
 dev.off()
 ```
 
-IDEAS:
-Maybe it would be good to subset the research area trend by branch as well?? Can do temporal or as pie charts?
+```{r trend in research area by oro branch}
 
-Map of First Author Affiliation
+## SQLITE CALCULATIONS
+# connect to db and load tables
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),all_db_fp, create=FALSE)
+dedups <- tbl(all_db,"uniquerefs") %>% filter(!is.na(abstract))
+predBranch <- tbl(all_db, "predBranch")
+
+# Get the number of articles that are relevant, for any ORO branch
+# and their metadata
+research_area_branch_df <- predBranch %>%
+  filter(0.5 <= Mitigation_upper |
+           0.5 <= Nature_upper |
+           0.5 <= Societal_upper) %>%
+  left_join(dedups, by="analysis_id") %>%
+  filter(!is.na(research_areas)) %>%
+  select(analysis_id, duplicate_id, research_areas, year, 
+         Mitigation_upper, Nature_upper, Societal_upper)%>%
+  filter(!is.na(year)) %>%
+  collect()
+
+
+# Disconnect the database
+dbDisconnect(all_db)
+
+
+
+## CALCULATIONS
+
+# tabulate the number of different research areas in a year and branch,
+# filter the tabulated results to just the high-sampled research areas
+
+# Format the columns
+research_area_branch_df <- research_area_branch_df %>% 
+  mutate(research_areas = eval(parse(text=gsub("\\", "", deparse(research_areas), fixed=TRUE)))) 
+
+research_area_branch_df_melt <- reshape2::melt(
+  research_area_branch_df, measure.vars = c("Mitigation_upper", "Nature_upper", "Societal_upper"),
+  value.name = "relevance_upper", variable.name = "ORO_branch"
+)
+# make sure only keep the rows that are predicted relevant for that particular branch
+research_area_branch_df_melt <- research_area_branch_df_melt %>%
+  filter(0.5 <= relevance_upper)
+
+research_area_branch_df_melt$ORO_branch <- factor(
+  research_area_branch_df_melt$ORO_branch,
+  levels = c("Mitigation_upper", "Nature_upper", "Societal_upper"),
+  labels = c("Mitigation","Natural resilience","Societal adaptation"))
+
+# Loop through all the unique year and branch combinations to tabulate the research areas
+years <- unique(research_area_df$year) 
+branches <- levels(research_area_branch_df_melt$ORO_branch) 
+for(y in 1:length(years)){
+  for(b in 1:length(branches)){
+    tempList <- strsplit(
+      research_area_branch_df_melt$research_areas[
+        research_area_branch_df_melt$year == years[y] &
+          research_area_branch_df_melt$ORO_branch == branches[b]],
+      split = "; ")
+    if(length(tempList)==0){
+      next
+    }
+    tempTab <- as.data.frame(table(unlist(lapply(tempList, unique))))
+    tempTab$year <- years[y]
+    tempTab$ORO_branch <- branches[b]
+    if(y==1 & b==1)
+      research_area_branch_tab <- tempTab
+    else
+      research_area_branch_tab <- rbind(research_area_branch_tab, tempTab)
+  }
+}
+
+# rename columns
+research_area_branch_tab$year <- as.Date(paste0(research_area_branch_tab$year,"-01-01"))
+research_area_branch_tab$ORO_branch <- factor(research_area_branch_tab$ORO_branch,
+                                              levels = branches)
+research_area_branch_tab <- research_area_branch_tab%>%
+  rename(research_area = Var1, n_articles = Freq)
+# Find which are the top n research areas for each branch overall
+low_research_branch_areas <- research_area_branch_tab %>%
+  group_by(research_area, ORO_branch) %>%
+  summarise(n_articles=sum(n_articles)) %>%
+  ungroup() %>%
+  arrange(desc(n_articles)) %>%
+  group_by(ORO_branch) %>%
+  slice(1:7)
+length(unique(low_research_branch_areas$research_area)) # number of total research areas
+raLevels <- unique(low_research_branch_areas$research_area)[order(unique(low_research_branch_areas$research_area))]
+raLevels <- as.character(raLevels)
+
+# subset -- all other research areas put into the "other" category
+research_area_branch_tab <- research_area_branch_tab %>%
+  filter(year < as.Date("2023-01-01")) %>%
+  mutate(research_area = ifelse(research_area %in% raLevels,
+                                as.character(research_area), "Other")) %>% 
+  mutate(research_area = factor(research_area, levels = c(raLevels, "Other"))) 
+
+
+
+# Calculate the number of articles as a proportion of the total
+yearlyBranchTotal <- research_area_branch_tab %>%
+  group_by(year, ORO_branch) %>%
+  summarise(totalArticles = sum(n_articles))
+
+research_area_branch_tab <- research_area_branch_tab %>%
+  merge(yearlyBranchTotal, by=c("year","ORO_branch")) %>%
+  mutate(proportion = n_articles/totalArticles)
+
+
+## PLOT
+annualResearchAreaProportionBranch_ggp <- research_area_branch_tab %>%
+  ggplot()+
+  facet_grid(ORO_branch~.)+
+  geom_col(aes(x=year, y=proportion, fill=research_area),
+           position = "stack")+
+  scale_x_date(limits = c(as.Date("1990-01-01"), as.Date("2022-01-01")))+
+  scale_fill_brewer(type = "qual",palette = "Paired")+
+  labs(y="Proportional contribution",x="Year",
+       fill= "Research\narea")+
+  theme_classic()+
+  theme(legend.position = "right")
+  
+annualResearchAreaProportionBranch_ggp
+
+
+ggsave(here::here("figures/supplementary/annual-trends-branch-research-area.pdf"), 
+       plot = annualResearchAreaProportionBranch_ggp, width = 7, height=6, units="in")
+
+```
+
+
+
+
+```{r Map of First Author Affiliation}
+## SQLITE CALCULATIONS
+# connect to db and load tables
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),all_db_fp, create=FALSE)
+dedups <- tbl(all_db,"uniquerefs") %>% filter(!is.na(abstract))
+predRel <- tbl(all_db, "predRel2") 
+
+# Get the number of articles that are relevant, and their metadata
+affiliation_df <- predRel %>%
+  filter(0.5 <= relevance_upper) %>%
+  left_join(dedups, by="analysis_id") %>%
+  filter(!is.na(affiliation)) %>%
+  select(analysis_id, duplicate_id, affiliation)%>%
+  collect()
+
+# Disconnect the database
+dbDisconnect(all_db)
+
+
+
+## DATA FORMATTING
+world_map <- map_data("world")
+
+# look for matches between each full affiliatoin and a region in the world map
+affiliation_df$region <- rep(NA, nrow(affiliation_df))
+regions <- unique(world_map$region)
+for(r in 1:length(regions)){
+  matches <- grepl(regions[r], affiliation_df$affiliation,ignore.case = TRUE)
+  affiliation_df$region[matches] <- regions[r]
+}
+sum(is.na(affiliation_df$region)) # no matches - 10678
+sum(!is.na(affiliation_df$region)) # compared to # of matches - 46911
+
+# Calculate the number of affiliations for each region
+library(ggthemes)
+affiliation_df_tab <- affiliation_df %>%
+  group_by(region) %>%
+  summarise(n_articles = n()) %>%
+  right_join(world_map %>% filter(! long > 180), by = "region")
+
+
+ggplot(data=affiliation_df_tab, aes(long, lat, group=group, fill = n_articles))+
+  geom_polygon()+
+  scale_fill_viridis_c()+
+  coord_map("moll") 
+
+lout = 100
+bb <- data.frame(
+  long = c(seq(-180,180,length.out = lout),
+           rep(180, lout),
+           seq(180,-180, length.out = lout),
+           rep(-180, lout)),
+  lat = c(rep(-90, lout),
+          seq(-90,90,length.out = lout),
+          rep(90, lout),
+          seq(90,-90, length.out = lout))
+)
+bb$group <- paste("boundingBox")
+
+
+affiliationMap_ggp <- ggplot()+
+  geom_polygon(data = affiliation_df_tab, aes(long, lat, group=group, fill = n_articles))+
+  geom_polygon(data = bb, aes(long, lat, group=group), col="black", fill = "transparent")+
+  scale_fill_viridis_c(name = "Number of articles")+
+  coord_map("moll") +
+  theme_map()+
+  theme(legend.position = "bottom", legend.key.width = unit(0.5, units = "in"))
+
+
+# Another option for improvement could be this:
+# https://seethedatablog.wordpress.com/2016/12/23/r-simple-world-map-robinson-ggplot/
+
+pdf(here::here("figures/main/annual-trends-research-area-affiliation.pdf"),
+    width = 10, height=6)
+mat <- rbind(c(1,3),c(2,2))
+gridExtra::grid.arrange(annualTrend_ggp2+ggtitle("a."), annualResearchAreaProportion_ggp+ggtitle("c.")+guides(fill = guide_legend(ncol = 2, byrow = TRUE)), affiliationMap_ggp+ggtitle("b."),
+          layout_matrix = mat)
+dev.off()
+
+# Extract legend from ggplot and make it's own grob
+
+```
+
+
+
+
+IDEAS:
+
+Chloropleth Map of First Author Affiliation
+
+to annual-trends-research-area plot -- panel a Add label of total number of articles for each type (lower, upper)
 
 Annual trends in # articles one panel for each branch and then all the numbers of articles for each type
 
