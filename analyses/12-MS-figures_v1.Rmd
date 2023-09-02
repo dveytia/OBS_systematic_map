@@ -334,7 +334,7 @@ formula_text <- data.frame(
   label = paste0("y == ", 
                  format(coef(mod)[1], scientific=TRUE, digits = 2), "*(",
                  format(coef(mod)[2], scientific=TRUE, digits = 2),"^x)"),
-  year=as.Date("1932-01-01"),
+  year=as.Date("1960-01-01"),
   y=max(n_relevant$n_total)
 )
 
@@ -364,17 +364,27 @@ research_area_tab <- research_area_tab%>%
 low_research_areas <- research_area_tab %>%
   group_by(research_area) %>%
   summarise(n_articles=sum(n_articles)) %>%
-  arrange(desc(n_articles))
-low_research_areas <- low_research_areas[1:10,] # take the top 10
-low_research_areas <- low_research_areas %>%
+  ungroup()%>%
+  arrange(desc(n_articles)) %>%
+  slice(1:10) %>%
   arrange(research_area)
+raLevels <- as.character(low_research_areas$research_area)
 
 # subset
 research_area_tab <- research_area_tab %>%
   filter(year < as.Date("2023-01-01")) %>%
-  mutate(research_area = ifelse(research_area %in% low_research_areas$research_area,
+  mutate(research_area = ifelse(research_area %in% raLevels,
                                 as.character(research_area), "Other")) %>% 
-  mutate(research_area = factor(research_area, levels = c(low_research_areas$research_area, "Other"))) 
+  mutate(research_area = factor(research_area, levels = c(raLevels, "Other")))
+
+# Calculate as a proportion of total articles
+yearlyTotal <- research_area_tab %>%
+  group_by(year) %>%
+  summarise(yearlyTotal = sum(n_articles))
+
+research_area_tab <- research_area_tab %>%
+  merge(yearlyTotal, by="year")%>%
+  mutate(proportion = n_articles/yearlyTotal)
 
 
 
@@ -415,19 +425,13 @@ annualResearchArea_ggp <- ggplot()+
 annualResearchArea_ggp
 
 
-# Calculate as a proportion
-yearlyTotal <- research_area_tab %>%
-  group_by(year) %>%
-  summarise(yearlyTotal = sum(n_articles))
+# Show as a proportion
 
 annualResearchAreaProportion_ggp <- research_area_tab %>%
-  merge(yearlyTotal, by="year")%>%
-  mutate(proportion = n_articles/yearlyTotal)%>%
-  
   ggplot()+
   geom_col(aes(x=year, y=proportion, fill=research_area),
            position = "stack")+
-  scale_x_date()+
+  scale_x_date(limits = c(as.Date("1990-01-01"),as.Date("2022-01-01")))+
   scale_fill_brewer(type = "qual",palette = "Paired")+
   labs(y="Proportional contribution",x="Year",
        fill= "Research\narea")+
@@ -650,27 +654,338 @@ affiliationMap_ggp <- ggplot()+
 # Another option for improvement could be this:
 # https://seethedatablog.wordpress.com/2016/12/23/r-simple-world-map-robinson-ggplot/
 
+```
+
+
+
+
+```{r Save Annual trends research area and affiliation map multipanel}
+## SQLITE CALCULATIONS -------------------
+# connect to db and load tables
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),all_db_fp, create=FALSE)
+dedups <- tbl(all_db,"uniquerefs") %>% filter(!is.na(abstract))
+predRel <- tbl(all_db, "predRel2") 
+predBranch <- tbl(all_db, "predBranch")
+
+# Get the number of relevant predictions for each year
+n_relevant <- predRel %>%
+  left_join(dedups, by="analysis_id") %>%
+  left_join(predBranch, by = "analysis_id") %>%
+  filter(!is.na(year)) %>%
+  group_by(year) %>%
+  summarise(n_lower = sum(0.5 <= relevance_lower),
+            n_total = sum(0.5 <= relevance_mean),
+            n_upper = sum(0.5 <= relevance_upper),
+            n_mitigation = sum(0.5 <= Mitigation_mean & 0.5 <= relevance_mean),
+            n_nature = sum(0.5 <= Nature_mean & 0.5 <= relevance_mean),
+            n_societal = sum(0.5 <= Societal_mean & 0.5 <= relevance_mean)) %>%
+  collect()
+
+
+# Get the research area for relevant articles
+research_area_df <- predRel %>%
+  filter(0.5 <= relevance_upper) %>%
+  left_join(dedups, by="analysis_id") %>%
+  filter(!is.na(research_areas)) %>%
+  select(analysis_id, duplicate_id, research_areas, web_of_science_categories, year)%>%
+  filter(!is.na(year)) %>%
+  mutate(research_areas = eval(parse(text=gsub("\\", "", deparse(research_areas), fixed=TRUE))),
+         first_research_area = gsub("\\;.*","", research_areas)) %>%
+  collect()
+
+
+# Get the affiliation metadata for relevant articles
+affiliation_df <- predRel %>%
+  filter(0.5 <= relevance_upper) %>%
+  left_join(dedups, by="analysis_id") %>%
+  filter(!is.na(affiliation)) %>%
+  select(analysis_id, duplicate_id, affiliation)%>%
+  collect()
+
+# Disconnect the database
+dbDisconnect(all_db)
+
+
+
+## PLOT 1: Annual trends in # of relevant articles ------------------
+
+## Data formatting & Calculations
+
+
+# year as date
+n_relevant$year <- as.Date(paste0("01-01-", n_relevant$year), format = "%d-%m-%Y")
+n_relevant <- n_relevant %>% filter(year < as.Date("01-01-2023", format = "%d-%m-%Y"))
+# Melt by ORO branch
+n_relevant_melt <- reshape2::melt(n_relevant, measure.vars = c("n_total","n_mitigation","n_nature","n_societal"),
+                     value.name = "mean_prediction", variable.name = "variable") %>%
+  mutate(variable = factor(variable, levels = c("n_total","n_mitigation","n_nature","n_societal"),
+                           labels = c("All articles","Mitigation","Natural resilience","Societal\nadaptation")))
+# Model fit
+mod <- lm(log(n_total)~year, data = n_relevant, subset = n_total > 0)
+pred_df <- data.frame(year = seq(min(n_relevant$year), max(n_relevant$year), by=1))
+pred_y <- predict(mod, pred_df, interval = "confidence", type="response")
+pred_df <- cbind(pred_df, as.data.frame(exp(pred_y)))
+# Dataframe of where to write the model text on the plot
+formula_text <- data.frame(
+  label = paste0("y == ", 
+                 format(coef(mod)[1], scientific=TRUE, digits = 2), "*(",
+                 format(coef(mod)[2], scientific=TRUE, digits = 2),"^x)"),
+  year=as.Date("1960-01-01"),
+  y=max(n_relevant$n_total)
+)
+
+
+## Plotting
+## Annual trend in number of articles
+annualTrend_ggp2 <- ggplot()+
+  geom_ribbon(data=n_relevant, aes(x=year, ymin = n_lower, ymax = n_upper), fill = "lightgrey")+
+  geom_line(data = n_relevant_melt, aes(x=year, y=mean_prediction, col = variable), linewidth = 1)+
+  geom_line(data = pred_df, aes(x=year, y=fit), col="red", linetype = "dashed", linewidth = 1)+
+  geom_text(data=formula_text, aes(x=year, y=y, 
+                                   label = label),parse=TRUE, color = "red")+
+  geom_text(data=formula_text, aes(x=year, y=y-1000, 
+                                   label = paste("R^2 == ",
+                                                 format(summary(mod)$adj.r.squared, digits = 2))),
+            color = "red", parse=TRUE)+
+  scale_color_manual(values = c("black",as.vector(branchPal)), 
+                     name = "Mean predicted\nrelevance")+
+  labs(x="Year", y="Articles predicted relevant (n)")+
+  scale_x_date()+
+  theme_classic()+
+  theme(legend.position = "right")
+
+
+
+
+## PLOT 2: Contribution of different research areas -------------------------------
+
+## Data Formatting and Calculations
+
+# tabulate the number of different research areas in a year and
+# filter the tabulated results to just the high-sampled research areas
+# tabulate
+years <- unique(research_area_df$year)
+for(y in 1:length(years)){
+  tempList <- strsplit(research_area_df$research_areas[research_area_df$year == years[y]],split = "; ")
+  tempTab <- as.data.frame(table(unlist(lapply(tempList, unique))))
+  tempTab$year <- years[y]
+  if(y==1)
+    research_area_tab <- tempTab
+  else
+    research_area_tab <- rbind(research_area_tab, tempTab)
+}
+# rename columns
+research_area_tab$year <- as.Date(paste0(research_area_tab$year,"-01-01"))
+research_area_tab <- research_area_tab%>%
+  rename(research_area = Var1, n_articles = Freq)
+# Find which research areas are in the higher percentile
+low_research_areas <- research_area_tab %>%
+  group_by(research_area) %>%
+  summarise(n_articles=sum(n_articles)) %>%
+  ungroup()%>%
+  arrange(desc(n_articles)) %>%
+  slice(1:10) %>%
+  arrange(research_area)
+raLevels <- as.character(low_research_areas$research_area)
+# Format the research area factor to just the highest levels and group others into "Other"
+research_area_tab <- research_area_tab %>%
+  filter(year < as.Date("2023-01-01")) %>%
+  mutate(research_area = ifelse(research_area %in% raLevels,
+                                as.character(research_area), "Other")) %>% 
+  mutate(research_area = factor(research_area, levels = c(raLevels, "Other")))
+
+# Calculate as a proportion of total articles
+yearlyTotal <- research_area_tab %>%
+  group_by(year) %>%
+  summarise(yearlyTotal = sum(n_articles))
+
+research_area_tab <- research_area_tab %>%
+  merge(yearlyTotal, by="year")%>%
+  mutate(proportion = n_articles/yearlyTotal)
+
+
+## Plotting
+annualResearchAreaProportion_ggp <- research_area_tab %>%
+  ggplot()+
+  geom_col(aes(x=year, y=proportion, fill=research_area),
+           position = "stack")+
+  scale_x_date(limits = c(as.Date("1990-01-01"),as.Date("2022-01-01")))+
+  scale_fill_brewer(type = "qual",palette = "Paired")+
+  labs(y="Proportional contribution",x="Year",
+       fill= "Research\narea")+
+  theme_classic()+
+  theme(legend.position = "right")
+  
+
+
+
+## PLOT 3: Map of affiliation -------------------------------------------
+
+## DATA FORMATTING
+world_map <- map_data("world")
+
+# look for matches between each full affiliatoin and a region in the world map
+affiliation_df$region <- rep(NA, nrow(affiliation_df))
+regions <- unique(world_map$region)
+for(r in 1:length(regions)){
+  matches <- grepl(regions[r], affiliation_df$affiliation,ignore.case = TRUE)
+  affiliation_df$region[matches] <- regions[r]
+}
+sum(is.na(affiliation_df$region)) # no matches - 10678
+sum(!is.na(affiliation_df$region)) # compared to # of matches - 46911
+
+# Calculate the number of affiliations for each region
+library(ggthemes)
+affiliation_df_tab <- affiliation_df %>%
+  group_by(region) %>%
+  summarise(n_articles = n()) %>%
+  right_join(world_map %>% filter(! long > 180), by = "region")
+
+
+ggplot(data=affiliation_df_tab, aes(long, lat, group=group, fill = n_articles))+
+  geom_polygon()+
+  scale_fill_viridis_c()+
+  coord_map("moll") 
+
+lout = 100
+bb <- data.frame(
+  long = c(seq(-180,180,length.out = lout),
+           rep(180, lout),
+           seq(180,-180, length.out = lout),
+           rep(-180, lout)),
+  lat = c(rep(-90, lout),
+          seq(-90,90,length.out = lout),
+          rep(90, lout),
+          seq(90,-90, length.out = lout))
+)
+bb$group <- paste("boundingBox")
+
+
+affiliationMap_ggp <- ggplot()+
+  geom_polygon(data = affiliation_df_tab, aes(long, lat, group=group, fill = n_articles))+
+  geom_polygon(data = bb, aes(long, lat, group=group), col="black", fill = "transparent")+
+  scale_fill_viridis_c(name = "Number of articles")+
+  coord_map("moll") +
+  theme_map()+
+  theme(legend.position = "bottom", legend.key.width = unit(0.5, units = "in"))
+
+
+# Another option for improvement could be this:
+# https://seethedatablog.wordpress.com/2016/12/23/r-simple-world-map-robinson-ggplot/
+mat <- rbind(c(1,3),c(2,2))
+
 pdf(here::here("figures/main/annual-trends-research-area-affiliation.pdf"),
     width = 10, height=6)
-mat <- rbind(c(1,3),c(2,2))
 gridExtra::grid.arrange(annualTrend_ggp2+ggtitle("a."), annualResearchAreaProportion_ggp+ggtitle("c.")+guides(fill = guide_legend(ncol = 2, byrow = TRUE)), affiliationMap_ggp+ggtitle("b."),
           layout_matrix = mat)
-dev.off()
+while(!is.null(dev.list())) dev.off()
 
-# Extract legend from ggplot and make it's own grob
+
+## NOTE that the counts of the branches are conditional on predicted relevance mean prediction, otherwise the mitigation mean line surpasses the mean line of all the articles and it looks confusing
 
 ```
 
 
 
 
-IDEAS:
-
-Chloropleth Map of First Author Affiliation
-
-to annual-trends-research-area plot -- panel a Add label of total number of articles for each type (lower, upper)
-
 Annual trends in # articles one panel for each branch and then all the numbers of articles for each type
+```{r}
+## LOAD DATA
+## Read in the predictions for oro_type
+# Note these predictions were made using the upper confidence limit for ORO_branch
+oroAnyFiles <- dir(here::here("data/raw-data/coding-predictions"))
+oroAnyFiles <- oroAnyFiles[grep("oro_any", oroAnyFiles)]
+predOROAnyList <- list()
+for(i in 1:length(oroAnyFiles)){
+  temp <- readr::read_csv(
+    here::here("data/raw-data/coding-predictions",oroAnyFiles[i]),
+    show_col_types = FALSE
+  )
+  colNames <- colnames(temp)
+  colNames[1] <- "analysis_id"
+  colNames <- gsub("oro_any.","",colNames)
+  colNames <- gsub("M_","", colNames)
+  colNames <- gsub("N_","", colNames)
+  colNames <- gsub("SA_","", colNames)
+  colNames <- gsub(" - ","_", colNames)
+  colNames <- gsub("_prediction","", colNames)
+  colNames <- gsub("_pred","", colNames)
+  colnames(temp) <- colNames
+  temp$oro_branch <- gsub("oro_any_","",oroAnyFiles[i])
+  temp$oro_branch <- gsub("_predictions.csv","",temp$oro_branch)
+  predOROAnyList[[i]] <- temp
+}
+
+## Make a dataframe of the predictions
+for(i in 1:length(predOROAnyList)){
+  temp <- predOROAnyList[[i]]
+  boundaries <- c("upper","mean","lower")
+  for(b in 1:length(boundaries)){
+    temp_b <- cbind(temp[,1], temp$oro_branch, temp[grep(boundaries[b], colnames(temp))])
+    colnames(temp_b)[2]<- "oro_branch"
+    colnames(temp_b) <- gsub(paste0("_",boundaries[b]),"", colnames(temp_b))
+    temp_b <- reshape2::melt(temp_b, variable.name = "oro_any", value.name = boundaries[b], 
+                             id.vars = c("analysis_id","oro_branch"))
+    if(b==1){
+      temp_melt <- temp_b
+    }else{
+      temp_melt <- merge(temp_melt, temp_b, by=c("analysis_id","oro_branch","oro_any"))
+    }
+  }
+  if(i==1)
+    predOROAny <- temp_melt
+  else
+    predOROAny <- rbind(predOROAny, temp_melt)
+}
+rm(predOROAnyList)
+
+
+## BARPLOT OF NUMBER OF ARTICLES PREDICTED RELEVANT FOR EACH TYPE
+temp <- predOROAny %>%
+  mutate(oro_branch = factor(oro_branch,
+                             levels = c("mitigation","nature","societal"),
+                             labels = c("Mitigation","Natural resilience","Societal adaptation"))) %>%
+  group_by(oro_branch, oro_any)%>%
+  summarise(n_mean = sum(0.5 <= mean),
+            n_lower = sum(0.5 <= lower),
+            n_upper = sum(0.5 <= upper))%>%
+  arrange(oro_branch,n_mean)%>%
+  ungroup()%>%
+  mutate(valueOrder = as.factor(row_number()))
+  
+numberOROTypeBar_ggp <- ggplot(temp, aes(x=valueOrder, y=n_mean, fill = oro_branch))+
+  geom_col()+
+  geom_errorbar(aes(ymin = n_lower, ymax = n_upper), width=.2)+
+  geom_text(aes(label = n_mean), nudge_y = 1000, size=3, col="red")+ #nudge_x=0.2,
+  scale_fill_manual(name = "ORO Branch", values = as.vector(branchPal))+
+  scale_x_discrete(limits = levels(temp$valueOrder), 
+                    labels = gsub("_"," ", temp$oro_any[order(temp$valueOrder)]))+
+  #ylim(c(0, max(temp$n_upper)+2000))+
+  labs(y="Articles predicted relevant (n)")+
+  theme(
+    panel.background = element_rect(fill="white",colour = "black"),
+    panel.grid.major = element_line(colour = "grey"),
+    axis.text.x = element_text(angle=45, hjust=1),
+    axis.title.x = element_blank()
+  )
+
+
+mat <- rbind(c(1,3),c(2,2))
+
+pdf(here::here("figures/main/annual-trends-research-area-nType.pdf"),
+    width = 10, height=8)
+gridExtra::grid.arrange(
+  annualTrend_ggp2+ggtitle("a.")+
+    theme(plot.margin = unit(c(0.1,0,2,0.1), "cm"),legend.position = "bottom")+
+    guides(color = guide_legend(nrow = 2, byrow = TRUE)),
+  annualResearchAreaProportion_ggp+ggtitle("c.")+guides(fill = guide_legend(ncol = 2, byrow = TRUE)),
+  numberOROTypeBar_ggp+ggtitle("b.")+theme(legend.position = "bottom"),
+  
+  layout_matrix = mat, heights = c(5,3), widths = c(4.5,5.5))
+while(!is.null(dev.list())) dev.off()
+
+```
+
 
 # 2. Intervention breakdown
 
