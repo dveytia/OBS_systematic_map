@@ -1095,24 +1095,31 @@ gridExtra::grid.arrange(
   annualTrend_ggp2+
     ggtitle("a.")+
     scale_y_continuous(label = scales::unit_format(scale = 0.001,unit = "K"))+
-    theme(plot.margin = unit(c(0.1,0,2.5,0.1), "cm"),legend.position = "none"), #"bottom" 
+    theme(plot.margin = unit(c(0.1,0,2.5,0.1), "cm"),
+          legend.position = "none",
+          title = element_text(size=14)), #"bottom" 
     #guides(color = guide_legend(nrow = 2, byrow = TRUE)),
   
   numberOROTypeBar_ggp+
     ggtitle("b.")+
     scale_y_continuous(label = scales::unit_format(scale = 0.001,unit = "K"))+
     theme(legend.position = "none",
-          plot.margin = unit(c(0,0.1,0,0.1), "cm")), # "bottom
+          plot.margin = unit(c(0,0.1,0,0.1), "cm"),
+          title = element_text(size=14)), # "bottom
   
   annualResearchAreaProportion_OECD_ggp+
     scale_fill_brewer(type = "qual",palette = "Paired",labels = scales::label_wrap(15))+
     ggtitle("c.")+
-    theme(plot.margin = unit(c(0.8,0,0,0.1), "cm"))+
+    theme(plot.margin = unit(c(0.8,0,0,0.1), "cm"),
+          title = element_text(size=14))+
     guides(fill = guide_legend("",nrow = 2, byrow = TRUE)),
   
   affiliationMap_ggp+
     ggtitle("d.")+
-    theme(plot.margin = unit(c(0,0,1.5,0), "cm"))+
+    theme(plot.margin = unit(c(0,0,1,0), "cm"),
+          legend.key.height = unit(1,"cm"),
+          legend.key.width = unit(0.75,"in"),
+          title = element_text(size=14))+
     guides(fill = guide_colourbar("Number\nof articles")),
   
   oro_legend,
