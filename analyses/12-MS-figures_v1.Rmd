@@ -418,6 +418,26 @@ research_area_branch_df <- predBranch %>%
 dbDisconnect(all_db)
 
 
+## LOAD OECD REASEARCH AREA CLASSIFICATIONS
+oecdCat <- readxl::read_xlsx(here::here("data/raw-data/research-area-schemas/OECD-Category-Mapping.xlsx"))
+oecdCat <- oecdCat[,c(1,3)]
+colnames(oecdCat) <- c("OECD_research_area","research_area_upper")
+oecdCat$OECD_level = readr::parse_number(oecdCat$OECD_research_area)
+oecdCat$OECD_high_level = floor(oecdCat$OECD_level)
+oecdCatHighLevel <- oecdCat[,c("OECD_research_area","OECD_level")]
+oecdCatHighLevel <- oecdCatHighLevel[!duplicated(oecdCatHighLevel),]
+oecdCatHighLevel <- oecdCatHighLevel[which(oecdCatHighLevel$OECD_level %in% c(1:6)),]
+colnames(oecdCatHighLevel)[1] <- "OECD_research_area_high"
+oecdCat <- oecdCat %>% left_join(oecdCatHighLevel, by="OECD_level")
+oecdCat <- oecdCat[!duplicated(oecdCat[,c("research_area_upper","OECD_research_area_high")]),]
+oecdCat <- oecdCat %>% arrange("OECD_level")
+
+research_area_tab %>%
+  head() %>%
+  mutate(research_area_upper = toupper(research_area))%>%
+  left_join(oecdCat, by="research_area_upper")
+
+
 
 ## CALCULATIONS
 
@@ -446,6 +466,7 @@ years <- unique(research_area_df$year)
 branches <- levels(research_area_branch_df_melt$ORO_branch) 
 for(y in 1:length(years)){
   for(b in 1:length(branches)){
+    # Tabulate appearances of each unique research area for that year and branch
     tempList <- strsplit(
       research_area_branch_df_melt$research_areas[
         research_area_branch_df_melt$year == years[y] &
@@ -454,7 +475,42 @@ for(y in 1:length(years)){
     if(length(tempList)==0){
       next
     }
+    
     tempTab <- as.data.frame(table(unlist(lapply(tempList, unique))))
+    # match to get to OCED level
+    matches <- sapply(toupper(tempTab$Var1), function(x) grep(x, oecdCat$research_area_upper))
+    if(!("list" %in% class(matches))){
+      matches <- list(as.vector(matches))
+    }
+    tempTab$oecd_research_area <- oecdCat$OECD_research_area_high[
+      sapply(matches, function(x) ifelse(length(x)==0, NA, min(x)))]
+    
+    # If no match, separate by "&" symbol and look for individual matches
+    # Start by separating dataframes to only investigate NAs
+    noMatch <- subset(tempTab, is.na(oecd_research_area))
+    tempTab <- subset(tempTab, !is.na(oecd_research_area))
+    # Get new research areas by splitting at &
+    newRAs <- unlist(strsplit(as.character(noMatch$Var1),split='&',fixed=TRUE))
+    newRAs <- trimws(newRAs, which = c("both"))
+    # Match elongated dataframe with old frequencies
+    matches <- sapply(newRAs, function(x) grep(x, noMatch$Var1))
+    newFreq <- unlist(sapply(matches, function(x) sum(noMatch$Freq[x], na.rm=T)))
+    noMatch <- data.frame(
+     Var1 = newRAs,
+     Freq = newFreq
+    )
+    rownames(noMatch) <- NULL
+    noMatch <- subset(noMatch, Var1 != "Science") # Too broad
+    # Look for OECD match
+    matches <- sapply(toupper(noMatch$Var1), function(x) grep(x, oecdCat$research_area_upper))
+    if(length(matches)==0){next} # if no matches, continue
+    if(sum(sapply(matches, function(x) length(x))) == 0){next} # if no matches, continue
+    noMatch$oecd_research_area <- oecdCat$OECD_research_area_high[
+      sapply(matches, function(x) ifelse(length(x)==0, NA, min(x)))]
+    noMatch <- na.omit(noMatch)
+    
+    # Bind dataframes back together and Join
+    tempTab <- rbind(tempTab, noMatch)
     tempTab$year <- years[y]
     tempTab$ORO_branch <- branches[b]
     if(y==1 & b==1)
@@ -470,24 +526,30 @@ research_area_branch_tab$ORO_branch <- factor(research_area_branch_tab$ORO_branc
                                               levels = branches)
 research_area_branch_tab <- research_area_branch_tab%>%
   rename(research_area = Var1, n_articles = Freq)
-# Find which are the top n research areas for each branch overall
-low_research_branch_areas <- research_area_branch_tab %>%
-  group_by(research_area, ORO_branch) %>%
-  summarise(n_articles=sum(n_articles)) %>%
-  ungroup() %>%
-  arrange(desc(n_articles)) %>%
-  group_by(ORO_branch) %>%
-  slice(1:7)
-length(unique(low_research_branch_areas$research_area)) # number of total research areas
-raLevels <- unique(low_research_branch_areas$research_area)[order(unique(low_research_branch_areas$research_area))]
-raLevels <- as.character(raLevels)
 
-# subset -- all other research areas put into the "other" category
-research_area_branch_tab <- research_area_branch_tab %>%
-  filter(year < as.Date("2023-01-01")) %>%
-  mutate(research_area = ifelse(research_area %in% raLevels,
-                                as.character(research_area), "Other")) %>% 
-  mutate(research_area = factor(research_area, levels = c(raLevels, "Other"))) 
+research_area_branch_tab$oecd_research_area <- factor(
+  research_area_branch_tab$oecd_research_area, 
+  levels = oecdCatHighLevel$OECD_research_area_high[order(oecdCatHighLevel$OECD_level)]
+)
+
+# # Find which are the top n research areas for each branch overall
+# low_research_branch_areas <- research_area_branch_tab %>%
+#   group_by(research_area, ORO_branch) %>%
+#   summarise(n_articles=sum(n_articles)) %>%
+#   ungroup() %>%
+#   arrange(desc(n_articles)) %>%
+#   group_by(ORO_branch) %>%
+#   slice(1:7)
+# length(unique(low_research_branch_areas$research_area)) # number of total research areas
+# raLevels <- unique(low_research_branch_areas$research_area)[order(unique(low_research_branch_areas$research_area))]
+# raLevels <- as.character(raLevels)
+# 
+# # subset -- all other research areas put into the "other" category
+# research_area_branch_tab <- research_area_branch_tab %>%
+#   filter(year < as.Date("2023-01-01")) %>%
+#   mutate(research_area = ifelse(research_area %in% raLevels,
+#                                 as.character(research_area), "Other")) %>% 
+#   mutate(research_area = factor(research_area, levels = c(raLevels, "Other"))) 
 
 
 
@@ -513,12 +575,28 @@ annualResearchAreaProportionBranch_ggp <- research_area_branch_tab %>%
        fill= "Research\narea")+
   theme_classic()+
   theme(legend.position = "right")
+
+annualResearchAreaProportionBranch_oecd_ggp <- research_area_branch_tab %>%
+  ggplot()+
+  facet_grid(ORO_branch~.)+
+  geom_col(aes(x=year, y=proportion, fill=oecd_research_area),
+           position = "stack")+
+  scale_x_date(limits = c(as.Date("1990-01-01"), as.Date("2022-01-01")))+
+  scale_fill_brewer(type = "qual",palette = "Paired")+
+  labs(y="Proportional contribution",x="Year",
+       fill= "Research\narea")+
+  theme_classic()+
+  theme(legend.position = "right")
   
 annualResearchAreaProportionBranch_ggp
+annualResearchAreaProportionBranch_oecd_ggp
 
 
 ggsave(here::here("figures/supplementary/annual-trends-branch-research-area.pdf"), 
        plot = annualResearchAreaProportionBranch_ggp, width = 7, height=6, units="in")
+
+ggsave(here::here("figures/supplementary/annual-trends-branch-oecd-research-area.pdf"), 
+       plot = annualResearchAreaProportionBranch_oecd_ggp, width = 7, height=6, units="in")
 
 ```
 
@@ -812,16 +890,16 @@ annualResearchAreaProportion_ggp <- research_area_tab %>%
   theme(legend.position = "right")
   
 
-annualResearchAreaProportion_ggp <- research_area_tab %>%
+annualResearchAreaProportion_OECD_ggp <- research_area_tab %>%
   ggplot()+
   geom_col(aes(x=year, y=proportion, fill=oecd_research_area),
            position = "stack")+
   scale_x_date(limits = c(as.Date("1990-01-01"),as.Date("2022-01-01")))+
-  scale_fill_brewer(type = "qual",palette = "Paired")+
+  #scale_fill_brewer(type = "qual",palette = "Paired",labels = scales::label_wrap(10))+
   labs(y="Proportional contribution",x="Year",
-       fill= "OECD\nResearch area")+
+       fill= "OECD\nResearch\narea")+
   theme_classic()+
-  theme(legend.position = "right")
+  theme(legend.position = "bottom")
 
 ## PLOT 3: Map of affiliation -------------------------------------------
 
@@ -891,7 +969,7 @@ while(!is.null(dev.list())) dev.off()
 
 
 
-```{r Save Annual trends research area and n oro_type barplot multipanel}
+```{r Save Annual trends research area and oro_type barplot multipanel}
 ## LOAD DATA
 ## Read in the predictions for oro_type
 # Note these predictions were made using the upper confidence limit for ORO_branch
@@ -984,6 +1062,63 @@ gridExtra::grid.arrange(
   numberOROTypeBar_ggp+ggtitle("b.")+theme(legend.position = "bottom"),
   
   layout_matrix = mat, heights = c(5,3), widths = c(4.5,5.5))
+while(!is.null(dev.list())) dev.off()
+
+```
+
+```{r Save annual trends oecd research area oro_type barplot and affiliation map multipanel}
+
+oro_legend <- ggpubr::get_legend(
+  annualTrend_ggp2+
+    scale_color_manual(values = c("black",as.vector(branchPal)),
+                       labels = c("All branches","Mitigation","Natural resilience",
+                                  "Societal adaptation"),
+                       name = "ORO branch")+
+    theme(legend.position = "bottom",
+          legend.key.width = unit(0.5,"in"),
+          legend.text = element_text(size = 12),
+          legend.title = element_text(size = 14))+
+    guides(color = guide_legend(nrow = 1, byrow = TRUE, override.aes = list(linewidth = 10)))
+  )
+oro_legend <- ggpubr::as_ggplot(oro_legend)
+
+
+while(!is.null(dev.list())) dev.off()
+
+mat <- rbind(c(1,2),
+             c(5,5),
+             c(3,4))
+
+pdf(here::here("figures/main/annual-trends-oecd-research-area-oroType-affiliation-map.pdf"), width = 10, height=10)
+gridExtra::grid.arrange(
+  
+  annualTrend_ggp2+
+    ggtitle("a.")+
+    scale_y_continuous(label = scales::unit_format(scale = 0.001,unit = "K"))+
+    theme(plot.margin = unit(c(0.1,0,2.5,0.1), "cm"),legend.position = "none"), #"bottom" 
+    #guides(color = guide_legend(nrow = 2, byrow = TRUE)),
+  
+  numberOROTypeBar_ggp+
+    ggtitle("b.")+
+    scale_y_continuous(label = scales::unit_format(scale = 0.001,unit = "K"))+
+    theme(legend.position = "none",
+          plot.margin = unit(c(0,0.1,0,0.1), "cm")), # "bottom
+  
+  annualResearchAreaProportion_OECD_ggp+
+    scale_fill_brewer(type = "qual",palette = "Paired",labels = scales::label_wrap(15))+
+    ggtitle("c.")+
+    theme(plot.margin = unit(c(0.8,0,0,0.1), "cm"))+
+    guides(fill = guide_legend("",nrow = 2, byrow = TRUE)),
+  
+  affiliationMap_ggp+
+    ggtitle("d.")+
+    theme(plot.margin = unit(c(0,0,1.5,0), "cm"))+
+    guides(fill = guide_colourbar("Number\nof articles")),
+  
+  oro_legend,
+  
+  layout_matrix = mat, heights = c(4.5,0.5,4), widths = c(5,5))
+
 while(!is.null(dev.list())) dev.off()
 
 ```
