@@ -103,65 +103,8 @@ dev.off()
 
 ```
 
-```{r performance of DistilBERT vs SVM, echo=FALSE, fig.cap="Performance of DistilBERT vs SVM", out.width = '100%'}
-knitr::include_graphics(here::here("figures/supplementary/relevance-predictions-SVM-vs-DistilBERT.png"))
-```
 
-```{r violin plots of predicted relevance for seen articles}
-
-## SQLITE CALCULATIONS
-# connect to db and load tables
-all_db <- RSQLite::dbConnect(RSQLite::SQLite(),all_db_fp, create=FALSE)
-dedups <- tbl(all_db,"uniquerefs") %>% filter(!is.na(abstract))
-predRel <- tbl(all_db, "predRel2") 
-screens <- tbl(all_db, "all-screen-results_screenExcl-codeIncl") %>%
-   select(duplicate_id, sample_screen, include_screen)
-
-df <- dedups %>%
-  inner_join(predRel, by = "analysis_id") %>%
-  inner_join(screens, by = "duplicate_id") %>%
-  collect()
-
-summary(df)
-
-# disconnect database
-dbDisconnect(all_db)
-
-
-
-## PLOT
-relevancePredictionsSeenViolin_ggp <- df %>%
-  select(sample_screen, include_screen, relevance_lower, relevance_mean, relevance_upper) %>%
-  #filter(!(sample_screen == "test list" & include_screen == 0)) %>%
-  mutate(sample_screen = factor(ifelse(sample_screen == "test list", "Test list","Other"),
-                           levels = c("Test list","Other")),
-         include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
-  reshape2::melt(
-    measure.vars = paste("relevance", c("lower","mean","upper"), sep="_"),
-    variable.name = "estimate", value.name = "value"
-  ) %>%
-  mutate(estimate = factor(estimate, 
-                           labels = c(paste0(c("Lower","Mean","Upper"), "\nestimate"))))%>%
-  
-  ggplot(aes(x=include_screen, y=value, fill = sample_screen)) +
-  facet_wrap(vars(estimate))+
-  geom_violin(trim=TRUE, aes(colour = sample_screen), linewidth = 0.25)+
-  #geom_text(data=tabText, aes(label = `predicted number`), nudge_x = 0.3, size=3, col="red")+
-  geom_hline(yintercept = 0.5)+
-  scale_y_continuous(limits = c(0,1))+
-  labs(fill = "Sample method", colour = "Sample method")+
-  labs(x="Reviewer decision", y = "Predicted relevance")+
-  theme_bw()+
-  theme(
-    legend.position = "bottom"
-  )
-
-
-ggsave(here::here("figures/supplementary/relevancePredictions_seen_violin.pdf"), 
-       plot = relevancePredictionsSeenViolin_ggp,
-       width = 7, height = 4, units="in")
-```
-
+# Broad trends and WOS metadata
 
 ```{r Annual trend in number of documents}
 
@@ -580,8 +523,6 @@ ggsave(here::here("figures/supplementary/annual-trends-branch-research-area.pdf"
 ```
 
 
-
-
 ```{r Map of First Author Affiliation}
 ## SQLITE CALCULATIONS
 # connect to db and load tables
@@ -655,8 +596,6 @@ affiliationMap_ggp <- ggplot()+
 # https://seethedatablog.wordpress.com/2016/12/23/r-simple-world-map-robinson-ggplot/
 
 ```
-
-
 
 
 ```{r Save Annual trends research area and affiliation map multipanel}
@@ -764,10 +703,62 @@ annualTrend_ggp2 <- ggplot()+
 # tabulate the number of different research areas in a year and
 # filter the tabulated results to just the high-sampled research areas
 # tabulate
+
+# Try mapping WOS research areas (252 categories) to OECD category scheme which are only ~45
+# http://help.prod-incites.com/inCites2Live/filterValuesGroup/researchAreaSchema/oecdCategoryScheme.html
+oecdCat <- readxl::read_xlsx(here::here("data/raw-data/research-area-schemas/OECD-Category-Mapping.xlsx"))
+oecdCat <- oecdCat[,c(1,3)]
+colnames(oecdCat) <- c("OECD_research_area","research_area_upper")
+oecdCat$OECD_level = readr::parse_number(oecdCat$OECD_research_area)
+oecdCat$OECD_high_level = floor(oecdCat$OECD_level)
+oecdCatHighLevel <- oecdCat[,c("OECD_research_area","OECD_level")]
+oecdCatHighLevel <- oecdCatHighLevel[!duplicated(oecdCatHighLevel),]
+oecdCatHighLevel <- oecdCatHighLevel[which(oecdCatHighLevel$OECD_level %in% c(1:6)),]
+colnames(oecdCatHighLevel)[1] <- "OECD_research_area_high"
+oecdCat <- oecdCat %>% left_join(oecdCatHighLevel, by="OECD_level")
+oecdCat <- oecdCat[!duplicated(oecdCat[,c("research_area_upper","OECD_research_area_high")]),]
+oecdCat <- oecdCat %>% arrange("OECD_level")
+
+research_area_tab %>%
+  head() %>%
+  mutate(research_area_upper = toupper(research_area))%>%
+  left_join(oecdCat, by="research_area_upper")
+
 years <- unique(research_area_df$year)
 for(y in 1:length(years)){
+  # Tabulate appearances of each unique research area for that year
   tempList <- strsplit(research_area_df$research_areas[research_area_df$year == years[y]],split = "; ")
   tempTab <- as.data.frame(table(unlist(lapply(tempList, unique))))
+  # match to get to OCED level
+  matches <- sapply(toupper(tempTab$Var1), function(x) grep(x, oecdCat$research_area_upper))
+  tempTab$oecd_research_area <- oecdCat$OECD_research_area_high[
+    sapply(matches, function(x) ifelse(length(x)==0, NA, min(x)))]
+  
+  # If no match, separate by "&" symbol and look for individual matches
+  # Start by separating dataframes to only investigate NAs
+  noMatch <- subset(tempTab, is.na(oecd_research_area))
+  tempTab <- subset(tempTab, !is.na(oecd_research_area))
+  # Get new research areas by splitting at &
+  newRAs <- unlist(strsplit(as.character(noMatch$Var1),split='&',fixed=TRUE))
+  newRAs <- trimws(newRAs, which = c("both"))
+  # Match elongated dataframe with old frequencies
+  matches <- sapply(newRAs, function(x) grep(x, noMatch$Var1))
+  newFreq <- unlist(sapply(matches, function(x) sum(noMatch$Freq[x], na.rm=T)))
+  noMatch <- data.frame(
+   Var1 = newRAs,
+   Freq = newFreq
+  )
+  rownames(noMatch) <- NULL
+  noMatch <- subset(noMatch, Var1 != "Science") # Too broad
+  # Look for OECD match
+  matches <- sapply(toupper(noMatch$Var1), function(x) grep(x, oecdCat$research_area_upper))
+  if(sum(sapply(matches, function(x) length(x))) == 0){next} # if no matches, continue
+  noMatch$oecd_research_area <- oecdCat$OECD_research_area_high[
+    sapply(matches, function(x) ifelse(length(x)==0, NA, min(x)))]
+  noMatch <- na.omit(noMatch)
+  
+  # Bind dataframes back together and Join
+  tempTab <- rbind(tempTab, noMatch)
   tempTab$year <- years[y]
   if(y==1)
     research_area_tab <- tempTab
@@ -776,23 +767,27 @@ for(y in 1:length(years)){
 }
 # rename columns
 research_area_tab$year <- as.Date(paste0(research_area_tab$year,"-01-01"))
-research_area_tab <- research_area_tab%>%
-  rename(research_area = Var1, n_articles = Freq)
-# Find which research areas are in the higher percentile
-low_research_areas <- research_area_tab %>%
-  group_by(research_area) %>%
-  summarise(n_articles=sum(n_articles)) %>%
-  ungroup()%>%
-  arrange(desc(n_articles)) %>%
-  slice(1:10) %>%
-  arrange(research_area)
-raLevels <- as.character(low_research_areas$research_area)
-# Format the research area factor to just the highest levels and group others into "Other"
-research_area_tab <- research_area_tab %>%
-  filter(year < as.Date("2023-01-01")) %>%
-  mutate(research_area = ifelse(research_area %in% raLevels,
-                                as.character(research_area), "Other")) %>% 
-  mutate(research_area = factor(research_area, levels = c(raLevels, "Other")))
+research_area_tab <- research_area_tab%>% rename(research_area = Var1, n_articles = Freq)
+research_area_tab$oecd_research_area <- factor(
+  research_area_tab$oecd_research_area, 
+  levels = oecdCatHighLevel$OECD_research_area_high[order(oecdCatHighLevel$OECD_level)]
+)
+
+# # Find which research areas are in the higher percentile
+# low_research_areas <- research_area_tab %>%
+#   group_by(research_area) %>%
+#   summarise(n_articles=sum(n_articles)) %>%
+#   ungroup()%>%
+#   arrange(desc(n_articles)) %>%
+#   slice(1:10) %>%
+#   arrange(research_area)
+# raLevels <- as.character(low_research_areas$research_area)
+# # Format the research area factor to just the highest levels and group others into "Other"
+# research_area_tab <- research_area_tab %>%
+#   filter(year < as.Date("2023-01-01")) %>%
+#   mutate(research_area = ifelse(research_area %in% raLevels,
+#                                 as.character(research_area), "Other")) %>% 
+#   mutate(research_area = factor(research_area, levels = c(raLevels, "Other")))
 
 # Calculate as a proportion of total articles
 yearlyTotal <- research_area_tab %>%
@@ -817,7 +812,16 @@ annualResearchAreaProportion_ggp <- research_area_tab %>%
   theme(legend.position = "right")
   
 
-
+annualResearchAreaProportion_ggp <- research_area_tab %>%
+  ggplot()+
+  geom_col(aes(x=year, y=proportion, fill=oecd_research_area),
+           position = "stack")+
+  scale_x_date(limits = c(as.Date("1990-01-01"),as.Date("2022-01-01")))+
+  scale_fill_brewer(type = "qual",palette = "Paired")+
+  labs(y="Proportional contribution",x="Year",
+       fill= "OECD\nResearch area")+
+  theme_classic()+
+  theme(legend.position = "right")
 
 ## PLOT 3: Map of affiliation -------------------------------------------
 
@@ -887,9 +891,7 @@ while(!is.null(dev.list())) dev.off()
 
 
 
-
-Annual trends in # articles one panel for each branch and then all the numbers of articles for each type
-```{r}
+```{r Save Annual trends research area and n oro_type barplot multipanel}
 ## LOAD DATA
 ## Read in the predictions for oro_type
 # Note these predictions were made using the upper confidence limit for ORO_branch
@@ -987,10 +989,73 @@ while(!is.null(dev.list())) dev.off()
 ```
 
 
-# 2. Intervention breakdown
+# 2. Verifying model fit
+
+```{r performance of DistilBERT vs SVM, echo=FALSE, fig.cap="Performance of DistilBERT vs SVM", out.width = '100%'}
+knitr::include_graphics(here::here("figures/supplementary/relevance-predictions-SVM-vs-DistilBERT.png"))
+```
+
+```{r violin plots of predicted relevance for seen articles}
+
+## SQLITE CALCULATIONS
+# connect to db and load tables
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),all_db_fp, create=FALSE)
+dedups <- tbl(all_db,"uniquerefs") %>% filter(!is.na(abstract))
+predRel <- tbl(all_db, "predRel2") 
+screens <- tbl(all_db, "all-screen-results_screenExcl-codeIncl") %>%
+   select(duplicate_id, sample_screen, include_screen)
+
+df <- dedups %>%
+  inner_join(predRel, by = "analysis_id") %>%
+  inner_join(screens, by = "duplicate_id") %>%
+  collect()
+
+summary(df)
+
+# disconnect database
+dbDisconnect(all_db)
+
+
+
+## PLOT
+relevancePredictionsSeenViolin_ggp <- df %>%
+  select(sample_screen, include_screen, relevance_lower, relevance_mean, relevance_upper) %>%
+  #filter(!(sample_screen == "test list" & include_screen == 0)) %>%
+  mutate(sample_screen = factor(ifelse(sample_screen == "test list", "Test list","Other"),
+                           levels = c("Test list","Other")),
+         include_screen = factor(include_screen, levels = c(1,0), labels = c("include","exclude"))) %>%
+  reshape2::melt(
+    measure.vars = paste("relevance", c("lower","mean","upper"), sep="_"),
+    variable.name = "estimate", value.name = "value"
+  ) %>%
+  mutate(estimate = factor(estimate, 
+                           labels = c(paste0(c("Lower","Mean","Upper"), "\nestimate"))))%>%
+  
+  ggplot(aes(x=include_screen, y=value, fill = sample_screen)) +
+  facet_wrap(vars(estimate))+
+  geom_violin(trim=TRUE, aes(colour = sample_screen), linewidth = 0.25)+
+  #geom_text(data=tabText, aes(label = `predicted number`), nudge_x = 0.3, size=3, col="red")+
+  geom_hline(yintercept = 0.5)+
+  scale_y_continuous(limits = c(0,1))+
+  labs(fill = "Sample method", colour = "Sample method")+
+  labs(x="Reviewer decision", y = "Predicted relevance")+
+  theme_bw()+
+  theme(
+    legend.position = "bottom"
+  )
+
+
+ggsave(here::here("figures/supplementary/relevancePredictions_seen_violin.pdf"), 
+       plot = relevancePredictionsSeenViolin_ggp,
+       width = 7, height = 4, units="in")
+```
+
+
 
 Resolving differences between ORO branches violin plot
 
+
+Resolving differences between ORO type violin plot
 
 
 # Heatmaps of interactions
