@@ -1137,6 +1137,8 @@ while(!is.null(dev.list())) dev.off()
 knitr::include_graphics(here::here("figures/supplementary/relevance-predictions-SVM-vs-DistilBERT.png"))
 ```
 
+## 2.1 Violin plots comparing predicted relevance to reviewer choice for seen articles
+
 ```{r violin plots of predicted relevance for seen articles}
 
 ## SQLITE CALCULATIONS
@@ -1193,11 +1195,277 @@ ggsave(here::here("figures/supplementary/relevancePredictions_seen_violin.pdf"),
 ```
 
 
+```{r violin plots of predicted ORO_branch for seen articles}
+## SQLITE CALCULATIONS
+# connect to db and load tables
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),all_db_fp, create=FALSE)
+predRel <- tbl(all_db, "predRel2") 
+predBranch <- tbl(all_db, "predBranch")
+codebookCombinedSimplifiedMore <- tbl(all_db, "allCodingSimplifiedVariablesMore")
 
-Resolving differences between ORO branches violin plot
+
+df <- predRel %>%
+  filter(0.5 <= relevance_mean)%>%
+  left_join(predBranch, by = "analysis_id") %>%
+  left_join(codebookCombinedSimplifiedMore %>%
+               select(analysis_id, oro_branch.Mitigation, 
+                      oro_branch.Nature, oro_branch.Societal)) %>%
+  collect()
+
+summary(df)
+
+# disconnect database
+dbDisconnect(all_db)
+
+
+
+## DATA FORMATTING AND CALCULATIONS
+# melt based on seen decisions for each unit of publication so that each row is a reviewer decision for that article, and then columns for the predictions for each branch
+branchDf <- df %>%
+  select(analysis_id, relevance_mean, Mitigation_mean, Nature_mean, Societal_mean,
+         oro_branch.Mitigation, oro_branch.Nature,oro_branch.Societal)%>%
+  reshape2::melt(
+    measure.vars = c("oro_branch.Mitigation","oro_branch.Nature","oro_branch.Societal"),
+    #measure.vars = c("Mitigation_mean","Nature_mean","Societal_mean"),
+    value.name = "seen_branch", variable.name = "oro_branch") %>%
+  mutate(oro_branch = factor(oro_branch, 
+                             c("oro_branch.Mitigation","oro_branch.Nature",
+                               "oro_branch.Societal"),
+                             c("Mitigation","Nature","Societal")))%>%
+  mutate(seen_branch = ifelse(seen_branch==1, as.character(oro_branch), NA)) %>%
+  select(-c(oro_branch)) %>%
+  filter(!is.na(seen_branch))
+
+# add a column for the predictions for the branch that was picked when seen
+pred <- rep(NA, nrow(branchDf))
+for(i in 1:length(pred)){
+  if(branchDf$seen_branch[i] == "Mitigation"){
+    pred[i] <- branchDf[i, grep("Mitigation", colnames(branchDf), ignore.case = T)]
+  }else if(branchDf$seen_branch[i] == "Nature"){
+    pred[i] <- branchDf[i, grep("Natur", colnames(branchDf), ignore.case = T)]
+  }else if(branchDf$seen_branch[i] == "Societal"){
+    pred[i] <- branchDf[i, grep("Societal", colnames(branchDf), ignore.case = T)]
+  }else{
+    pred[i] <- NA
+  }
+}
+branchDf$seen_branch_pred <- pred; rm(pred)
+
+
+
+## PLOTTING
+oroBranchPredictionsSeenViolin_ggp <- branchDf %>%
+  select(analysis_id, Mitigation_mean, Societal_mean, Nature_mean, seen_branch) %>%
+  reshape2::melt(measure.vars = c("Mitigation_mean", "Societal_mean", "Nature_mean"),
+                 variable.name = "predictedBranch", value.name = "predictedRelevance")%>% 
+  mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA),
+         predictedBranch = factor(predictedBranch,
+                                  levels = c("Mitigation_mean", "Societal_mean", "Nature_mean"),
+                                  labels = c("Mitigation","Natural\nresilience",
+                                             "Societal\nadaptation")),
+         seen_branch = factor(seen_branch,
+                              levels = c("Mitigation","Nature","Societal"),
+                              labels = c("Mitigation","Natural resilience",
+                                             "Societal adaptation"))) %>%
+  
+  ggplot(aes(x=predictedBranch, y= predictedRelevance, fill=predictedBranch))+
+  #geom_hline(yintercept = 0.5)+
+  geom_violin()+
+  facet_wrap(vars(seen_branch))+
+  scale_fill_manual(guide="none", values = as.vector(branchPal))+
+  labs(y="Predicted relevance", x = "Predicted ORO branch", fill = "predicted ORO branch")+
+  theme_bw()+
+  theme(
+    axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))
+  )
+  
+
+
+ggsave(here::here("figures/supplementary/oro_branchPredictions_seen_violin.pdf"), 
+       plot = oroBranchPredictionsSeenViolin_ggp,
+       width = 7, height = 4, units="in")
+
+```
+
 
 
 Resolving differences between ORO type violin plot
+
+```{r violin plots of predicted ORO type for seen articles using mean}
+
+## READ IN ORO ANY PREDICTIONS AND FORMAT
+# Note these predictions were made using the upper confidence limit for ORO_branch
+oroAnyFiles <- dir(here::here("data/raw-data/coding-predictions"))
+oroAnyFiles <- oroAnyFiles[grep("oro_any", oroAnyFiles)]
+predOROAnyList <- list()
+for(i in 1:length(oroAnyFiles)){
+  temp <- readr::read_csv(
+    here::here("data/raw-data/coding-predictions",oroAnyFiles[i]),
+    show_col_types = FALSE
+  )
+  colNames <- colnames(temp)
+  colNames[1] <- "analysis_id"
+  colNames <- gsub("oro_any.","",colNames)
+  colNames <- gsub("M_","", colNames)
+  colNames <- gsub("N_","", colNames)
+  colNames <- gsub("SA_","", colNames)
+  colNames <- gsub(" - ","_", colNames)
+  colNames <- gsub("_prediction","", colNames)
+  colNames <- gsub("_pred","", colNames)
+  colnames(temp) <- colNames
+  temp$oro_branch <- gsub("oro_any_","",oroAnyFiles[i])
+  temp$oro_branch <- gsub("_predictions.csv","",temp$oro_branch)
+  predOROAnyList[[i]] <- temp
+}
+
+## Make a dataframe of just the MEAN predictions
+boundary = "mean"
+for(i in 1:length(predOROAnyList)){
+  temp <- predOROAnyList[[i]]
+  temp <- temp[grep(boundary, colnames(temp))]
+  colnames(temp) <- gsub(paste0("_",boundary),"", colnames(temp))
+  temp <- reshape2::melt(temp, variable.name = "oro_any")
+  temp <- cbind(predOROAnyList[[i]][,c("analysis_id","oro_branch")], temp)
+  if(i==1)
+    predOROAny <- temp
+  else
+    predOROAny <- rbind(predOROAny, temp)
+}
+rm(predOROAnyList)
+
+
+## RETREIVE SQLITE METADATA ON SEEN CODING DECISIONS
+all_db <- RSQLite::dbConnect(RSQLite::SQLite(),all_db_fp, create=FALSE)
+codebookCombinedSimplifiedMore <- tbl(all_db, "allCodingSimplifiedVariablesMore") %>% collect()
+dbDisconnect(all_db)
+
+
+
+
+## VIOLIN PLOT COMPARING PREDICTIONS FOR PROTECTION, RESTORATION AND CONSERVATION -----------
+
+## DATA FORMATTING AND CALCULATIONS
+# melt based on seen decisions for each unit of publication
+# end up with column for analysis id (unique), protection, restoration and conservation, and seen_oro
+df <- predOROAny %>%
+  filter(oro_any %in% c("Protection","Restoration","Conservation"))%>%
+  reshape2::dcast(analysis_id~oro_any, value.var = "value") %>%
+  left_join(codebookCombinedSimplifiedMore %>%
+               select(analysis_id, oro_any.N_Protection,oro_any.N_Restoration))%>% 
+  reshape2::melt(
+    measure.vars = c("oro_any.N_Protection","oro_any.N_Restoration"),
+    value.name = "seen_oro", variable.name = "oro_any") %>%
+  mutate(oro_any = factor(oro_any, 
+                             c("oro_any.N_Protection","oro_any.N_Restoration"),
+                             c("Protection","Restoration")))%>%
+  mutate(seen_oro = ifelse(seen_oro==1, as.character(oro_any), NA)) %>%
+  select(-c(oro_any)) 
+
+## PLOTTING
+oroType_naturalResilience_PredictionsSeenViolin_ggp <- df %>%
+  filter(!is.na(seen_oro))%>%
+  reshape2::melt(measure.vars = c("Protection","Restoration","Conservation"),
+                 variable.name = "predictedORO", value.name = "predictedRelevance")%>% 
+  mutate(predictedRelevance = ifelse(0.5 <= predictedRelevance, predictedRelevance, NA)) %>%
+  
+  ggplot(aes(x=predictedORO, y= predictedRelevance))+
+  geom_violin(fill=as.vector(branchPal[2]))+
+  facet_wrap(vars(seen_oro))+
+  labs(y="Predicted relevance", x = "Predicted ORO type", fill = "predicted ORO type")+
+  theme_bw()+
+  theme(
+    axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))
+  )
+
+ggsave(here::here("figures/supplementary/oro_type_naturalResilience_Predictions_seen_violin.pdf"), 
+       plot = oroType_naturalResilience_PredictionsSeenViolin_ggp,
+       width = 7, height = 4, units="in")
+
+
+
+
+
+## VIOLIN PLOT COMPARING PREDICTIONS FOR ALL ORO TYPES -----------
+
+## DATA FORMATTING AND CALCULATIONS
+# melt based on seen decisions for each unit of publication
+# 1 row = 1 article x seen ORO combinations
+oroAnyCols <- colnames(codebookCombinedSimplifiedMore)[
+  grep("oro_any", colnames(codebookCombinedSimplifiedMore))]
+oroAnyColsLevels <- gsub("oro_any..._","",gsub("oro_any.._","",oroAnyCols))
+oroAnyColsLabels <- gsub("_"," ",oroAnyColsLevels)
+oroAnyColsLabels[grep("Renew", oroAnyColsLabels)] <- c("Renewable energy")
+oroAnyColsLabels[grep("CO", oroAnyColsLabels)] <- c("CO2 removal or storage")
+oroAnyColsLabels[grep("Human", oroAnyColsLabels)] <- paste("Human-assisted evolution")
+oroAnyColsLabels[grep("Built", oroAnyColsLabels)] <- paste("Built infrastructure & technology")
+oroAnyColsLabels[grep("Socio", oroAnyColsLabels)] <- paste("Socio-institutional")
+
+
+
+df <- predOROAny %>%
+  reshape2::dcast(analysis_id~oro_any, value.var = "value") %>%
+  left_join(codebookCombinedSimplifiedMore[c("analysis_id", oroAnyCols)])%>%
+  reshape2::melt(
+    measure.vars = oroAnyCols,
+    value.name = "seen_oro", variable.name = "oro_any") %>%
+  mutate(oro_any = factor(oro_any,levels = oroAnyCols,labels = oroAnyColsLabels))%>%
+  mutate(seen_oro = ifelse(seen_oro==1, as.character(oro_any), NA)) %>%
+  select(-c(oro_any)) 
+
+
+## PLOTTING
+# define colour scale
+gg_color_hue <- function(n) {
+  hues = seq(15, 375, length = n + 1)
+  hcl(h = hues, l = 65, c = 100)[1:n]
+}
+
+facetCol <- data.frame(
+  seen_oro = factor(oroAnyColsLabels, oroAnyColsLabels),
+  oroColor = gg_color_hue(length(oroAnyColsLabels))
+)
+
+oroTypePredictionsSeenViolin_ggp <- df %>%
+  select(-c(Conservation))%>%
+  filter(!is.na(seen_oro))%>%
+  reshape2::melt(id.vars = c("analysis_id", "seen_oro"),
+                 variable.name = "predictedORO", value.name = "predictedRelevance")%>% 
+  filter(!is.na(predictedORO))%>%
+  mutate(predictedORO = factor(predictedORO, levels = oroAnyColsLevels,labels = oroAnyColsLabels),
+         seen_oro = factor(seen_oro, levels = oroAnyColsLabels))  %>%
+  # mutate(predictedORO = factor(gsub("_"," ", predictedORO), labels = oroAnyColsLabels),
+  #        seen_oro = factor(gsub("_"," ",seen_oro), oroAnyColsLabels))  %>%
+
+  ggplot()+
+  geom_hline(yintercept = 0.5)+
+  geom_violin(aes(x=predictedORO, y= predictedRelevance, col=predictedORO, fill=predictedORO),
+              trim=TRUE, width=1.5, scale = "count", linewidth = 0.5)+
+  facet_wrap(vars(seen_oro), labeller= label_wrap_gen(30))+ 
+  geom_rect(data=facetCol, aes(xmin=-Inf, xmax=Inf, ymin=1.05, ymax=1.35,
+                               fill=seen_oro))+
+  coord_cartesian(clip = "off", ylim=c(0,1))+
+  labs(y="Predicted relevance", x = "Predicted ORO type",
+       guide = "Predicted\nORO type")+
+  #scale_fill_discrete(guide="none")+
+  scale_fill_manual(guide="none", values = facetCol$oroColor, breaks = facetCol$seen_oro)+
+  scale_colour_manual(guide="none", values = facetCol$oroColor, breaks = facetCol$seen_oro)+
+  theme(
+    panel.background = element_rect(fill="white", colour = "black"),
+    panel.grid.major = element_line(colour = "lightgrey"),
+    #axis.text.x = element_blank(),
+    strip.background = element_rect(fill=NA),
+    axis.text.x = element_text(angle=90, hjust=1, vjust=0.5),
+    axis.title.x = element_text(margin = margin(t = 10, r = 0, b = 0, l = 0))
+  )
+
+
+
+ggsave(here::here("figures/supplementary/oro_typePredictions_seen_violin.pdf"), 
+       plot = oroTypePredictionsSeenViolin_ggp,
+       width = 7, height = 7.5, units="in")
+
+
+```
 
 
 # Heatmaps of interactions
