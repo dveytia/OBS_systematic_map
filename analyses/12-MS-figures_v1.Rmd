@@ -1474,6 +1474,8 @@ Heatmap of ORO type by marine system
 
 Heatmap of ORO type by ecosystem_type
 
+Three way heatmaps of oro, ecosystem, outcome
+
 Heatmap of outcomes (mitigation, adapt to threat human or natural) by ORO type
 
 Heatmap of outcomes by ecosystem_type
@@ -1481,6 +1483,123 @@ Heatmap of outcomes by ecosystem_type
 Heatmap of Ecosystem type x blue carbon category?
 
 Data_type?
+
+https://cran.r-project.org/web/packages/heatmaply/vignettes/heatmaply.html
+
+```{r Try heatmaply}
+library(heatmaply)
+source(here::here("R/readOROAnyPredictions.R"))
+source(here::here("R/readPredictions.R"))
+
+## READ IN PREDICTIONS
+
+predOROAny <- readOROAnyPredictions(boundaries = "mean")
+predEcos <- readPredictions(boundaries = "mean", variable = "ecosystem_type")
+predMit <- readPredictions(boundaries = "mean", variable = "climate_mitigation")
+predAdapt <- readPredictions(boundaries = "mean", variable = "adapt_to_threat")
+
+
+
+
+
+## FORMATTING & CALCULATIONS
+
+# Factor ORO_branch
+predOROAny$oro_branch <- factor(predOROAny$oro_branch,
+                                levels = c("mitigation","nature","societal"),
+                                labels = c("Mitigation",
+                                           "Natural resilience",
+                                           "Societal adaptation"))
+
+# Fuse mitigation and adaptation predictions into one "Outcome" Variable
+predMit <- predMit %>%
+  mutate(outcome = recode_factor(climate_mitigation, 
+                                 `0_relevance` = "Mitigation"),
+         outcome_category = paste("Mitigation")) %>%
+  select(-c(climate_mitigation))
+
+predAdapt <- predAdapt %>%
+  mutate(outcome = recode_factor(adapt_to_threat,
+                                 Human = "Human adapt", Natural = "Nature adapt",
+                                 Both = "Human & nature adapt"),
+         outcome_category = paste("Adaptation")) %>%
+  select(-c(adapt_to_threat))
+
+predOutcome <- rbind(predMit, predAdapt)
+predOutcome <- predOutcome %>%
+  select(analysis_id, outcome_category, outcome, mean)%>%
+  mutate(outcome_category = factor(outcome_category,
+                                   levels = c("Mitigation","Adaptation")))
+
+
+# make a co-occurrence matrix
+temp <- predOROAny %>%
+  filter(0.5 <= mean) %>%
+  select(-c(mean))%>%
+  full_join(predEcos %>% filter(0.5 <= mean) %>%select(-c(mean)), by = "analysis_id") %>%
+  full_join(predOutcome%>% filter(0.5 <= mean) %>%select(-c(mean)), by = "analysis_id") %>%
+  filter(!is.na(oro_any)) # remove "other" oro_type
+
+temp2 <- temp %>%
+  group_by(ecosystem_type, oro_any, outcome_category) %>%
+  na.omit() %>%
+  summarise(z = n()) %>% View
+  filter(ecosystem_type != "Other" & outcome_category == "Mitigation") %>%
+  reshape2::acast(ecosystem_type ~ oro_any, value.var = "z") %>%
+  as.matrix()
+temp2[is.na(temp2)] <- 0
+
+# Need to fill in missing combinations
+# Need to add colourbars on side for the grouping of ORO type
+library("gplots")
+hm1 <- heatmaply(
+  x = temp2,
+  dendrogram = "none",
+  #main = "a.",
+  margins = c(50,50,30, 30),
+  xlab = "ORO type",
+  ylab = "Ecosystem type",
+  key.title = "N articles",
+  heatmap_layers = list(ggtitle("a.")),
+  plot_method = "ggplot",
+  labCol = c(oroAnyColsLabels[1:6],"Conservation"),
+  #labRow = ,
+  row_side_colors = colorspace::rainbow_hcl(nrow(temp2))
+
+)
+
+
+ggheatmap(
+  x = temp2,
+  dendrogram = "none",
+  #main = "a.",
+  margins = c(50,50,30, 30),
+  xlab = "ORO type",
+  ylab = "Ecosystem type",
+  key.title = "N articles",
+  heatmap_layers = list(ggtitle("a.")),
+  labCol = c(oroAnyColsLabels[1:6],"Conservation"),
+  #labRow = ,
+  col_side_colors = colorspace::rainbow_hcl(ncol(temp2))
+
+)
+
+
+hm1
+
+subplot(hm1, hm1, margin = .1, shareY=TRUE, shareX = TRUE, nrows = 2)
+
+
+x  <- as.matrix(datasets::mtcars)
+rc <- colorspace::rainbow_hcl(nrow(x))
+
+heatmaply(
+  x,
+  seriate = "mean",
+  RowSideColors = rc
+)
+```
+
 
 
 # Geoparsing results
