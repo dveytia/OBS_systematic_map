@@ -1470,136 +1470,204 @@ ggsave(here::here("figures/supplementary/oro_typePredictions_seen_violin.pdf"),
 
 # Heatmaps of interactions
 
-Heatmap of ORO type by marine system
+Heatmap of ORO type by marine system -- maybe as an infographic? 
 
-Heatmap of ORO type by ecosystem_type
 
-Three way heatmaps of oro, ecosystem, outcome
 
-Heatmap of outcomes (mitigation, adapt to threat human or natural) by ORO type
 
-Heatmap of outcomes by ecosystem_type
+Heatmap of ORO type and outcome
 
 Heatmap of Ecosystem type x blue carbon category?
 
 Data_type?
 
-https://cran.r-project.org/web/packages/heatmaply/vignettes/heatmaply.html
 
-```{r Try heatmaply}
+## Three way heatmaps of oro type, ecosystem, outcome
+
+```{r get phylopics for ecosystem type}
+library(rphylopic)
+
+# get mangrove
+mangrove_uuid <- get_uuid(name = "Rhizophora mangle", n=5)
+mangrove_img <- pick_phylopic(name = "Rhizophora mangle", n = 1)
+mangrove_img <- get_phylopic("bacc6a59-80d2-461c-92d4-83cabc91cc39")
+save_phylopic(img=mangrove_img,
+              path = here::here("figures/phylopics/mangrove.svg"))
+
+# Get coral
+coral_img <- get_phylopic("32eeaa29-2e90-40b5-92fb-eb8d7fcab9ab")
+save_phylopic(img = coral_img,
+              path = here::here("figures/phylopics/coral.svg"))
+
+# Get macroalgae
+macro_img <- get_phylopic("9acf11fa-89dd-4a56-b3da-8665c406c6f5")
+save_phylopic(img = macro_img,
+              path = here::here("figures/phylopics/macroalgae.svg"))
+
+# get seagrass -- for some reason I had to download this directly from the website
+#seagrass_img <- get_phylopic("2534e10f-ea8e-436e-a8c8-13ac045eb867")
+#save_phylopic(img = seagrass_img,
+#              path = here::here("figures/phylopics/seagrass.svg"))
+
+```
+
+
+```{r ggplot heatmap ORO type ecosystem type and outcome}
 library(heatmaply)
 source(here::here("R/readOROAnyPredictions.R"))
 source(here::here("R/readPredictions.R"))
 
-## READ IN PREDICTIONS
+## READ IN PREDICTIONS & Factor
 
+# ORO Type
 predOROAny <- readOROAnyPredictions(boundaries = "mean")
-predEcos <- readPredictions(boundaries = "mean", variable = "ecosystem_type")
-predMit <- readPredictions(boundaries = "mean", variable = "climate_mitigation")
-predAdapt <- readPredictions(boundaries = "mean", variable = "adapt_to_threat")
-
-
-
-
-
-## FORMATTING & CALCULATIONS
-
-# Factor ORO_branch
 predOROAny$oro_branch <- factor(predOROAny$oro_branch,
                                 levels = c("mitigation","nature","societal"),
                                 labels = c("Mitigation",
                                            "Natural resilience",
                                            "Societal adaptation"))
+predOROAny <- predOROAny %>% 
+  filter(!(oro_any %in% c("Protection","Restoration"))) %>%
+  mutate(oro_any = droplevels(oro_any))
+  
+predOROAny$oro_any <- recode_factor(predOROAny$oro_any, Renewables = "Renewable energy", 
+                Increase_efficiency = "Increase efficiency",
+    CO2_removal_or_storage="CO2 removal or storage", 
+    Human_assisted_evolution="Human-assisted evolution",
+    Conservation="Conservation",
+    Built_infrastructure_and_technology="Built infrastructure & technology",
+    Socioinstitutional="Socio-institutional"
+)
+summary(predOROAny)
+levels(predOROAny$oro_any)
+
+# Ecosystem type
+predEcos <- readPredictions(boundaries = "mean", variable = "ecosystem_type")
+predEcos <- predEcos %>%
+  mutate(ecosystem_type = factor(as.character(ecosystem_type),
+                                 levels = unique(as.character(ecosystem_type)),
+                                 labels = gsub("_"," ", unique(as.character(ecosystem_type)))))
+
+# Outcomes
+predMit <- readPredictions(boundaries = "mean", variable = "climate_mitigation")
+predAdapt <- readPredictions(boundaries = "mean", variable = "adapt_to_threat")
+
+
+
+## FORMATTING & CALCULATIONS
 
 # Fuse mitigation and adaptation predictions into one "Outcome" Variable
 predMit <- predMit %>%
   mutate(outcome = recode_factor(climate_mitigation, 
                                  `0_relevance` = "Mitigation"),
          outcome_category = paste("Mitigation")) %>%
+  mutate(outcome = as.character(outcome),
+         outcome_category = as.character(outcome_category))%>%
   select(-c(climate_mitigation))
 
 predAdapt <- predAdapt %>%
   mutate(outcome = recode_factor(adapt_to_threat,
-                                 Human = "Human adapt", Natural = "Nature adapt",
-                                 Both = "Human & nature adapt"),
+                                 Human = "Adapt: Humans", Natural = "Adapt: Nature",
+                                 Both = "Adapt: Humans & nature"),
          outcome_category = paste("Adaptation")) %>%
+  mutate(outcome = as.character(outcome),
+        outcome_category = as.character(outcome_category))%>%
   select(-c(adapt_to_threat))
 
 predOutcome <- rbind(predMit, predAdapt)
 predOutcome <- predOutcome %>%
-  select(analysis_id, outcome_category, outcome, mean)%>%
+  select(analysis_id, outcome_category, outcome, mean)
+
+
+  
+
+summary(predOutcome)
+
+# make a long-format dataframe of cateogory predictions for each article
+# start with a dataframe of analysis_id, oro_branch, oro_any, ecosystem_type, outcome
+# Filter out the "other" oro_type and ecosystem_type, and when there is no ecosystem type
+# If there is no mitigation or adaptatoin outcome classified, classify as "Other"
+temp <- predEcos %>% 
+  filter(0.5 <= mean) %>% select(-c(mean))%>%
+  filter(ecosystem_type != "Other") %>%
+  mutate(ecosystem_type = droplevels(ecosystem_type)) %>%
+  left_join(predOROAny %>% filter(0.5 <= mean) %>% select(-c(mean)), by = "analysis_id") %>%
+  left_join(predOutcome%>% filter(0.5 <= mean) %>%select(-c(mean)), by = "analysis_id") %>%
+  filter(!is.na(oro_any)) %>%
+  #mutate(outcome = ifelse(is.na(outcome), "Other", outcome),
+  #       outcome_category = ifelse(is.na(outcome_category), "Other", outcome_category)) %>%
+  filter(!is.na(outcome)) %>%
   mutate(outcome_category = factor(outcome_category,
-                                   levels = c("Mitigation","Adaptation")))
+                                   levels = c("Mitigation","Adaptation"))) %>% 
+  mutate(outcome = factor(as.character(outcome),
+                          levels = c("Mitigation","Adapt: Humans", "Adapt: Nature",
+                                     "Adapt: Humans & nature"))) 
+
+summary(temp)
+
+# Now grouping by the 3 variables: oro, ecosystem and outcome, tabulate the numbers of 
+# co-occurences
+tempTab <- temp %>%
+  group_by(ecosystem_type, oro_any, outcome) %>%
+  summarise(n_articles = n())
+
+outcomeTotals <- tempTab %>%
+  group_by(outcome) %>%
+  summarise(outcomeTotal = sum(n_articles, na.rm=T)) 
+
+library(magick)
+marsh_ras <- as.raster(image_fill(image_read(here::here("figures/phylopics/saltmarsh.jpg")),'none'))
+mangrove_ras <- as.raster(image_fill(image_read_svg(here::here("figures/phylopics/mangrove.svg")),'none'))
+coral_ras <- as.raster(image_fill(image_read_svg(here::here("figures/phylopics/coral.svg")),'none'))
+macro_ras <- as.raster(image_fill(image_read_svg(here::here("figures/phylopics/macroalgae.svg")),'none'))
+seagrass_ras <- as.raster(image_fill(image_read_svg(here::here("figures/phylopics/seagrass.svg")),'none'))
 
 
-# make a co-occurrence matrix
-temp <- predOROAny %>%
-  filter(0.5 <= mean) %>%
-  select(-c(mean))%>%
-  full_join(predEcos %>% filter(0.5 <= mean) %>%select(-c(mean)), by = "analysis_id") %>%
-  full_join(predOutcome%>% filter(0.5 <= mean) %>%select(-c(mean)), by = "analysis_id") %>%
-  filter(!is.na(oro_any)) # remove "other" oro_type
-
-temp2 <- temp %>%
-  group_by(ecosystem_type, oro_any, outcome_category) %>%
-  na.omit() %>%
-  summarise(z = n()) %>% View
-  filter(ecosystem_type != "Other" & outcome_category == "Mitigation") %>%
-  reshape2::acast(ecosystem_type ~ oro_any, value.var = "z") %>%
-  as.matrix()
-temp2[is.na(temp2)] <- 0
-
-# Need to fill in missing combinations
-# Need to add colourbars on side for the grouping of ORO type
-library("gplots")
-hm1 <- heatmaply(
-  x = temp2,
-  dendrogram = "none",
-  #main = "a.",
-  margins = c(50,50,30, 30),
-  xlab = "ORO type",
-  ylab = "Ecosystem type",
-  key.title = "N articles",
-  heatmap_layers = list(ggtitle("a.")),
-  plot_method = "ggplot",
-  labCol = c(oroAnyColsLabels[1:6],"Conservation"),
-  #labRow = ,
-  row_side_colors = colorspace::rainbow_hcl(nrow(temp2))
-
-)
+oro_eco_outcome_ggp <- tempTab %>%
+  left_join(outcomeTotals)%>% 
+  mutate(percentage = n_articles/outcomeTotal*100) %>%
+  ggplot(aes(y=oro_any, x=ecosystem_type))+
+  geom_tile(aes(fill = percentage))+
+  facet_wrap(vars(outcome))+
+  scale_fill_distiller(palette = "Blues", direction = 1)+
+  scale_y_discrete(limits=rev)+
+  geom_hline(yintercept = c(0.5,2.5,4.5), col="black", linewidth=0.5)+
+  #add_phylopic(x="Mangrove", y=-10, img = mangrove_img, alpha = 1)+
+  annotation_raster(marsh_ras, 0.5, 1.5, -4, -0)+
+  annotation_raster(mangrove_ras, 1.5, 2.5, -4, -0)+
+  annotation_raster(coral_ras, 2.5, 3.5, -4, -0)+
+  annotation_raster(macro_ras, 3.5, 4.5, -4, -0)+
+  annotation_raster(seagrass_ras, 4.5, 5.5, -4, -0)+
+  coord_cartesian(ylim = c(-3.5, length(levels(tempTab$oro_any))), clip = 'off')+
+  labs(
+    x = "Ecosystem type", y = "ORO type", 
+    fill = "% of\narticles",
+    caption = paste(
+      "total number of articles per panel =", paste(outcomeTotals$outcomeTotal, collapse=", "),
+      "\nfor", paste(outcomeTotals$outcome, collapse=", "), "\noutcomes respectively"
+    )
+  )+
+  theme_bw()+
+  theme(
+    #plot.margin = unit(c(0,0,0,0), "cm"),
+    panel.grid = element_blank(),
+    legend.position = "bottom",
+    axis.text.x = element_text(angle=45, vjust=1, hjust=1)
+    #axis.title.x = element_text(vjust = -8)
+  )
 
 
-ggheatmap(
-  x = temp2,
-  dendrogram = "none",
-  #main = "a.",
-  margins = c(50,50,30, 30),
-  xlab = "ORO type",
-  ylab = "Ecosystem type",
-  key.title = "N articles",
-  heatmap_layers = list(ggtitle("a.")),
-  labCol = c(oroAnyColsLabels[1:6],"Conservation"),
-  #labRow = ,
-  col_side_colors = colorspace::rainbow_hcl(ncol(temp2))
+ggsave(here::here("figures/main/oro-type_ecosystem_outcome_heatmap.pdf"), 
+       plot = oro_eco_outcome_ggp,
+       width = 7, height = 6, units = "in")
 
-)
+# Maybe make the values proportional?
+# Add little infographics for ecosysstem type on the axis? 
+# add hashing where humans & nature is not NA?
+# Remove outcome == Other
 
 
-hm1
-
-subplot(hm1, hm1, margin = .1, shareY=TRUE, shareX = TRUE, nrows = 2)
-
-
-x  <- as.matrix(datasets::mtcars)
-rc <- colorspace::rainbow_hcl(nrow(x))
-
-heatmaply(
-  x,
-  seriate = "mean",
-  RowSideColors = rc
-)
 ```
-
 
 
 # Geoparsing results
