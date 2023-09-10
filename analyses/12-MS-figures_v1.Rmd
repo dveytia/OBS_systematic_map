@@ -1468,45 +1468,94 @@ ggsave(here::here("figures/supplementary/oro_typePredictions_seen_violin.pdf"),
 ```
 
 
+## 2.2 Examine correlations and overlaps between variable predictions
+
+blue carbon or co2 removal/storage
+```{r are blue carbon and co2 removal and storage oro predictions correlated?}
+predCO2 <- readOROAnyPredictions(boundaries = "mean")
+predCO2 <- predCO2 %>%
+  filter(oro_any == "CO2_removal_or_storage") %>%
+  rename(CO2_removal_or_storage = mean) %>%
+  select(analysis_id, CO2_removal_or_storage)
+
+
+predBC <- readPredictions(boundaries = "mean", variable = "blue_carbon")
+predBC <- predBC %>%
+  select(-c(blue_carbon)) %>%
+  rename(blue_carbon = mean) %>%
+  select(analysis_id, blue_carbon)
+
+temp_df <- inner_join(predCO2, predBC, by = "analysis_id")
+
+cor(temp_df$CO2_removal_or_storage, temp_df$blue_carbon) # 0.4989678
+
+plot(temp_df$CO2_removal_or_storage, temp_df$blue_carbon) # Not a very strong relationship
+```
+
+
+
+
+
+
 # Heatmaps of interactions
 
-Heatmap of ORO type by marine system -- maybe as an infographic? 
+Calculations to do
+- climate threat simplified (temp, SLR, extreme weather) model + predictions.
+- ecosystem simplified 2 (Mangrove, Coral, Seagrass, salt marsh) model and predictions
+- oro_dev_stage societal - implemented binary (just societal) model and predictions. code prepped
 
 
 
+Heatmap of ORO type x outcomes by marine system (land, coastal, open) -- maybe as an infographic? Can this be combined with the idea of 
 
-Heatmap of ORO type and outcome
+?
 
-Heatmap of Ecosystem type x blue carbon category?
+Three way heatmap of Climate threat(temperature, SLR, extreme weather) and adaptation OROs and adaptation outcomes
 
-Data_type?
+
+
+Heatmap of ORO type and outcome -- supplement?
+
+
+Data_type primary vs secondary
+
+
 
 
 ## Three way heatmaps of oro type, ecosystem, outcome
 
 ```{r get phylopics for ecosystem type}
-library(rphylopic)
+pics <- dir(here::here("figures/phylopics/"))
 
 # get mangrove
-mangrove_uuid <- get_uuid(name = "Rhizophora mangle", n=5)
-mangrove_img <- pick_phylopic(name = "Rhizophora mangle", n = 1)
-mangrove_img <- get_phylopic("bacc6a59-80d2-461c-92d4-83cabc91cc39")
-save_phylopic(img=mangrove_img,
-              path = here::here("figures/phylopics/mangrove.svg"))
+if(!("mangrove.svg" %in% pics)){
+  mangrove_uuid <- rphylopic::get_uuid(name = "Rhizophora mangle", n=5)
+  mangrove_img <- rphylopic::pick_phylopic(name = "Rhizophora mangle", n = 1)
+  mangrove_img <- rphylopic::get_phylopic("bacc6a59-80d2-461c-92d4-83cabc91cc39")
+  rphylopic::save_phylopic(img=mangrove_img,
+                path = here::here("figures/phylopics/mangrove.svg"))
+}
+
 
 # Get coral
-coral_img <- get_phylopic("32eeaa29-2e90-40b5-92fb-eb8d7fcab9ab")
-save_phylopic(img = coral_img,
+if(!("coral.svg" %in% pics)){
+  coral_img <- rphylopic::get_phylopic("32eeaa29-2e90-40b5-92fb-eb8d7fcab9ab")
+  rphylopic::save_phylopic(img = coral_img,
               path = here::here("figures/phylopics/coral.svg"))
+}
+
 
 # Get macroalgae
-macro_img <- get_phylopic("9acf11fa-89dd-4a56-b3da-8665c406c6f5")
-save_phylopic(img = macro_img,
+if(!("macroalgae.svg" %in% pics)){
+  macro_img <- rphylopic::get_phylopic("9acf11fa-89dd-4a56-b3da-8665c406c6f5")
+  rphylopic::save_phylopic(img = macro_img,
               path = here::here("figures/phylopics/macroalgae.svg"))
+}
+
 
 # get seagrass -- for some reason I had to download this directly from the website
-#seagrass_img <- get_phylopic("2534e10f-ea8e-436e-a8c8-13ac045eb867")
-#save_phylopic(img = seagrass_img,
+#seagrass_img <- rphylopic::get_phylopic("2534e10f-ea8e-436e-a8c8-13ac045eb867")
+#rphylopic::save_phylopic(img = seagrass_img,
 #              path = here::here("figures/phylopics/seagrass.svg"))
 
 ```
@@ -1550,7 +1599,7 @@ predEcos <- predEcos %>%
 
 # Outcomes
 predMit <- readPredictions(boundaries = "mean", variable = "climate_mitigation")
-predAdapt <- readPredictions(boundaries = "mean", variable = "adapt_to_threat")
+predAdapt <- readPredictions(boundaries = "mean", variable = "adapt_to_threat_simplified2")
 
 
 
@@ -1566,13 +1615,13 @@ predMit <- predMit %>%
   select(-c(climate_mitigation))
 
 predAdapt <- predAdapt %>%
-  mutate(outcome = recode_factor(adapt_to_threat,
-                                 Human = "Adapt: Humans", Natural = "Adapt: Nature",
-                                 Both = "Adapt: Humans & nature"),
+  mutate(outcome = recode_factor(adapt_to_threat_simplified2,
+                                 adapt_to_threat.Human = "Adapt: Humans", 
+                                 adapt_to_threat.Natural = "Adapt: Nature"), #Both = "Adapt: Humans & nature"
          outcome_category = paste("Adaptation")) %>%
   mutate(outcome = as.character(outcome),
         outcome_category = as.character(outcome_category))%>%
-  select(-c(adapt_to_threat))
+  select(-c(adapt_to_threat_simplified2))
 
 predOutcome <- rbind(predMit, predAdapt)
 predOutcome <- predOutcome %>%
@@ -1600,8 +1649,7 @@ temp <- predEcos %>%
   mutate(outcome_category = factor(outcome_category,
                                    levels = c("Mitigation","Adaptation"))) %>% 
   mutate(outcome = factor(as.character(outcome),
-                          levels = c("Mitigation","Adapt: Humans", "Adapt: Nature",
-                                     "Adapt: Humans & nature"))) 
+                          levels = c("Mitigation","Adapt: Humans", "Adapt: Nature"))) # "Adapt: Humans & nature"
 
 summary(temp)
 
@@ -1633,12 +1681,12 @@ oro_eco_outcome_ggp <- tempTab %>%
   scale_y_discrete(limits=rev)+
   geom_hline(yintercept = c(0.5,2.5,4.5), col="black", linewidth=0.5)+
   #add_phylopic(x="Mangrove", y=-10, img = mangrove_img, alpha = 1)+
-  annotation_raster(marsh_ras, 0.5, 1.5, -4, -0)+
-  annotation_raster(mangrove_ras, 1.5, 2.5, -4, -0)+
-  annotation_raster(coral_ras, 2.5, 3.5, -4, -0)+
-  annotation_raster(macro_ras, 3.5, 4.5, -4, -0)+
-  annotation_raster(seagrass_ras, 4.5, 5.5, -4, -0)+
-  coord_cartesian(ylim = c(-3.5, length(levels(tempTab$oro_any))), clip = 'off')+
+  annotation_raster(marsh_ras, 0.5, 1.5, -2, -0)+
+  annotation_raster(mangrove_ras, 1.5, 2.5, -2, -0)+
+  annotation_raster(coral_ras, 2.5, 3.5, -2, -0)+
+  annotation_raster(macro_ras, 3.5, 4.5, -2, -0)+
+  annotation_raster(seagrass_ras, 4.5, 5.5, -2, -0)+
+  coord_cartesian(ylim = c(-1.5, length(levels(tempTab$oro_any))), clip = 'off')+
   labs(
     x = "Ecosystem type", y = "ORO type", 
     fill = "% of\narticles",
@@ -1656,10 +1704,11 @@ oro_eco_outcome_ggp <- tempTab %>%
     #axis.title.x = element_text(vjust = -8)
   )
 
+oro_eco_outcome_ggp
 
 ggsave(here::here("figures/main/oro-type_ecosystem_outcome_heatmap.pdf"), 
        plot = oro_eco_outcome_ggp,
-       width = 7, height = 6, units = "in")
+       width = 7, height = 4.75, units = "in")
 
 # Maybe make the values proportional?
 # Add little infographics for ecosysstem type on the axis? 
@@ -1668,6 +1717,9 @@ ggsave(here::here("figures/main/oro-type_ecosystem_outcome_heatmap.pdf"),
 
 
 ```
+
+
+## Nested doughnut of Ecosystem type x blue carbon x mitigation outcome -- 
 
 
 # Geoparsing results
