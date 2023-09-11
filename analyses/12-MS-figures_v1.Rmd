@@ -1506,23 +1506,119 @@ Calculations to do
 
 
 
-Heatmap of ORO type x outcomes by marine system (land, coastal, open) -- maybe as an infographic? Can this be combined with the idea of 
 
-?
-
-Three way heatmap of Climate threat(temperature, SLR, extreme weather) and adaptation OROs and adaptation outcomes
+Three way heatmap of Climate threat(temperature, SLR, extreme weather) and adaptation OROs and adaptation outcomes, facetted by continent -- add as inset to map of number of studies?
 
 
 
-Heatmap of ORO type and outcome -- supplement?
+## ORO type, outcome and data type
+
+Heatmap of ORO type and outcome, coloured by number of articles -- supplement?
+In the heatmap above, also change geom_point size depending on number of secondary data types? Data_type primary vs secondary
+
+```{r heatmap of oro type outcome and data type}
+## Read in data for plots (cluster by climate threat)
+# ORO Type
+predOROAny <- readOROAnyPredictions(boundaries = "mean") %>%
+  mutate(oro_branch = factor(oro_branch,
+                             levels = c("mitigation","nature","societal"),
+                             labels = c("Mitigation",
+                                           "Natural resilience",
+                                           "Societal adaptation"))) %>%
+  filter(!(oro_any %in% c("Protection","Restoration"))) %>%
+  mutate(oro_any = droplevels(oro_any)) %>%
+  mutate(oro_any = recode_factor(
+    oro_any, Renewables = "Renewable energy", Increase_efficiency = "Increase efficiency",
+    CO2_removal_or_storage="CO2 removal or storage", 
+    Human_assisted_evolution="Human-assisted evolution", Conservation="Conservation",
+    Built_infrastructure_and_technology="Built infrastructure & technology",
+    Socioinstitutional="Socio-institutional"
+  ))
+
+# Outcomes
+# Mitigation
+predMit <- readPredictions(boundaries = "mean", variable = "climate_mitigation") %>%
+  mutate(outcome = recode_factor(climate_mitigation, 
+                                 `0_relevance` = "Mitigation"),
+         outcome_category = paste("Mitigation")) %>%
+  mutate(outcome = as.character(outcome),
+         outcome_category = as.character(outcome_category))%>%
+  select(-c(climate_mitigation))
+# Adaptation
+predAdapt <- readPredictions(boundaries = "mean", variable = "adapt_to_threat_simplified2") %>%
+  mutate(outcome = recode_factor(adapt_to_threat_simplified2,
+                                 adapt_to_threat.Human = "Adapt: Humans", 
+                                 adapt_to_threat.Natural = "Adapt: Nature"), 
+         outcome_category = paste("Adaptation")) %>%
+  mutate(outcome = as.character(outcome),
+        outcome_category = as.character(outcome_category))%>%
+  select(-c(adapt_to_threat_simplified2))
+# Fuse together into one outcome variable
+predOutcome <- rbind(predMit, predAdapt)
+predOutcome <- predOutcome %>%
+  select(analysis_id, outcome_category, outcome, mean)
 
 
-Data_type primary vs secondary
+# Data type -- one column for Primary and Secondary
+predData <- readPredictions(boundaries = "mean", variable = "data") %>%
+  filter(data == "type.Secondary") %>%
+  mutate(Secondary = ifelse(0.5 <= mean, 1, 0)) %>%
+  select(analysis_id, Secondary)
 
 
+## FORMATTING & CALCULATIONS
+
+# Bind all dataframes together with rows = analysis_id, columns : oro_type, outcome, Primary, Secondary
+temp <- predOROAny %>% 
+  filter(0.5 <= mean) %>% select(analysis_id, oro_any)%>%
+  inner_join(predOutcome %>% filter(0.5 <= mean) %>% select(analysis_id, outcome)) %>%
+  left_join(predData)
+
+tempTab <- temp %>%
+  group_by(oro_any, outcome) %>%
+  summarise(n_articles = n_distinct(analysis_id)) %>%
+  mutate(outcome = factor(as.character(outcome),
+                          levels = c("Mitigation","Adapt: Humans", "Adapt: Nature")))
+
+tempTabSecondary <- temp %>%
+  filter(Secondary == 1) %>%
+  group_by(oro_any, outcome) %>%
+  summarise(n_secondary = n_distinct(analysis_id)) %>%
+  mutate(outcome = factor(as.character(outcome),
+                          levels = c("Mitigation","Adapt: Humans", "Adapt: Nature")))
+
+  
+tempTab <- tempTab %>%
+  full_join(tempTabSecondary, by = c("oro_any","outcome")) 
+
+
+## Plot
+oroOutcomeData_ggp <- ggplot(tempTab, aes(x=oro_any, y=outcome))+
+  geom_tile(aes(fill = log(n_articles)))+
+  geom_text(aes(label = format(n_articles, big.mark=",")), vjust = -2, size=3)+
+  geom_point(aes(y=outcome, size = n_secondary))+
+  #scale_fill_distiller(palette = "Blues", direction = -1)+
+  scale_size(breaks = seq(0,max(tempTab$n_secondary, na.rm=T), by=3))+
+  scale_fill_viridis_c()+
+  labs(x = "ORO type",y="Outcome",size = "N secondary\narticles", fill = "log(N articles)")+
+  theme_bw()+
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  )
+
+
+
+ggsave(
+  file = here::here("figures/supplementary/oroType-Outcome-Secondary_heatmap.pdf"), 
+  plot = oroOutcomeData_ggp,
+  width = 6, height = 5, units="in"
+)
+
+```
 
 
 ## Three way heatmaps of oro type, ecosystem, outcome
+
 
 ```{r get phylopics for ecosystem type}
 pics <- dir(here::here("figures/phylopics/"))
@@ -1657,7 +1753,7 @@ summary(temp)
 # co-occurences
 tempTab <- temp %>%
   group_by(ecosystem_type, oro_any, outcome) %>%
-  summarise(n_articles = n())
+  summarise(n_articles = n_distinct(analysis_id)) %>% 
 
 outcomeTotals <- tempTab %>%
   group_by(outcome) %>%
@@ -1719,12 +1815,194 @@ ggsave(here::here("figures/main/oro-type_ecosystem_outcome_heatmap.pdf"),
 ```
 
 
-## Nested doughnut of Ecosystem type x blue carbon x mitigation outcome -- 
+## Sankey flow of blue carbon > Ecosystem type > mitigation outcome 
+
+How many of the blue carbon articles actually look at mitigation outcomes?
+
+```{r Sankey flow of blue carbon articles broken down by ecosystem type and mitigation outcome}
+#remotes::install_github("davidsjoberg/ggsankey")
+library(ggsankey)
+
+# Blue carbon predictions >= 0.5
+predBC <- readPredictions(boundaries = "mean", variable = "blue_carbon")
+predBC <- predBC %>%
+  filter(0.5 <= mean) %>%
+  mutate(blue_carbon = paste("Blue carbon")) %>%
+  select(-c(mean)) %>%
+  select(analysis_id, blue_carbon)
+
+
+# Ecosystem type
+predEcos <- readPredictions(boundaries = "mean", variable = "ecosystem_type")
+predEcos <- predEcos %>%
+  filter(0.5 <= mean) %>%
+  mutate(ecosystem_type = as.character(ecosystem_type)) %>%
+  select(analysis_id, ecosystem_type)
+  
+ecosysLevels = unique(predEcos$ecosystem_type)
+
+
+# Outcomes
+predMit <- readPredictions(boundaries = "mean", variable = "climate_mitigation")
+predMit <- predMit %>%
+  filter(0.5 <= mean) %>%
+  mutate(mitigation_outcome = paste("Mitigation")) %>%
+  select(-c(mean)) %>%
+  select(analysis_id, mitigation_outcome)
+
+
+# I want 3 columns: blue carbon, ecosystem type (incl. other), Mitigation outcome, other
+temp <- predBC %>%
+  left_join(predEcos, by="analysis_id") %>%
+  left_join(predMit, by = "analysis_id") %>%
+  mutate(ecosystem_type = ifelse(is.na(ecosystem_type),"Other", ecosystem_type),
+         mitigation_outcome = ifelse(is.na(mitigation_outcome),"Other", mitigation_outcome)) %>%
+  mutate(ecosystem_type = factor(ecosystem_type,
+                                 levels = c(ecosysLevels, "Other"),
+                                 labels = c(gsub("_"," ", ecosysLevels), "Other")),
+         mitigation_outcome = factor(mitigation_outcome, 
+                                     levels = c("Mitigation", "Other")))
+
+temp <- temp %>%
+  make_long(blue_carbon, ecosystem_type, mitigation_outcome) 
+  
+
+tempTab <- temp %>%
+  group_by(node) %>%
+  tally()
+
+temp <- merge(temp, tempTab, by = "node", all.x=TRUE)
+
+## PLOT THE SANKEY DIAGRAM
+blueCarbonSankey <- temp %>%
+  ggplot(aes(x=x, next_x=next_x, node=node, next_node=next_node, 
+             fill=factor(node), label = paste0(node, "\n n=", n))) +
+  geom_sankey(flow.alpha=0.5, node.color = "black", show.legend = FALSE)+
+  geom_sankey_label(size = 3, color = "black", fill= "transparent", hjust = -0.2)+
+  #scale_fill_viridis_d()+
+  scale_fill_manual(
+    values = c(
+      'Blue carbon' = "#1f78b4",
+      'Seagrass' = '#b2df8a',
+      'Salt marsh' = '#fb9a99',
+      "Other" = "darkgrey",
+      "Mangrove" = "#33a02c",
+      "Macroalgae" = "#cab2d6",
+      "Coral reef" = "#ff7f00",
+      "Mitigation" = "#e31a1c"
+    )
+  )+
+  labs(fill = 'Nodes')+
+  theme_bw()+
+  theme(
+    legend.position = "none",
+    panel.border = element_blank(),
+    axis.text.y = element_blank(), 
+    axis.text.x = element_blank(),
+    axis.title.x = element_blank(),
+    axis.title.y = element_blank(),
+    axis.ticks = element_blank(), 
+    panel.grid = element_blank()
+  )
+
+
+ggsave(
+  here::here("figures/main/blueCarbonEcosystemSankey.pdf"), plot=blueCarbonSankey,
+  width = 7, height=4, units="in"
+)
+```
+
+Maybe this can be done as a clustered barplot as well?
+
+
+## Barchart of ORO types split by marine system (land, coastal, open), clustered by climate threat
+
+
+```{r Barchart of ORO types split by marine system clustered by climate threat}
+library(cowplot)
+
+## Read in the infographic of the marine systems
+marineSysImg <- magick::image_read(here::here("figures/inkscape/marineSystems.svg"))
+
+## Read in data for plots (cluster by climate threat)
+# ORO Type
+predOROAny <- readOROAnyPredictions(boundaries = "mean")
+predOROAny$oro_branch <- factor(predOROAny$oro_branch,
+                                levels = c("mitigation","nature","societal"),
+                                labels = c("Mitigation",
+                                           "Natural resilience",
+                                           "Societal adaptation"))
+predOROAny <- predOROAny %>% 
+  filter(!(oro_any %in% c("Protection","Restoration"))) %>%
+  mutate(oro_any = droplevels(oro_any)) %>%
+  mutate(oro_any = recode_factor(
+    oro_any, Renewables = "Renewable energy", Increase_efficiency = "Increase efficiency",
+    CO2_removal_or_storage="CO2 removal or storage", 
+    Human_assisted_evolution="Human-assisted evolution", Conservation="Conservation",
+    Built_infrastructure_and_technology="Built infrastructure & technology",
+    Socioinstitutional="Socio-institutional"
+  ))
+# Marine system
+predMarine <- readPredictions(boundaries = "mean", variable = "marine_system")
+predMarine <- predMarine %>%
+  mutate(marine_system = recode_factor(marine_system, 
+                                       land = "Coastal land", 
+                                       `coastal ocean` = "Coastal ocean",
+                                       `open-ocean` = "Open-ocean"))
+# Climate threat
+predThreat <- readPredictions(boundaries = "mean", variable = "climate_threat")
+predThreat <- predThreat %>%
+  filter(climate_threat %in% c("Temperature","SLR","Extreme_weather")) %>%
+  mutate(climate_threat = droplevels(climate_threat))
+  
+
+
+## DATA CALCULATIONS 
+
+temp <- predMarine %>% filter(0.5 <= mean) %>% select(analysis_id, marine_system) %>%
+  inner_join(predOROAny %>% filter(0.5 <= mean) %>% select(analysis_id, oro_any)) %>%
+  left_join(predThreat %>% filter(0.5 <= mean) %>% select(analysis_id, climate_threat)) %>%
+  mutate(climate_threat = factor(climate_threat, 
+                                 levels = c("Temperature","SLR","Extreme_weather", NA), 
+                                 labels = c("Temperature","Sea-level rise","Extreme weather", "Other"), 
+                                 exclude = NULL))
+
+
+
+## PLOTTING
+
+marineSysOROThreat_ggp <- ggplot(temp, aes(x = oro_any, fill = climate_threat))+
+  facet_wrap(vars(marine_system), ncol=1, scales = "free")+
+  geom_bar(position = "stack")+
+  labs(fill = "Climate threat", y = "Number of articles", x="ORO type")+ #
+  scale_fill_brewer(palette = "Paired")+ # only one that's colourblind safe
+  scale_x_discrete(limits = rev)+
+  coord_flip()+
+  theme_bw()+
+  theme(
+    #axis.text.x = element_text(angle = 45, hjust=1, vjust=1)
+    legend.position = "right",
+    axis.title.y = element_blank()
+  )
+
+
+# Plot of the svg infographic -- odd that the vecotor images of the icons don't show up
+marineSysImg_ggp <- ggdraw()+draw_image(marineSysImg, scale = 1)
+
+
+
+## Save file
+pdf(file = here::here("figures/main/marineSystem-ORO-climateThreat_barplot.pdf"),
+    width = 10, height = 5)
+plot_grid(marineSysImg_ggp, marineSysOROThreat_ggp, rel_widths = c(1,1.5))
+while (!is.null(dev.list())) dev.off()
+
+```
 
 
 # Geoparsing results
 
-Sankey Diagram of First Author Affiliation compared to where research is conducted 
+Sankey Diagram of First Author Affiliation compared to where research is conducted by continent/region
 
 Maps of # articles by ORO type? ie. one panel with one map/ORO type 
 
