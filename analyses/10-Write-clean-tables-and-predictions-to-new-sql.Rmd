@@ -2,7 +2,9 @@
 title: "Remove-duplicate-dois"
 author: "Devi Veytia"
 date: "2023-07-14"
-output: html_document
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}

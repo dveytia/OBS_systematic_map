@@ -1,0 +1,306 @@
+---
+title: "Geoparsing-spacy-example"
+author: "Devi Veytia"
+date: "2024-01-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r load libraries}
+library(dplyr)
+library(dbplyr)
+library(R.utils)
+library(RSQLite)
+library(reticulate)
+library(ggplot2)
+```
+
+
+# Geoparsing text
+
+```{r load helper functions located in R folder}
+source(here::here("R/utils.R"))
+source(here::here("R/clean_string.R"))
+```
+
+
+```{r clean text and remove stopwords}
+## Example text to geoparse
+vec2geocode <- c('I went to Ottawa and then London.','Pacific northwest') # text
+vec2geocode_duplicate_id <- c(as.character(1:length(vec2geocode))) # unique document ID
+
+## clean
+vec2geocode <- clean_string(vec2geocode)
+
+## remove stopwords
+
+# identify stopwords frome existing package databases
+my_stopwords <- unique(c(quanteda::stopwords(),revtools::revwords(), litsearchr::get_stopwords()))
+
+# remove stopwords
+for(i in 1:length(vec2geocode)){
+  vec2geocode[i] <- paste(quanteda::tokens_remove(quanteda::tokens(vec2geocode[i]),
+                                                  my_stopwords),collapse = " ")
+}
+
+
+```
+
+
+
+```{r use spacy virtual environment}
+#use_virtualenv(here::here("spaCy_env"))
+use_virtualenv(file.path("C:/Users/deviv/R-working-folder/OBS_systematic_map/spaCy_env"))
+
+#use_virtualenv(here::here("localGeocode_env"))
+#use_python("C:\\Users\\deviv\\AppData\\Local\\Programs\\Python\\PYTHON~1\\python.exe")
+```
+
+Use spacy to extract components of sentences that contain locations.
+
+Types of entity labels available:
+PERSON:      People, including fictional.
+NORP:        Nationalities or religious or political groups.
+FAC:         Buildings, airports, highways, bridges, etc.
+ORG:         Companies, agencies, institutions, etc.
+GPE:         Countries, cities, states.
+LOC:         Non-GPE locations, mountain ranges, bodies of water.
+PRODUCT:     Objects, vehicles, foods, etc. (Not services.)
+EVENT:       Named hurricanes, battles, wars, sports events, etc.
+WORK_OF_ART: Titles of books, songs, etc.
+LAW:         Named documents made into laws.
+LANGUAGE:    Any named language.
+DATE:        Absolute or relative dates or periods.
+TIME:        Times smaller than a day.
+PERCENT:     Percentage, including ”%“.
+MONEY:       Monetary values, including unit.
+QUANTITY:    Measurements, as of weight or distance.
+ORDINAL:     “first”, “second”, etc.
+CARDINAL:    Numerals that do not fall under another type.
+
+attributes can be displayed using dir(doc)
+
+First extract the entities from the text. If GPE or LOC, store separately from dates
+```{python extract entity names}
+
+import spacy
+nlp = spacy.load("en_core_web_sm")
+
+
+Entarr = [] ;
+#Datearr = [] ; # comment this out because only intersted in places not dates
+
+
+for i in range(len(r.vec2geocode)):
+  doc = nlp(r.vec2geocode[i])
+  
+  for entity in doc.ents:
+    
+    if entity.label_ in ('GPE' 'LOC'):
+      ents = [r.vec2geocode_duplicate_id[i], entity.label_, entity.text]
+      Entarr.append(ents)
+      
+    # if entity.label_ == 'DATE':
+    #   ents = [r.vec2geocode_duplicate_id[i], entity.label_, entity.text]
+    #   Datearr.append(ents)
+
+
+# what the results look like:
+print(Entarr[0])
+#print(Datearr[0])
+
+# An array where the first element is the ID, second is the type of entity, third is the corresponding name
+# ['1', 'GPE', 'ottawa']
+
+
+```
+
+```{python save outputs}
+import pickle
+import os
+
+pickle.dump(Entarr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "wb"))
+pickle.dump(Datearr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Dates.pickle"]), "wb"))
+
+del Datearr
+del Entarr
+```
+
+note there will likely be duplicates in place names within a duplicate_id, so make sure to clean afterwards. Columns are: duplicate_id, entity_label, entity_text
+
+
+
+```{python call the output from location tagging in spacy directly to retreive metadata about the location}
+from geocode.geocode import Geocode
+gc = Geocode()
+gc.load()
+
+import numpy as np
+
+# Remove commenting if Entarr is saved above
+# Entarr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "rb"))
+Entarr_numpy = np.array(Entarr)
+
+Geocodearr = [] ;
+
+for i in range(len(Entarr)):
+  location = gc.decode(Entarr_numpy[i,2])
+  Geocodearr.append(location)
+  
+
+pickle.dump(Geocodearr, file= open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Geocode-Metadata.pickle"]), "wb"))
+
+
+
+del Geocodearr
+del Entarr
+
+
+```
+
+Note also the option of gc.decode_parallel in https://github.com/mar-muel/local-geocode
+
+Note that the Geocode library metadata only has the centroid (lon/lat) of the location. To get the full spatial extent, a second analysis is required to match place names to natural earth shapefiles and grid to a common grid. 
+
+
+## Map the distribution of locations mentioned
+
+
+
+```{python load in entity data frames}
+import pickle
+import os
+
+Entarr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"Entities.pickle"]), "rb"))
+Geocodearr = pickle.load(open("\\".join([os.getcwd(),'data','derived-data','coding','nlp-extracted',"geocode-metadata.pickle"]), "rb"))
+
+quit
+```
+
+
+```{r format data frame for mapping}
+require(tidyverse)
+
+# add the duplicate id to each entry
+geoarr <- list()
+
+for(i in 1:length(py$Entarr)){
+  # append each element of the list with the corresponding duplicate id -- sometimes multiple entries for each entity because returns
+  # multiple matches
+  tmp <- lapply(py$Geocodearr[[i]], function(x) append(x, py$Entarr[[i]]))
+  # Add names to these new columns
+  tmp <- lapply(tmp, function(x) {names(x)[9:11] <- c("duplicate_id","entity_label","entity_text"); x})
+  geoarr[[i]] <- tmp
+}
+
+locationsDf <- flatten(geoarr)
+rm(geoarr)
+
+locationsDf <- lapply(locationsDf, function(x) as.data.frame(x))
+
+locationsDf <- do.call(rbind.data.frame, locationsDf)
+
+
+# remove any duplicated identifications within each article
+# sometimes there will also be multiple values for an entity label -- in this case take the first? ****
+locationsDf <- locationsDf %>%
+  distinct(geoname_id, duplicate_id, entity_text, .keep_all=TRUE) 
+
+
+## Format the data frame
+locationsDf <- locationsDf %>%
+  mutate(
+    entity_label = factor(entity_label, levels=c("LOC","GPE"))
+  )
+
+## BUT geolocating only really works on GPE, not LOC types, so maybe seperate as several columns in the metadata
+```
+
+
+Work on coding the location types
+```{r}
+library(mregions)
+
+
+# get records
+types <- mr_place_types()
+
+mrec <- mr_records_by_type(type = types$type[1])
+
+
+
+# identify which records correspond to each entry
+mreg_text <- locationsDf %>%
+  filter(entity_label == "LOC")
+
+mreg_code <- mregions::mr_geo_code(mreg_text$entity_text[2], fuzzy=TRUE)
+mreg_code <- mreg_code[1,]
+
+
+# get the area of the bounding box
+
+library(geosphere)
+
+xlim <- c(mreg_code$minLongitude, mreg_code$maxLongitude)
+ylim <- c(mreg_code$minLatitude, mreg_code$maxLatitude)
+l.out = 50
+
+bb = rbind(cbind(xlim[1], seq(ylim[1],ylim[2],length.out = l.out)),
+            cbind(seq(xlim[1],xlim[2],length.out = l.out),ylim[2]),
+            cbind(xlim[2],seq(ylim[2],ylim[1],length.out = l.out)),
+            cbind(seq(xlim[2],xlim[1],length.out = l.out),ylim[1]))
+
+
+area <- geosphere::areaPolygon(bb)
+
+area # in m2
+
+
+# extract shp file?
+
+
+
+
+
+save(locationsDf, file = here::here("data","derived-data","coding","nlp-extracted","geocode-metadata.RData"))
+```
+
+```{r}
+library(maps)
+
+load(here::here("data","derived-data","coding","nlp-extracted","geocode-metadata.RData"))
+
+world_map <- map_data("world")
+
+# # add the sizes of the different location_types
+# location_size_lookup <- data.frame(
+#   location_type = c('city', 'place', 'country', 'admin1', 'admin2', 'admin3', 'admin4', 'admin5', 'admin6', 'admin_other', 'continent', 'region'),
+#   area  = c()
+# )
+
+ggplot()+
+  geom_polygon(data = world_map, aes(x=long, y=lat, group=group), fill="grey")+
+
+  geom_point(data=locationsDf %>% filter(entity_label == "GPE") %>% arrange(population), 
+             aes(longitude, latitude, size = log(population), color = log(population)), alpha=0.3)+
+  
+  coord_sf()+
+  scale_size_continuous()+
+  scale_color_viridis_c(option = "magma")+
+  theme_void()+
+  guides(color = guide_legend())+
+  theme(
+    legend.position = c(0.1, 0.5),
+      plot.background = element_rect(fill = "#f5f5f2", color = NA), 
+      panel.background = element_rect(fill = "#f5f5f2", color = NA), 
+      legend.background = element_rect(fill = "#f5f5f2", color = NA)
+  )
+  
+
+  
+```
+
