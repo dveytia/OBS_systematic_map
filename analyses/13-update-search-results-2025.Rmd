@@ -1,0 +1,662 @@
+---
+title: "13-update-search-results-2025"
+author: "Devi Veytia"
+date: "2025-05-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load libraries}
+library(dplyr)
+library(R.utils)
+library(RSQLite)
+library(revtools)
+
+```
+
+```{r source functions}
+source(here::here("R","cleaning-and-formatting-bib-dataframes.R"))
+```
+
+```{r set up inputs}
+##  set up inputs
+
+# Do you want to overwrite the existing sql databases?
+sqlOverwrite = TRUE
+
+
+## Directory where the folders containing the results for the different blocks 
+resultsPath <- here::here("data","raw-data") # where the database folders are located
+dbFolderNames <- c("WOS_downloads/UPDATE_13-05-2025", "Scopus_downloads/UPDATE_2023_13-05-2025") # names of the database folders
+
+
+
+## SQL files for de-duplication
+
+# all references before duplicate identification
+sqlite_all_ref_file <- file.path(resultsPath,"sql-databases","all-refs_2025.sqlite")
+sqlite_all_ref_table_name <- "allrefs_2025" 
+# # version of the database file
+v = "v1"
+sqlite_all_ref_file_version <- paste0(gsub(".sqlite","",sqlite_all_ref_file),"_",v,".sqlite")
+
+# joined with duplicate id
+sqlite_all_ref_file_version_dedupid <- paste0(gsub(".sqlite","",sqlite_all_ref_file_version),
+                                              "_join-duplicate_id.sqlite")
+sqlite_allRefDedupID_table_name <- "allrefs_join"
+
+# just the unique references
+sqlite_unique_ref_file <- file.path(resultsPath,"sql-databases", paste0("unique-refs_2025",v,".sqlite"))
+sqlite_unique_ref_table_name <- "uniquerefs_2025"
+
+
+
+
+```
+
+
+# Reformat all the WOS and Scopus records into standard formatting
+
+Things to include in the dataframe:
+* Which database it came from
+* database unique identifier
+* Other metadata: colnames2extract <- c("type","author","title","journal","year","volume","number","pages","abstract","publisher","address","affiliation","doi","issn","eissn","keywords","keywords_plus","research_areas","web_of_science_categories","author_email","affiliations","orcid_numbers", "web_of_science_index", "unique_id", "funding_acknowledgement", "funding_text", "article_number", "researcherid_numbers","editor", "booktitle","isbn", "book_group_author", "organization", "series")
+* unique id based on title and year
+
+Then create another database that has collapsed all duplicates based on title and year into the most complete record possible.
+
+```{r IS THIS NEEDED  set up folders filepaths containing records, eval=FALSE}
+
+## use inputs to extract file paths
+
+# combine into one list so that it can be looped through
+database_resultsFolders <- vector("list", length(dbFolderNames))
+names(database_resultsFolders) <-  dbFolderNames
+
+
+## get the file names located within each block folder and store in a list
+
+for(d in 1:length(dbFolderNames)){ # for each of the databases searched
+  
+  # select only the folders with record results (not sql databases)
+  resultsFolders <- dir(file.path(resultsPath, dbFolderNames[d]))
+  resultsFolders <- resultsFolders[order(resultsFolders)] 
+  
+  # create a list to store these file names
+  database_resultsFolders[[d]] <- vector("list", length(resultsFolders))
+  names(database_resultsFolders[[d]]) <- resultsFolders
+  
+  # get names for the different blocks -- should be the same for all so only do this once
+  if(d==1){
+    blockNames <- unlist(lapply(strsplit(resultsFolders,"_"), function(x) x[[1]]))
+    blockNames <- stringr::str_remove(blockNames, "-block")
+  }
+  
+  
+  # for each folder containing results for a search string
+  # get a list of the file names
+  for(s in 1:length(resultsFolders)){ 
+     database_resultsFolders[[d]][[s]] <- dir(file.path(resultsPath, dbFolderNames[d], resultsFolders[s]))
+  }
+  
+}
+
+
+
+# check
+str(database_resultsFolders)
+
+
+```
+
+
+```{r compare the formatting of the wos references and the scopus references to figure out how to merge them, eval=FALSE}
+# import sample df from .bib files
+wosFormat <- revtools::read_bibliography(
+  file.path(resultsPath, 
+            names(database_resultsFolders)[1], 
+            names(database_resultsFolders[[1]])[1],
+            database_resultsFolders[[1]][[1]][1]))
+
+scopusFormat <- revtools::read_bibliography(
+  file.path(resultsPath, 
+            names(database_resultsFolders)[2], 
+            names(database_resultsFolders[[2]])[1],
+            database_resultsFolders[[2]][[1]][1]))
+
+# # check which column names are shared
+# colnames(wosFormat)[(colnames(wosFormat) %in% colnames(scopusFormat))]
+```
+
+```{r Vector of names of columns I want to include in the standard dataframe when all is combined }
+
+standardColnames <- c(
+  "analysis_id", # space to fill in the unique id of the record as it has been downloaded in the map
+  "duplicate_id", # space to fill in the "unique id" based on de-duplication protocol
+  "source_database", # the name of the database e.g. wos or scopus
+  "search_substring", # the string(s) the record was retrieved, 
+  "database_article_id", # if the source has a unique id, use (e.g. eid for scopus, and unique_id in wos)
+  "type", # the type of publication, e.g. article, proceedings - make all lower case
+  "author", # the authors of the publication
+  "title", # the title of the publication
+  "source_title", # "journal" column, which in scopus is actually source_title, so could be book,etc, in wos, if journal is absent, use booktitle  
+  "year",
+  "volume",
+  "number",
+  "pages",
+  "abstract",
+  "keywords", # merge author keywords and keywords
+  "keywords_other", # any additional keywords, e.g. author keywords or keywords_plus
+  "publisher",
+  "editor",
+  "language",
+  "affiliation",
+  "funding", # funding_acknowledgement in wos, "funding_details in scopus
+  "doi",
+  "issn",
+  "isbn",
+  "journal", # wos-only columns ------------
+  "research_areas",
+  "web_of_science_categories",
+  "booktitle",
+  "book_group_author",
+  "book_author",
+  "organization",
+  "series",
+  "da" # access date
+)
+
+```
+
+
+```{r loop through all the saved .bib files and reformat and save into sql database}
+
+
+# for each of the databases searched
+
+for(d in 1:length(dbFolderNames)){ 
+  
+  # track progress
+  cat(paste(dbFolderNames[d], "\n"))
+  
+  # name of the database
+  database <- dbFolderNames[d]
+  
+  # names of all the folders holding results
+  resultsFolders <- dir(file.path(resultsPath, dbFolderNames[d])) #names(database_resultsFolders[[d]])
+  resultsFolders <- resultsFolders[order(resultsFolders)]
+  
+  # get the names for the sub-string blocks
+  blockNames <- unlist(lapply(strsplit(resultsFolders,"_"), function(x) x[[1]]))
+  blockNames <- stringr::str_remove(blockNames, "-block")
+  
+  # for each folder containing results for a search string
+  for(s in 1:length(resultsFolders)){ 
+    
+    # track progress
+    cat(paste("  ",blockNames[s], d,"/of", length(blockNames), "\n"))
+    
+    # get all the files in the folder
+    files <- dir(file.path(resultsPath, database, resultsFolders[s]))
+    
+    # for each file in the folder read in the .bib file
+    # if there is an error because wrong file type is in folder, skip to next
+    for(f in 1:length(files)){
+      
+      # track progress
+      cat(paste("      file", f,"/of", length(files), "\n"))
+      
+      # # Read in file
+      # skip_to_next <- FALSE
+      # tryCatch(
+      #   tempDf <- revtools::read_bibliography(here::here(resultsPath, database, resultsFolders[s], files[f])),
+      #   error = function(e){skip_to_next <<- TRUE}
+      # )
+      # if(skip_to_next){next}
+      # tempDf <- revtools::read_bibliography(file.path(resultsPath, database, resultsFolders[s], files[f]))
+      tempDf <- tryCatch(
+        revtools::read_bibliography(file.path(resultsPath, database, resultsFolders[s], files[f])),
+        error = function(e) e
+      )
+      if(inherits(tempDf, "error")) next
+      
+      # Format to common formatting
+      # determine what function needs to be used to format
+      if(grepl("wos", tolower(database))){
+        format.fn <- wos2standard
+      }else{
+        format.fn <- scopus2standard
+        tempDf$funding_details <- rep(NA, nrow(tempDf))
+      }
+      # use that function to format the data frame
+      tempDf <- tryCatch(
+        format.fn(standardColnames = standardColnames, inputDf = tempDf, search_substring = blockNames[s]),
+          error=function(e) e
+        )
+      if(inherits(tempDf, "error")) next
+      
+      # tempDf <- format.fn(
+      #   standardColnames = standardColnames, inputDf = tempDf, search_substring = blockNames[s], 
+      #   inputvals = data.frame(
+      #     source_database = rep(source_database, nrow(tempDf)), 
+      #     search_substring = rep(search_substring, nrow(tempDf)),
+      #     database_article_id = url2eid(tempDf$url),
+      #     source_title = tempDf$journal,
+      #     keywords_other = tempDf$author_keywords,
+      #     funding = tempDf$funding_details
+      #   )
+      # )
+      
+      
+      ## fill in the analysis_id
+      # if the first iteration, start from 1
+      if(d==1 & s==1 & f==1){start <- 1}
+      end <- start+nrow(tempDf)-1
+      tempDf$analysis_id <- seq(start, end)
+      # once filled set where the next iteration should start
+      start <- end+1
+      
+      
+      # print progress
+      if(f==1){
+        runningtotal <- nrow(tempDf)
+      }else{
+        runningtotal <- runningtotal + nrow(tempDf)
+      }
+      print(paste(nrow(tempDf), "records added /", runningtotal, "total"))
+      
+      
+      # write to the sql database
+      # set overwrite commands and appending commands
+      if(d==1 & s==1 & f==1 & sqlOverwrite){
+        overwritel = TRUE; appendl = FALSE
+      }else{
+        overwritel = FALSE; appendl = TRUE
+      }
+      
+      # # write to database
+      db <- RSQLite::dbConnect(RSQLite::SQLite(), dbname = sqlite_all_ref_file_version)
+      dbWriteTable(db, "refs", tempDf, append=appendl, overwrite = overwritel)
+      dbDisconnect(db)
+      
+      
+      
+    } # end processing one file
+    
+     
+  } # end looping through all files in a block folder
+  
+} # end looping through all databases
+
+
+
+
+```
+
+
+# Deduplicate pooled records
+
+```{r searching through the sql database, make a lookup table with id, title and year duplicates}
+
+db <- src_sqlite(sqlite_all_ref_file_version, create=FALSE)
+allrefs <- tbl(db, "refs")
+
+# find number of records in total
+nrecstotal <- allrefs %>% summarise(n())
+print(nrecstotal) # 169448
+
+# number of records by database
+nrecsbydb <- allrefs %>% group_by(source_database) %>% summarise(n())
+print(nrecsbydb)
+#   source_database  `n()`
+#   <chr>            <int>
+# 1 Scopus           36566
+# 2 Web Of Science  132882
+
+# also by substring
+allrefs %>% group_by(source_database, search_substring) %>% summarise(n())
+#    source_database search_substring  `n()`
+#    <chr>           <chr>             <int>
+#    Scopus          General-options     65
+#  2 Scopus          Mitigation       15982
+#  3 Scopus          Nature             281
+#  4 Scopus          Renewables       20134
+#  5 Scopus          Societal           104
+#  6 Web Of Science  General-options  63232
+#  7 Web Of Science  Mitigation       13353
+#  8 Web Of Science  Nature           37336
+#  9 Web Of Science  Renewables       12803
+# 10 Web Of Science  Societal          6158
+
+
+
+
+# extract the id, the title and the year for de-duplication
+dedupInfo <- allrefs %>%
+  select(analysis_id, title, year, doi)
+dedupInfo %>% head
+dedupInfo <- as.data.frame(dedupInfo)
+
+# # write the file of de-dupe info
+# save(dedupInfo, file = file.path(resultsPath, "deduplication-files","columns-for-deduplication_UPDATE_13-05-2025.RData"))
+```
+
+
+Next the deduplication is run in rossi using the script analyses/ross_dedup.R
+
+
+```{r read in the results from the ross deduplication}
+
+## Old column IDs
+load(file.path(resultsPath, "deduplication-files","columns-for-deduplication_UPDATE_13-05-2025.RData"))
+columns_for_deduplication <- dedupInfo
+rm(dedupInfo)
+
+
+## this data contains columns for the unique id of the reference, the title and the year, as well as a duplicate id indicating if there was a duplicate based on title and year
+load(here::here(resultsPath,"deduplication-files","title_dedup_ids_UPDATE_13-05-2025.RData"))
+dedupInfo <- subset(dedupInfo,!is.na(dedupInfo$analysis_id)) 
+
+# because the de-dup was run in parallel by year, need to attach back the year id to make it unique, 
+# otherwise there is duplication in ids between years
+dedupInfo$title_year_dup_id <- paste(dedupInfo$year, dedupInfo$duplicate_id, sep=".")
+
+# investigate which analysis records are not in the deup dataframe
+ind <- which(!(columns_for_deduplication$analysis_id %in% dedupInfo$analysis_id))
+length(ind) # 0 -- none
+
+
+dim(dedupInfo) # check dims -- correct.
+length(unique(dedupInfo$analysis_id)) == nrow(dedupInfo) # check each row has its own unique id 
+
+# order by analysis_id
+dedupInfo <- dedupInfo %>%
+  arrange(analysis_id)
+
+# The number of records
+length(dedupInfo$title_year_dup_id) # 169448
+
+# The number of duplicates
+sum(duplicated(dedupInfo$title_year_dup_id)) # 40082
+
+# the number of unique references
+length(dedupInfo$title_year_dup_id)-sum(duplicated(dedupInfo$title_year_dup_id)) # 129366
+
+# rename column to duplicate_id
+dedupInfo$duplicate_id <- dedupInfo$title_year_dup_id
+dedupInfo$title_year_dup_id <- NULL
+
+
+# # save as a .sqlite
+# db <- RSQLite::dbConnect(RSQLite::SQLite(),
+#                          dbname = sqlite_all_ref_file_version, create = FALSE)
+# dbWriteTable(db, "title_dedup_ids", dedupInfo, append=FALSE, overwrite = TRUE)
+# dbDisconnect(db)
+
+```
+
+
+```{r summarise the duplicate information using join}
+library(dbplyr)
+
+## connect to the database
+allrefs_db <- dbConnect(RSQLite::SQLite(), sqlite_all_ref_file_version, create = FALSE)
+src_dbi(allrefs_db)
+allrefs <- tbl(allrefs_db, "refs")
+dedups <- tbl(allrefs_db, "title_dedup_ids") %>%
+  select(analysis_id, duplicate_id)
+
+
+
+## join the datasets with their duplicate info
+# do left join so that all the references are maintained
+allrefs_join <- left_join(allrefs %>% select(-duplicate_id), dedups, by = "analysis_id")
+
+
+
+## Summarise
+
+# numbers of duplicates by database source
+allrefs_join %>%
+  group_by(source_database) %>%
+  summarize(n_unique_refs = n_distinct(duplicate_id))
+#   source_database n_unique_refs
+#   <chr>                   <int>
+# 1 Scopus                  33882
+# 2 Web Of Science         115096
+  
+
+# in total
+allrefs_join %>%
+  summarise(n_unique_refs = n_distinct(duplicate_id))
+#   n_unique_refs
+#           <int>
+# 1        129366
+
+
+
+## Write
+require(RSQLite)
+allrefs_join <- allrefs_join %>% collect() # collect all the values from the database into local memory
+
+
+
+
+dbWriteTable(conn=allrefs_db, name=sqlite_allRefDedupID_table_name, value=allrefs_join, append=FALSE, overwrite = TRUE)
+
+
+
+## Disconnect from active databases
+DBI::dbDisconnect(allrefs_db)
+
+```
+
+
+
+Now that the duplicates are identified, deduplicate the database using Rossiusing the file ross_unique_refs_UPDATE...
+
+
+```{r Then need to double check if any duplicates with existing data}
+
+dbcon <- DBI::dbConnect(RSQLite::SQLite(), sqlite_all_ref_file_version, create=FALSE)
+uniquerefs_2025 <- tbl(dbcon, paste0(sqlite_unique_ref_table_name,"_1")) %>% collect()
+DBI::dbDisconnect(dbcon)
+
+years <- unique(uniquerefs_2025$year)
+
+
+db_2022 <- RSQLite::dbConnect(
+  RSQLite::SQLite(),
+  here::here("data/raw-data/sql-databases/all_tables_v2.sqlite"),
+  create=FALSE)
+
+uniquerefs_2022 <- tbl(db_2022, "uniquerefs") %>%
+  filter(year %in% years) %>%
+  select(title, year, doi) %>%
+  collect()
+
+DBI::dbDisconnect(db_2022)
+
+
+# Process match variables
+uniquerefs_2022 <- uniquerefs_2022 %>%
+  mutate(
+    title_mod = tm::removePunctuation(tolower(title))
+  )
+uniquerefs_2025 <- uniquerefs_2025 %>%
+  mutate(
+    title_mod = tm::removePunctuation(tolower(title))
+  ) 
+
+# Now check for any matches, remove 
+refs_2025_new <- data.frame()
+for(y in years){
+  refs_2022 <- subset(uniquerefs_2022, year == y) %>% 
+    select(-c(title)) %>%
+    na.omit()
+  refs_2025 <- subset(uniquerefs_2025, year == y)
+  newrefs <- fuzzyjoin::stringdist_anti_join(
+    refs_2025, 
+    refs_2022,
+    by ="title_mod", max_dist=5, ignore_case = TRUE
+  )
+  refs_2025_new <- refs_2025_new %>%
+    bind_rows(refs_2025)
+  
+}
+
+# No duplicates found
+dim(refs_2025_new) #  129366     35
+dim(uniquerefs_2025) # 129366     35
+
+
+# Re-save file to sqlite database
+
+allrefs_db <- RSQLite::dbConnect(
+  RSQLite::SQLite(),sqlite_all_ref_file_version, create=FALSE)
+
+DBI::dbWriteTable(allrefs_db, 
+                  sqlite_unique_ref_table_name, 
+                  refs_2025_new %>%
+                    select(-c(title_mod)), 
+                  append=FALSE, overwrite = TRUE)
+
+DBI::dbDisconnect(allrefs_db)
+
+
+```
+
+
+
+
+```{r summarise the deduplicated database}
+library(dbplyr)
+
+# open the connection
+db <- RSQLite::dbConnect(RSQLite::SQLite(),sqlite_all_ref_file_version, create=FALSE)
+dedupRefs <- tbl(db, sqlite_unique_ref_table_name)
+
+## Summarise
+
+# summarize how many unique references in total -- yes this matches what it should be
+dedupRefs %>% summarise(n_unique_refs=n())
+#   n_unique_refs
+#           <int>
+# 1        129366
+
+# number of unique records by database -- picture these results as a venn diagram
+dedupRefs %>% group_by(source_database) %>% summarise(n=n())
+#   source_database             n
+#   <chr>                   <int>
+# 1 Scopus                  14270
+# 2 Web Of Science          95484
+# 3 Web Of Science | Scopus 19612
+
+
+# number of abstracts missing
+dedupRefs %>% summarise(num_na = sum(is.na(abstract)))
+#   num_na
+#    <int>
+# 1    551
+
+
+
+
+# number of unique records by search string
+
+search_string_n <- dedupRefs %>% 
+  collect() %>%
+  summarise(
+    General = sum(grepl("General", search_substring)),
+    Mitigation = sum(sum(grepl("Mitigation", search_substring)), sum(grepl("Renewable", search_substring))),
+    Natural = sum(grepl("Natur", search_substring)),
+    Societal = sum(grepl("Societal", search_substring))
+  ) 
+search_string_n <- reshape2::melt(search_string_n, variable.name = "Search_string", value.name = "n_records")
+search_string_n
+#   Search_string n_records
+# 1       General     63201
+# 2    Mitigation     41819
+# 3       Natural     37402
+# 4      Societal      6185
+
+
+
+
+## Co-mentions -- i.e. how many duplicates between strings?
+# subset to all the records with co-mentions
+dedupRefsAll <- dedupRefs %>% collect() 
+dedupRefsAll <- dedupRefsAll[grepl(" | ", dedupRefsAll$search_substring),]
+dedupRefsAll2 <- strsplit(dedupRefsAll$search_substring, " | ")
+dedupRefsAll2 <- lapply(dedupRefsAll2, function(x) x[!(x %in% "|")])
+
+# all the possible strings
+strings <- c("General","Mitigation","Renewable","Nature","Societal")
+
+# Loop through to calculate number of co-mentions
+for(n in 2:length(strings)){ # start at 2 because need at least 2 to have a co-mention
+  # filter to all articles with that # of co-mentions
+  dedupRefsAllTemp <- Filter(function(x) length(x) == n, dedupRefsAll2) 
+  # bind into matrix
+  dedupRefsAllTemp <- do.call(rbind, dedupRefsAllTemp)
+  # paste all the words together
+  pasteStrings <- apply(dedupRefsAllTemp, MARGIN = 1, paste, collapse = " ")
+  # All the possible combinations with n
+  stringsCombn <- t(combn(strings,n))
+  stringsCombn <- as.data.frame(stringsCombn)
+  stringsCombn$duplicates <- rep(NA, nrow(stringsCombn))
+  # For all the different possible combinations, tabulate
+  for(i in 1:nrow(stringsCombn)){
+    stringsCombn$duplicates[i] <- sum(grepl(stringsCombn[i,1], pasteStrings) & 
+          grepl(stringsCombn[i,2],pasteStrings), na.rm=T)
+  }
+  # Save data frame
+  # empty temp data frame to store
+  stringsCombnTemp <- as.data.frame(matrix(nrow = nrow(stringsCombn), ncol = 6))
+  colnames(stringsCombnTemp) <- c(paste0("string", 1:5), "n_articles")
+  stringsCombnTemp$n_articles <- stringsCombn$duplicates
+  for(s in 1:n){
+    stringsCombnTemp[,s] <- stringsCombn[,s]
+  }
+  if(n==2){
+    stringsCombnAll <- stringsCombnTemp
+  }else{
+    stringsCombnAll <- rbind(stringsCombnAll, stringsCombnTemp)
+  }
+  
+}
+# Write
+writexl::write_xlsx(stringsCombnAll, here::here("outputs/corpus-summary/search_string_co-mentions_UPDATE_13-05-2025.xlsx"))
+
+
+
+
+require(ggplot2)
+
+ggplot(search_string_n, aes(Search_string, n_records)) +
+  geom_col()+
+  theme_classic()
+
+
+
+## Write to a tab delimited .txt file for Vicky to process?
+dedupRefs <- dedupRefs %>% 
+  filter(!is.na(abstract), !is.na(title)) %>%
+  collect()
+dim(dedupRefs)
+
+write.table(dedupRefs,
+            file = file.path(resultsPath, "deduplication-files","unique_references_UPDATE_13-05-2025.txt"),
+            row.names=F, col.names=TRUE, sep='\t', quote=FALSE)
+
+
+# close connection
+dbDisconnect(db)
+```
+
+
+
+
